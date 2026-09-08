@@ -18,11 +18,12 @@
 | 2026-09-08 | v0.6 | Phase 3 第三阶段 — Capability Asset Hub（方案 A 重定义） | 统一能力资产中心（非四个独立页面）：All/Skills/Memory/Rules/Tools 筛选（URL 驱动）、资产列表（名称/类型/描述/状态/使用数）、资产详情（基本信息 + Used by + 装配概览）、旧占位路由重定向、共享图标/徽章组件去重；Definition 只读；Hub 与 Agent 详情同一 Store 数据源实时联动；lint/tsc/build/生产交互验证全绿 | ✅ 已完成并通过「Definition 资产管理」审批 |
 | 2026-09-08 | v0.7 | Phase 3 第四阶段 — Definition 资产管理（方案 A：资产生命周期） | 生命周期两维状态分离（lifecycle 落模型 Active/Archived；Used/Unused 派生不落字段）、创建/编辑/归档（软删除）/恢复全走 Service 写契约、persist v3 + migrate（v1/v2 平滑升级补资产）、归档后不可新装配（Picker 禁用 + Store 校验双保险）、已归档装配保留展示并冻结（不悬空）、Hub/Asset Detail/Agent Detail/Picker 四处同源、Hub 搜索 + 排序（低成本体验增强）、Loading/Success/Error/Empty 完备；lint/tsc/build/生产交互验证全绿 | ✅ 已完成并通过「Projects 业务化」审批 |
 | 2026-09-08 | v0.8 | Phase 3 第五阶段 — Projects 业务化（方案 B：最小业务闭环） | 领域模型先定稿（Workspace → Project → ProjectAgent → Agent → AgentCapability/Run；只引用不复制）、Agent ↔ Project 多对多、Run 归属 Agent 统计全派生、Capability 经 Agent 间接关联、persist v3 → v4 + migrate（向后兼容）、`/projects` 列表 + 新建 + `/projects/[id]` 详情（项目摘要 + 关联 Agent 列表 + Picker + 解绑确认）、30 天口径复用 `selectRunsInRange`（与 Dashboard 完全同源）、实时响应 Store 变化；lint/tsc/build/生产交互验证全绿 | ✅ 已完成并通过「Project 维度观察」审批 |
-| 2026-09-08 | v0.9 | Phase 3 第六阶段 — Project 维度观察（方案 C 缩小范围） | Dashboard 增加项目维度摘要（项目数/各项目 Agent 数/最近 30 天运行量/成功率/最近活跃，行可点击进详情）、Project Detail 增加「最近运行」（复用 ActivityList + selectRunsInProject，零重复统计/渲染）、Agents 卡片增加所属项目徽章（只展示不改信息架构）、全部统计复用 `selectProjectStats`/`selectRunsInProjectWindow`（统一窗口同源）、单一 Store 实时联动；lint/tsc/build/生产交互验证全绿 | ✅ 已完成，待审批进入下一阶段 |
+| 2026-09-08 | v0.9 | Phase 3 第六阶段 — Project 维度观察（方案 C 缩小范围） | Dashboard 增加项目维度摘要（项目数/各项目 Agent 数/最近 30 天运行量/成功率/最近活跃，行可点击进详情）、Project Detail 增加「最近运行」（复用 ActivityList + selectRunsInProject，零重复统计/渲染）、Agents 卡片增加所属项目徽章（只展示不改信息架构）、全部统计复用 `selectProjectStats`/`selectRunsInProjectWindow`（统一窗口同源）、单一 Store 实时联动；lint/tsc/build/生产交互验证全绿 | ✅ 已完成并通过「V1 Review」审批 |
+| 2026-09-08 | v1.0 | V1 Architecture Review + Scope Freeze（纯审查，零代码修改） | 全量架构审查：领域模型 6 实体无复制/无第二数据源/生命周期无冲突/DB 适配良好；数据流 UI→Store→Selector→Service 合规（唯一例外为纯函数 composeCapabilityViews）；技术债务分级 P0=无 / P1=5 项（分页契约/错误模型/DTO 策略/id 策略/seed-migrate 流程）；Mock→Real 演进判定为 Service 契约足以替换；结论「Mock 边际收益已递减，推荐现在转向 Phase 4 真实后端设计」；V1 范围冻结：已具备 6 类闭环、明确延后 9 类功能 | ✅ 已完成，待审批（输出《V1 Architecture Review》） |
 
 ## 当前阶段
 
-**Phase 3 第六阶段 — Project 维度观察（方案 C 缩小范围）**（已完成；**不自动进入下一阶段**，待审批）
+**V1 Architecture Review + Scope Freeze（Phase 3 第七阶段，纯审查）**（已完成；**不自动进入下一阶段**，待审批）
 
 ---
 
@@ -39,39 +40,32 @@
 | Shell | PowerShell 5.1 | 不支持 `&&`，命令以分号或独立调用执行 |
 | 实际版本组合 | next 16.3.4 / react 19.2.8 / tailwindcss ^4 / zustand 5.x（Phase 2 新增）/ framer-motion ^13.2.0 / geist ^1.7.2 / radix-ui ^1.6.7 / lucide-react ^1.42.0 / cmdk ^1.1.1 | 构建通过（见验证结果） |
 
-## 二、已完成内容（Phase 3 第六阶段 / P3-6）
+## 二、已完成内容（V1 Architecture Review / 纯审查，零代码修改）
 
-### 1. Dashboard 项目维度摘要
-- [x] `components/dashboard/projects-overview.tsx`（新）：项目卡片区（行式列表，与 ActivityList 视觉一致），每行 = 项目名/描述 + Agent 数 + 最近 30 天运行量 + 成功率（≥90% 高亮）+ 最近活跃时间，**整行可点击进入对应 Project Detail**；右上角「查看全部」→ /projects；空态 + Skeleton
-- [x] 数据全部来自单一 Store（projects + projectAgents + runs），统计**复用 `selectProjectStats` / `selectRunsInProjectWindow`**（内部走 `selectRunsInRange` 统一自然日窗口），**零重新实现**
-- [x] Dashboard 页面接入 `<ProjectsOverview hydrated={hydrated} />`（指标卡/趋势图/最近活动下方，Quick Actions 上方）
+### 1. 审查范围与核验事实
+- [x] 领域模型 6 实体（Agent / AgentRun / CapabilityDefinition / AgentCapability / Project / ProjectAgent）：职责分离一致（资产 / 关系两层），**无数据复制、无隐藏第二数据源**（组件外无 localStorage）、生命周期无冲突（四组状态语义独立；Capability 两维状态正交）
+- [x] 数据流 UI → Store → Selector → Service：所有写操作经 Store actions；唯一组件直连 Service 为 `capability-list.tsx` 导入纯函数 `composeCapabilityViews`（只读派生，P3 归属问题）
+- [x] 单一时间窗口：`selectRunsInRange` 全站唯一
+- [x] 18 个 Service 契约逐个判定可替换性（Agents 4 / Capabilities 9+1纯 / Projects 5）
 
-### 2. Project Detail 运行摘要增强
-- [x] 新增「最近运行」卡片：`selectRunsInProject` 结果按 startedAt 降序后**直接复用 `ActivityList` 渲染**（Agent 名/状态/时长/Tokens/相对时间 + 空态自带），不重新实现任何列表/统计逻辑
+### 2. 技术债务分级
+- [x] **P0：无**（架构健康，无阻塞项）
+- [x] **P1（接后端前必须）5 项**：分页契约 / 统一错误模型 / DTO 与 Domain 分离策略 / id 服务端生成策略 / seed-migrate 同步流程文档化
+- [x] **P2（可后续）4 项**：dashboard periodStats 窗口计算收敛 / Definition 时间戳 / 嵌套 Link 限制 / 单 Store 切片评估
+- [x] **P3（可忽略）4 项**：composeCapabilityViews 归属 / uid 非 UUID / seed 相对时间不随日期平移 / 重置演示数据为演示专用
 
-### 3. Agents 页面项目关联展示
-- [x] `AgentCard` 新增可选 prop `projectsOf: Project[]`：描述下方显示「项目」徽章（最多 2 个 + `+N`），只展示不改信息架构
-- [x] Agents 页面 `projectsOfAgent()` 派生每个 Agent 所属项目（join projectAgents → projects，不复制数据）
+### 3. 结论与建议
+- [x] Mock 边际收益已递减；推荐**现在转向 Phase 4 真实后端设计**（API 契约 + DB Schema → 替换 Service 为 HTTP 客户端，前端零改动验证），而非继续堆前端
+- [x] V1 范围冻结：已具备 6 类闭环；明确延后 9 类（Project Archive/Restore/Edit、Capability Versioning、Settings、Tasks、Collaboration、权限、能力图谱等）；以后值得做：真实 AI Runtime、能力图谱、版本管理
+- [x] 产出 `docs/V1-Architecture-Review.md`（完整审查报告，含架构图/评估/债务/演进建议/冻结清单）
 
-### 4. 领域模型保持不变
-- [x] 维持 `Workspace → Project → ProjectAgent → Agent → Run`；Capability 仍经 Agent 间接关联，**未创建 ProjectCapability**；未复制 Run/Agent 数据
+## 三、验证结果（V1 Architecture Review）
 
-## 三、验证结果（Phase 3 第六阶段 / P3-6）
-
-| 检查项 | 命令 | 结果 |
-| --- | --- | --- |
-| ESLint | `npm run lint` | ✅ 0 错误 0 警告 |
-| TypeScript | `npx tsc --noEmit` | ✅ 0 错误 |
-| 生产构建 | `npm run build` | ✅ 通过（Turbopack；11 条路由不变） |
-| 生产运行 | `npm run start`（localhost:3000） | ✅ 正常运行 |
-| 同源一致 | Dashboard 项目行「客服提效 2 Agent/38 次/87%」= Project Detail 摘要 | ✅ 通过 |
-| 实时联动 | 解绑数据分析师 → 详情 Agent 数 1/26 次 → **Dashboard 行实时变「1 Agent/26 次/81%」** | ✅ 通过 |
-| 创建联动 | 新建「发布中台」→ Dashboard 项目区实时出现（0 Agent，活跃排序置顶） | ✅ 通过 |
-| 30 天窗口 | 全部复用 `selectRunsInRange`（selectProjectStats 内部同一函数），未新增日期计算 | ✅ 通过 |
-| 硬刷新持久化 | 解绑结果刷新后保留（Dashboard 仍 1 Agent/26 次） | ✅ 通过 |
-| Agents 徽章 | 5 个 Agent 卡片均显示所属项目徽章（客服提效/官网改版/数据分析平台） | ✅ 通过 |
-| 只展示不改架构 | AgentCard 仅新增底部徽章行，列表结构/信息层级未变 | ✅ 通过 |
-| 生产控制台 | 各页面 console 0 error | ✅ 通过 |
+| 检查项 | 结果 |
+| --- | --- |
+| 代码修改 | ✅ 零修改（审查产物仅新增 `docs/V1-Architecture-Review.md`） |
+| lint / tsc / build | ✅ 无需执行（无代码改动；上一阶段全绿基线保持） |
+| 事实核验 | ✅ 基于代码事实（services 18 签名 / store persist v4 / 页面数据访问面 / 无第二数据源） |
 
 ## 四、技术决策记录（ADR 简表，Phase 3 第一阶段更新）
 
@@ -101,36 +95,37 @@
 | D34 | **Dashboard 项目维度全部复用既有 Selector**（selectProjectStats / selectRunsInProjectWindow → selectRunsInRange），不新增统计实现 | ✅ 落地：Dashboard 与 Project Detail 同源同口径（2/38/87% 双向一致） |
 | D35 | **Project Detail「最近运行」复用 ActivityList**（纯展示组件，同 props 契约） | ✅ 落地：零重复渲染逻辑，空态/状态徽章沿用 |
 | D36 | **Agents 项目关联只展示不改架构**：AgentCard 新增可选 `projectsOf` 徽章行（≤2 +N），列表结构与信息层级不变 | ✅ 落地：5 卡片徽章正确；避免嵌套 Link（卡片外层已是链接） |
+| D37 | **V1 Scope Freeze**：停止堆前端模块；P0 债务 = 无；P1 5 项（分页/错误模型/DTO/id/seed-migrate 流程）在接后端前修复；延后 9 类功能 | ✅ 审查结论（见 docs/V1-Architecture-Review.md） |
+| D38 | **真实后端切入点判定**：Mock 边际收益已递减，推荐 Phase 4 转向真实后端设计（先契约后实现，前端零改动） | ✅ 审查结论，待用户审批 |
 
-## 五、发现的问题（Phase 3 第六阶段）
+## 五、发现的问题（V1 Architecture Review）
 
-1. **嵌套 Link 隐患**：AgentCard 外层已是 `<Link>`（→ Agent 详情），项目徽章若用 `<Link>` 会嵌套 `<a>`（HTML 非法 + 事件冲突）→ 徽章改为纯展示 `span`（本阶段仅「展示」关联信息，符合范围；未来若需点击进入项目，需重构卡片结构而非嵌套 Link）。
-2. **lastActive 来源优化**：初版在组件内手写 filter+sort 取最近运行（有重实现倾向）→ 改用 `selectRunsInProjectWindow` 结果取 max startedAt，完全复用统一窗口。
-3. **OCR 再次误读**（工具链）：OCR 把「客服提效」读成「客服系统」、「官网改版」读成「官网数据」；DOM 实测徽章文本正确，验证以 DOM 为准。
-4. 既有遗留不变（截图新标签视口偏小；link-preload 无害 warning）。
+1. **dashboard/page.tsx 内联 `periodStats` 重复窗口计算**（P2）：与 selectRunsInRange 同口径但违反 DRY；接后端前收敛为 Store Selector。
+2. **`capability-list.tsx` 直连 Service 导入纯函数**（P3）：`composeCapabilityViews` 只读派生，无违规行为；归属上应移至 lib。
+3. **seed / migrate 隐性契约**（P1 流程性）：seed 增字段必须同步 migrate 补丁，否则版本漂移；需文档化。
+4. **seed 相对时间特性**（P3）：seed 用 `now - N*DAY` 生成，跨天访问窗口内数字衰减；演示特性，接真实数据后消失。
+5. **AgentCard 嵌套 Link 限制**（P2）：项目徽章不可点击；未来若需点击需重构卡片结构。
 
 ## 六、遗留问题 / 风险
 
 | 风险 | 等级 | 应对 |
 | --- | --- | --- |
-| Agents 项目徽章不可点击进入项目 | 低 | 受嵌套 Link 限制；未来重构 AgentCard 为按钮语义或卡片内嵌项目区块时解决 |
-| Project 归档/恢复/编辑未实现 | 低 | 明确不在本阶段范围；后续「Project 生命周期管理」阶段可做 |
-| 能力图谱（项目 × Capability 矩阵视图）未实现 | 低 | 用户明确排除；数据基础已具备（经 Agent 间接 join） |
-| 浏览器截图工具链不稳定 | 低 | 新标签路线稳定可用 |
-| P2 遗留 link-preload warning | 低 | Next.js 16 框架提示，无 error |
+| 真实后端尚未启动（Mock 收益递减中） | P1 | 推荐 Phase 4 真实后端设计（待审批） |
+| 分页 / 错误模型 / DTO 未定稿 | P1 | Phase 4 契约先行，避免接后端时重构 |
+| runAgent 为随机数（非真实 AI） | P1 | 真实 AI Runtime 属「以后值得做」，Phase 4 可先桩实现 |
+| Settings 等占位模块 | P3 | 明确延后 |
+| 浏览器截图工具链不稳定 | P3 | 新标签路线稳定可用；不影响功能验证 |
 
 ## 七、下一步计划
 
-1. **等待审批**：批准进入下一阶段。候选方向（供用户选择，不擅自扩大范围）：
-   - 方案 A：**Project 生命周期管理**（归档/恢复 + 编辑，复用 Capability 生命周期心智）
-   - 方案 B：**Capability 版本管理**（生命周期 + 版本演进 / 编辑历史）
-   - 方案 C：**Settings 业务化**（工作区设置 + 用户偏好）
-   - 方案 D：**Agents/能力图谱增强**（项目 × Capability 矩阵、Agent 详情项目归属）
-   - 方案 E：其他（用户指定）
+1. **等待审批**：批准下一步方向。候选（供用户选择，不擅自扩大范围）：
+   - 方案 A（推荐）：**Phase 4 真实后端设计**——REST API 契约文档 + DB Schema + 分页/错误模型定稿（先纯设计文档，再实现替换 Mock，前端零改动验证）
+   - 方案 B：**先清 P1/P2 前端债务**（窗口计算收敛 / Definition 时间戳 / seed-migrate 流程文档化）再进后端
+   - 方案 C：**Settings 业务化**（用户偏好 + 工作区设置，纯前端）
+   - 方案 D：其他（用户指定）
 2. 执行任何内容前：先出方案 → 等待审批 → 实现 → 验证 → 更新本文件 → 汇报。
-3. **P3-6 收尾待办**：Git 提交（用户批准范围内执行）。
 
 ## 八、待审批事项
 
-- [ ] **A17**：批准进入下一阶段，并确认具体范围（候选见「七、下一步计划」）
-- [ ] **A18**：Project 维度观察（Dashboard 项目区 / 详情最近运行 / Agents 徽章）是否需要后续增强（如徽章可点击、项目×能力矩阵）
+- [ ] **A19**：批准《V1 Architecture Review》结论（P0=无 / P1 5 项 / 推荐 Phase 4 真实后端）
+- [ ] **A20**：确认下一阶段方向（候选见「七、下一步计划」）

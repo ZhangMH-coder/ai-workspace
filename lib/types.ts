@@ -80,6 +80,10 @@ export interface CapabilityDefinition {
    * 「使用状态 Used/Unused」是派生值（由 AgentCapability 装配数计算），不写入本字段。
    */
   lifecycle: CapabilityLifecycle;
+  /** 创建时间（P4-2 起由服务端提供；Mock seed 兼容缺省） */
+  createdAt?: string;
+  /** 最近更新时间（P4-2 起由服务端提供；Mock seed 兼容缺省） */
+  updatedAt?: string;
 }
 
 /** 新建能力定义的表单输入（Service 契约） */

@@ -27,6 +27,7 @@ import { Badge } from "@/components/ui/badge";
 import { formatNumber, formatPercent, formatTokens } from "@/lib/format";
 import {
   selectDailyStats,
+  selectPeriodStats,
   selectRunsInRange,
   useWorkspaceStore,
 } from "@/stores/workspace";
@@ -48,35 +49,6 @@ function useDashboardData() {
   return { hydrated, agents, runs, timeRange, setTimeRange };
 }
 
-/** 当前时段与上一等长时段的运行聚合（真实计算，不造假）
- * 口径：与趋势图/最近活动完全一致的自然日窗口 ——
- * current 为「含今天在内的 N 个自然日」[今天 0 点 −(N−1) 天, 明天 0 点)，
- * previous 为紧邻的前 N 个自然日。
- */
-function periodStats(runs: ReturnType<typeof selectRunsInRange>, days: number) {
-  const todayStart = new Date();
-  todayStart.setHours(0, 0, 0, 0);
-  const now = todayStart.getTime();
-  const dayMs = 86_400_000;
-  const currentStart = now - (days - 1) * dayMs;
-  const tomorrow = now + dayMs;
-  const summarize = (start: number, end: number) => {
-    const list = runs.filter((r) => {
-      const t = new Date(r.startedAt).getTime();
-      return t >= start && t < end;
-    });
-    return {
-      count: list.length,
-      success: list.filter((r) => r.status === "success").length,
-      tokens: list.reduce((sum, r) => sum + r.tokensUsed, 0),
-    };
-  };
-  return {
-    current: summarize(currentStart, tomorrow),
-    previous: summarize(currentStart - days * dayMs, currentStart),
-  };
-}
-
 function pctDelta(current: number, previous: number): string | null {
   if (previous === 0) return current > 0 ? "新增" : null;
   const delta = ((current - previous) / previous) * 100;
@@ -87,7 +59,7 @@ export default function DashboardPage() {
   const { hydrated, agents, runs, timeRange, setTimeRange } = useDashboardData();
   const days = TIME_RANGE_OPTIONS.find((t) => t.id === timeRange)?.days ?? 30;
   const inRange = selectRunsInRange(runs, timeRange);
-  const stats = periodStats(runs, days);
+  const stats = selectPeriodStats(runs, days);
   const daily = selectDailyStats(runs, timeRange);
 
   const activeAgents = agents.filter((a) => a.status === "active" || a.status === "idle").length;

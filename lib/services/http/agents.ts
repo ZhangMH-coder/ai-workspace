@@ -1,0 +1,39 @@
+/**
+ * Agents Service — HTTP 实现（P4-2c）
+ *
+ * 与 Mock 实现同名函数契约（签名/返回类型不变），Store/组件零改动。
+ * 返回 Domain（经 mappers 转换），UI 不依赖 DTO。
+ */
+import { http } from "@/lib/api/client";
+import type { PageDTO, AgentDTO, AgentRunDTO } from "@/lib/api/dto";
+import { toAgent, toAgentRun } from "@/lib/api/mappers";
+import type { Agent, AgentRun, NewAgentInput } from "@/lib/types";
+
+export async function fetchAgents(): Promise<Agent[]> {
+  const page = await http.get<PageDTO<AgentDTO>>("/agents?pageSize=100");
+  return page.items.map(toAgent);
+}
+
+export async function fetchRuns(): Promise<AgentRun[]> {
+  // P4-2 全量兼容：小数据量（≈92 条）直接拉取，前端 selectors 内存统计保持 P3 口径；
+  // 数据量增长后切换 /runs/stats 聚合端点（契约已就绪，渐进演进）。
+  const page = await http.get<PageDTO<AgentRunDTO>>("/runs?pageSize=1000");
+  return page.items.map(toAgentRun);
+}
+
+export async function createAgent(input: NewAgentInput): Promise<Agent> {
+  const dto = await http.post<AgentDTO>("/agents", {
+    name: input.name.trim(),
+    description: input.description.trim(),
+    model: input.model,
+    systemPrompt: input.systemPrompt.trim(),
+  });
+  return toAgent(dto);
+}
+
+/** 触发运行（服务端演示运行时桩；agentName 供 Mock 摘要使用，HTTP 实现忽略） */
+export async function runAgent(agentId: string, agentName: string): Promise<AgentRun> {
+  void agentName; // 服务端生成摘要，无需客户端名称
+  const dto = await http.post<AgentRunDTO>(`/agents/${encodeURIComponent(agentId)}/runs`);
+  return toAgentRun(dto);
+}

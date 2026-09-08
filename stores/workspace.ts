@@ -1,17 +1,18 @@
 "use client";
 
 /**
- * 工作区全局状态（Zustand + persist，Phase 3）
+ * 工作区全局状态（Zustand + persist，P4-2）
  *
  * 单一数据源：agents + runs + capabilityDefinitions + agentCapabilities + projects + projectAgents + timeRange。
- * - 持久化（localStorage key: ai-workspace-store，version 4）：
- *   agents / runs / agentCapabilities / capabilityDefinitions / projects / projectAgents / timeRange；
- *   actions、hydrated 标志不持久化。
- * - version 3 → 4：新增 Project 领域（projects + projectAgents 关系表，持久化）；
- *   migrate 为旧数据自动补 seed 副本（向后兼容）。
- * - 演示数据可恢复：无持久化数据时 hydrate() 自动从 Mock 服务层拉取 seed；
- *   resetDemoData() 显式重置回 seed（并写回持久化）。
- * - 未来接入真实 API 时仅替换 lib/services 实现。
+ *
+ * 持久化职责收敛（P4-2d）：
+ * - SQLite 为「事实数据源」；Zustand 为「客户端状态/缓存」；
+ * - localStorage 仅保留必要 UI 偏好（timeRange）；领域事实数据不再持久化（version 5）。
+ * - 旧版本（<5）localStorage 中的领域数据**明确丢弃、不与 SQLite 合并**（migrate 只保留 timeRange），
+ *   避免产生第二数据源。
+ * - hydrate() 一律从 Service 层全量拉取（Real=SQLite 数据 / Mock=seed 常量）；
+ *   resetDemoData() 在 Real 模式调用 POST /api/v1/demo/reset 重置演示库后再全量拉取。
+ * - 未来接入真实 API 时仅替换 lib/services 实现（当前已是双模式入口）。
  */
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
@@ -27,21 +28,20 @@ import {
   attachCapability as attachCapabilityService,
   createCapability as createCapabilityService,
   detachCapability as detachCapabilityService,
+  fetchAllAgentCapabilities as fetchAllAgentCapabilitiesService,
   fetchCapabilityDefinitions as fetchCapabilityDefinitionsService,
   restoreCapability as restoreCapabilityService,
   setCapabilityEnabled as setCapabilityEnabledService,
   updateCapability as updateCapabilityService,
 } from "@/lib/services/capabilities";
 import {
-  seedAgentCapabilities,
-  seedCapabilityDefinitions,
-  seedProjectAgents,
-  seedProjects,
-} from "@/lib/mock-data/seed";
+  resetDemoData as resetDemoDataService,
+} from "@/lib/services/demo";
 import {
   attachAgentToProject as attachAgentToProjectService,
   createProject as createProjectService,
   detachAgentFromProject as detachAgentFromProjectService,
+  fetchAllProjectAgents as fetchAllProjectAgentsService,
   fetchProjects as fetchProjectsService,
 } from "@/lib/services/projects";
 import type {
@@ -124,33 +124,8 @@ export const useWorkspaceStore = create<WorkspaceState>()(
 
       hydrate: async () => {
         if (get().hydrated) return;
-        const hasStored = get().agents.length > 0 || get().runs.length > 0;
-        if (!hasStored) {
-          // 无持久化数据：全量回填 seed（装配/项目/关系一并重置为 seed）
-          const [agents, runs, capabilityDefinitions, projects] =
-            await Promise.all([
-              fetchAgentsService(),
-              fetchRunsService(),
-              fetchCapabilityDefinitionsService(),
-              fetchProjectsService(),
-            ]);
-          set({
-            agents,
-            runs,
-            capabilityDefinitions,
-            agentCapabilities: seedAgentCapabilities.map((ac) => ({ ...ac })),
-            projects,
-            projectAgents: seedProjectAgents.map((pa) => ({ ...pa })),
-          });
-        } else {
-          // 持久化数据存在：补资产定义（migrate 已保证 v4 兼容；此处为防御性回填）
-          if (get().capabilityDefinitions.length === 0) {
-            const capabilityDefinitions =
-              await fetchCapabilityDefinitionsService();
-            set({ capabilityDefinitions });
-          }
-        }
-        set({ hydrated: true });
+        const all = await fetchAllData();
+        set({ ...all, hydrated: true });
       },
 
       setTimeRange: (range) => set({ timeRange: range }),
@@ -312,79 +287,111 @@ export const useWorkspaceStore = create<WorkspaceState>()(
       },
 
       resetDemoData: async () => {
-        const [agents, runs, capabilityDefinitions, projects] =
-          await Promise.all([
-            fetchAgentsService(),
-            fetchRunsService(),
-            fetchCapabilityDefinitionsService(),
-            fetchProjectsService(),
-          ]);
-        set({
-          agents,
-          runs,
-          capabilityDefinitions,
-          agentCapabilities: seedAgentCapabilities.map((ac) => ({ ...ac })),
-          projects,
-          projectAgents: seedProjectAgents.map((pa) => ({ ...pa })),
-          timeRange: "30d",
-        });
+        // Real：重置 SQLite 演示库；Mock：no-op（seed 为常量）
+        await resetDemoDataService();
+        const all = await fetchAllData();
+        set({ ...all, timeRange: "30d" });
       },
     }),
     {
       name: "ai-workspace-store",
-      version: 4,
+      version: 5,
       storage: createJSONStorage(() => localStorage),
+      // 持久化职责收敛：localStorage 仅保留必要 UI 偏好；领域事实数据以 SQLite 为唯一事实源
       partialize: (state) => ({
-        agents: state.agents,
-        runs: state.runs,
-        agentCapabilities: state.agentCapabilities,
-        capabilityDefinitions: state.capabilityDefinitions,
-        projects: state.projects,
-        projectAgents: state.projectAgents,
         timeRange: state.timeRange,
       }),
-      migrate: (persistedState, version) => {
-        // 阶梯式向后兼容：v1 → v2 → v3 → v4，仅补缺失字段，旧数据原样保留
-        const base = { ...(persistedState as object) };
-        if (version < 4) {
-          (base as Record<string, unknown>).projects = seedProjects.map((p) => ({
-            ...p,
-          }));
-          (base as Record<string, unknown>).projectAgents = seedProjectAgents.map(
-            (pa) => ({ ...pa })
-          );
-        }
-        if (version < 3) {
-          (base as Record<string, unknown>).capabilityDefinitions =
-            seedCapabilityDefinitions.map((d) => ({ ...d }));
-        }
-        if (version < 2) {
-          (base as Record<string, unknown>).agentCapabilities =
-            seedAgentCapabilities.map((ac) => ({ ...ac }));
-        }
-        return base;
+      migrate: (persistedState, persistedVersion) => {
+        // v<5：旧版本持久化了领域事实数据。明确处理策略：**一律丢弃，不与 SQLite 合并**
+        // （避免第二数据源）；仅迁移 UI 偏好 timeRange。
+        void persistedVersion;
+        const old = persistedState as { timeRange?: TimeRange } | null;
+        return { timeRange: old?.timeRange ?? "30d" };
       },
     }
   )
 );
 
+/** 全量拉取（hydrate / reset 共用；SQLite 为事实源，拉取后即权威缓存） */
+async function fetchAllData() {
+  const [agents, runs, capabilityDefinitions, agentCapabilities, projects, projectAgents] =
+    await Promise.all([
+      fetchAgentsService(),
+      fetchRunsService(),
+      fetchCapabilityDefinitionsService(),
+      fetchAllAgentCapabilitiesService(),
+      fetchProjectsService(),
+      fetchAllProjectAgentsService(),
+    ]);
+  return {
+    agents,
+    runs,
+    capabilityDefinitions,
+    agentCapabilities,
+    projects,
+    projectAgents,
+  };
+}
+
 /* ---------- 派生统计（Selectors，均实时计算，不落库） ---------- */
 
+const DAY_MS = 86_400_000;
+
 /**
- * 按时间范围过滤运行记录（统一自然日口径，与 selectDailyStats / periodStats 一致）：
+ * 统一自然日窗口边界（唯一实现）：
+ * 窗口 = [今天 0 点 −(offsetDays+days−1) 天, 今天 0 点 + (1−offsetDays) 天)，
+ * 即「含今天在内的 N 个自然日」（offsetDays=0 时）。
+ * selectRunsInRange / selectPeriodStats 均基于本函数，杜绝重复日期实现。
+ */
+export function windowBoundsForRange(
+  days: number,
+  offsetDays = 0
+): { start: number; end: number } {
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const today = todayStart.getTime();
+  return {
+    start: today - (offsetDays + days - 1) * DAY_MS,
+    end: today + (1 - offsetDays) * DAY_MS,
+  };
+}
+
+/**
+ * 按时间范围过滤运行记录（统一自然日口径，与 selectDailyStats / selectPeriodStats 一致）：
  * 窗口 = [今天 0 点 −(days−1) 天, 明天 0 点)，即「含今天在内的 N 个自然日」。
  * 保证指标卡、趋势图、最近活动三处数字同源同口径。
  */
 export function selectRunsInRange(runs: AgentRun[], range: TimeRange): AgentRun[] {
   const days = range === "today" ? 1 : range === "7d" ? 7 : 30;
-  const todayStart = new Date();
-  todayStart.setHours(0, 0, 0, 0);
-  const start = todayStart.getTime() - (days - 1) * 86_400_000;
-  const end = todayStart.getTime() + 86_400_000;
+  const { start, end } = windowBoundsForRange(days);
   return runs.filter((r) => {
     const t = new Date(r.startedAt).getTime();
     return t >= start && t < end;
   });
+}
+
+/* ---------- 当前时段与上一等长时段聚合（P4-2 收敛：原 dashboard 内联 periodStats） ---------- */
+
+export interface PeriodStats {
+  current: { count: number; success: number; tokens: number };
+  previous: { count: number; success: number; tokens: number };
+}
+
+export function selectPeriodStats(runs: AgentRun[], days: number): PeriodStats {
+  const current = windowBoundsForRange(days);
+  const previous = windowBoundsForRange(days, days);
+  const summarize = (b: { start: number; end: number }) => {
+    const list = runs.filter((r) => {
+      const t = new Date(r.startedAt).getTime();
+      return t >= b.start && t < b.end;
+    });
+    return {
+      count: list.length,
+      success: list.filter((r) => r.status === "success").length,
+      tokens: list.reduce((sum, r) => sum + r.tokensUsed, 0),
+    };
+  };
+  return { current: summarize(current), previous: summarize(previous) };
 }
 
 /** 按时间范围聚合运行记录为每日统计（用于趋势图） */

@@ -1,0 +1,98 @@
+import {
+  Bot,
+  BrainCircuit,
+  FolderKanban,
+  LayoutDashboard,
+  Settings,
+  ShieldCheck,
+  Sparkles,
+  Wrench,
+  type LucideIcon,
+} from "lucide-react";
+
+export type NavItem = {
+  title: string;
+  href: string;
+  icon: LucideIcon;
+  description?: string;
+};
+
+export type NavGroup = {
+  label: string;
+  items: NavItem[];
+};
+
+/** 侧边栏主导航分组（唯一来源，TopBar / CommandPalette 均引用） */
+export const navGroups: NavGroup[] = [
+  {
+    label: "概览",
+    items: [
+      {
+        title: "Dashboard",
+        href: "/dashboard",
+        icon: LayoutDashboard,
+        description: "工作区运行状态总览",
+      },
+      {
+        title: "Projects",
+        href: "/projects",
+        icon: FolderKanban,
+        description: "按项目组织智能体与任务",
+      },
+    ],
+  },
+  {
+    label: "智能体",
+    items: [
+      {
+        title: "Agents",
+        href: "/agents",
+        icon: Bot,
+        description: "创建与配置智能体",
+      },
+      {
+        title: "Skills",
+        href: "/skills",
+        icon: Sparkles,
+        description: "技能市场与能力装配",
+      },
+      {
+        title: "Memory",
+        href: "/memory",
+        icon: BrainCircuit,
+        description: "语义记忆与知识沉淀",
+      },
+      {
+        title: "Rules",
+        href: "/rules",
+        icon: ShieldCheck,
+        description: "行为约束与治理规则",
+      },
+      {
+        title: "Tools",
+        href: "/tools",
+        icon: Wrench,
+        description: "外部工具与连接器",
+      },
+    ],
+  },
+];
+
+/** 底部导航（设置），视觉上与主导航分离 */
+export const footerNav: NavItem = {
+  title: "Settings",
+  href: "/settings",
+  icon: Settings,
+  description: "工作区与模型设置",
+};
+
+export const allNavItems: NavItem[] = [
+  ...navGroups.flatMap((group) => group.items),
+  footerNav,
+];
+
+/** 当前路由是否为该导航项激活态 */
+export function isNavItemActive(item: NavItem, pathname: string): boolean {
+  if (item.href === "/dashboard") return pathname === item.href;
+  return pathname === item.href || pathname.startsWith(`${item.href}/`);
+}

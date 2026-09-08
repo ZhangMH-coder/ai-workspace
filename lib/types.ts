@@ -251,3 +251,109 @@ export interface RunsStats {
   };
   daily: DailyStat[];
 }
+
+/* ---------------- Resource Discovery 领域模型（本地资源发现，V1 MVP） ----------------
+ *
+ * 数据来源：本机真实 AI Harness 目录（只读发现 + 导入索引）。
+ * 边界：不伪造资源；sourcePath 必须能追溯到真实本地文件；不可解析 → parseable=false。
+ */
+
+/** 统一资源类型（未来可扩展，如 workflow / connector） */
+export type ResourceType =
+  | "agent"
+  | "skill"
+  | "command"
+  | "rule"
+  | "prompt"
+  | "mcp"
+  | "plugin"
+  | "other";
+
+export const RESOURCE_TYPE_OPTIONS: { id: ResourceType; label: string }[] = [
+  { id: "skill", label: "Skill" },
+  { id: "agent", label: "Agent" },
+  { id: "command", label: "Command" },
+  { id: "rule", label: "Rule" },
+  { id: "prompt", label: "Prompt" },
+  { id: "mcp", label: "MCP" },
+  { id: "plugin", label: "Plugin" },
+  { id: "other", label: "Other" },
+];
+
+export function resourceTypeLabel(type: ResourceType): string {
+  return RESOURCE_TYPE_OPTIONS.find((t) => t.id === type)?.label ?? type;
+}
+
+/** 资源状态（尽力判断；无法判断为 unknown，不猜测） */
+export type ResourceStatus = "enabled" | "unknown";
+
+/** 扫描运行状态 */
+export type ScanStatus = "completed" | "partial" | "failed";
+
+/** 统一资源索引条目 */
+export interface DiscoveredResource {
+  id: string;
+  scanId: string;
+  harnessId: string;
+  type: ResourceType;
+  name: string;
+  description: string;
+  /** Harness 展示名 */
+  source: string;
+  /** 真实绝对路径（唯一键，可溯源到原始文件/目录） */
+  sourcePath: string;
+  framework: string;
+  version: string | null;
+  status: ResourceStatus;
+  parseable: boolean;
+  parseNote: string | null;
+  lastModified: string | null;
+  /** 原始元数据摘要（frontmatter 头部 / manifest 关键字段 / 配置键名） */
+  metadata: Record<string, unknown>;
+}
+
+/** 单个 Harness 的扫描结果 */
+export interface HarnessScanSummary {
+  harnessId: string;
+  harnessName: string;
+  rootPath: string;
+  found: boolean;
+  resourceCount: number;
+  scannedAt: string;
+}
+
+/** 扫描位置（探测过的候选根 + 命中它的 Harness） */
+export interface ScanLocation {
+  path: string;
+  label: string;
+  hits: string[];
+}
+
+/** 一次扫描运行的完整记录 */
+export interface ScanRun {
+  id: string;
+  status: ScanStatus;
+  startedAt: string;
+  finishedAt: string;
+  locations: ScanLocation[];
+  byHarness: Record<string, number>;
+  byType: Record<string, number>;
+  totalResources: number;
+  parseableCount: number;
+}
+
+/** 资源发现概览（最新一次扫描） */
+export interface DiscoveryOverview {
+  scanRun: ScanRun | null;
+  harnesses: HarnessScanSummary[];
+  totalResources: number;
+  parseableCount: number;
+  lastScannedAt: string | null;
+}
+
+/** 一次扫描的完整结果（POST /scan 返回） */
+export interface RunScanResult {
+  scanRun: ScanRun | null;
+  harnesses: HarnessScanSummary[];
+  resources: DiscoveredResource[];
+}

@@ -53,11 +53,19 @@ import {
   fetchRecentRuns as fetchRecentRunsService,
   fetchRunsStats as fetchRunsStatsService,
 } from "@/lib/services/runs";
+import {
+  fetchDiscoveryOverview as fetchDiscoveryOverviewService,
+  fetchDiscoveredResources as fetchDiscoveredResourcesService,
+  fetchResourceDetail as fetchResourceDetailService,
+  runResourceScan as runResourceScanService,
+} from "@/lib/services/resource-discovery";
 import type {
   Agent,
   AgentCapability,
   AgentRun,
   CapabilityDefinition,
+  DiscoveredResource,
+  DiscoveryOverview,
   NewAgentInput,
   NewCapabilityInput,
   NewProjectInput,
@@ -67,6 +75,7 @@ import type {
   TimeRange,
   UpdateCapabilityInput,
 } from "@/lib/types";
+import type { ResourceListQuery } from "@/lib/api/resource-discovery";
 
 /** 空统计（组件对未加载/无数据时的防御默认值） */
 export const EMPTY_RUNS_STATS: RunsStats = {
@@ -157,6 +166,21 @@ interface WorkspaceState {
   detachAgentFromProject: (id: string) => Promise<void>;
   /** 重置回演示 seed 数据（Real 重置 SQLite；Mock 重置内存数据层） */
   resetDemoData: () => Promise<void>;
+  /** 资源发现：最新一次扫描概览（未扫描/无资源 → 结构化空态，不伪造数据） */
+  discovery: {
+    overview: DiscoveryOverview | null;
+    resources: DiscoveredResource[];
+    resourcesTotal: number;
+    resourceDetail: DiscoveredResource | null;
+    loading: boolean;
+    scanning: boolean;
+    error: string | null;
+  };
+  fetchDiscoveryOverview: () => Promise<void>;
+  /** 重新扫描本机真实 Harness 资源（只读；幂等 upsert 索引） */
+  runResourceScan: () => Promise<void>;
+  fetchDiscoveredResources: (q?: ResourceListQuery) => Promise<void>;
+  fetchResourceDetail: (id: string) => Promise<void>;
 }
 
 export const useWorkspaceStore = create<WorkspaceState>()(
@@ -173,6 +197,81 @@ export const useWorkspaceStore = create<WorkspaceState>()(
       projectAgents: [],
       timeRange: "30d",
       stats: null,
+      discovery: {
+        overview: null,
+        resources: [],
+        resourcesTotal: 0,
+        resourceDetail: null,
+        loading: false,
+        scanning: false,
+        error: null,
+      },
+
+      fetchDiscoveryOverview: async () => {
+        set((s) => ({ discovery: { ...s.discovery, loading: true, error: null } }));
+        try {
+          const overview = await fetchDiscoveryOverviewService();
+          set((s) => ({ discovery: { ...s.discovery, overview, loading: false } }));
+        } catch (e) {
+          set((s) => ({
+            discovery: { ...s.discovery, loading: false, error: (e as Error).message },
+          }));
+        }
+      },
+
+      runResourceScan: async () => {
+        set((s) => ({ discovery: { ...s.discovery, scanning: true, error: null } }));
+        try {
+          const result = await runResourceScanService();
+          const run = result.scanRun;
+          // Mock 模式不执行真实扫描（返回空结果）；Real 返回最新扫描记录
+          if (run) {
+            set((s) => ({
+              discovery: {
+                ...s.discovery,
+                overview: {
+                  scanRun: run,
+                  harnesses: result.harnesses,
+                  totalResources: run.totalResources,
+                  parseableCount: run.parseableCount,
+                  lastScannedAt: run.finishedAt,
+                },
+                scanning: false,
+              },
+            }));
+          } else {
+            set((s) => ({ discovery: { ...s.discovery, scanning: false } }));
+          }
+        } catch (e) {
+          set((s) => ({
+            discovery: { ...s.discovery, scanning: false, error: (e as Error).message },
+          }));
+        }
+      },
+
+      fetchDiscoveredResources: async (q) => {
+        set((s) => ({ discovery: { ...s.discovery, loading: true, error: null } }));
+        try {
+          const { items, total } = await fetchDiscoveredResourcesService(q);
+          set((s) => ({ discovery: { ...s.discovery, resources: items, resourcesTotal: total, loading: false } }));
+        } catch (e) {
+          set((s) => ({
+            discovery: { ...s.discovery, loading: false, error: (e as Error).message },
+          }));
+        }
+      },
+
+      fetchResourceDetail: async (id) => {
+        set((s) => ({ discovery: { ...s.discovery, loading: true, error: null } }));
+        try {
+          const detail = await fetchResourceDetailService(id);
+          set((s) => ({ discovery: { ...s.discovery, resourceDetail: detail, loading: false } }));
+        } catch (e) {
+          set((s) => ({
+            discovery: { ...s.discovery, loading: false, error: (e as Error).message },
+          }));
+        }
+      },
 
       hydrate: async () => {
         if (get().hydrated) return;

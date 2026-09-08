@@ -3,6 +3,7 @@ import {
   Bot,
   FolderKanban,
   LayoutDashboard,
+  Radar,
   Settings,
   type LucideIcon,
 } from "lucide-react";
@@ -52,6 +53,17 @@ export const navGroups: NavGroup[] = [
         href: "/capabilities",
         icon: Blocks,
         description: "能力资产库：Skills / Memory / Rules / Tools",
+      },
+    ],
+  },
+  {
+    label: "本地资源",
+    items: [
+      {
+        title: "Local Resources",
+        href: "/resources",
+        icon: Radar,
+        description: "发现并索引本机 AI Harness 资源",
       },
     ],
   },

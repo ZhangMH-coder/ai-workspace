@@ -121,9 +121,87 @@ export const agentRuns = sqliteTable(
   ]
 );
 
+/* ---------------- Resource Discovery（本地资源发现，V1 MVP） ----------------
+ *
+ * 三层结构：
+ * 1. scan_run             —— 一次「重新扫描」的完整记录（扫描位置清单 + 汇总）
+ * 2. harness_scan         —— 每个 Harness 在本次扫描中的命中结果（根路径 + 计数）
+ * 3. discovered_resource  —— 统一资源索引（唯一 by sourcePath，幂等 upsert）
+ *
+ * 边界原则：
+ * - 全部数据来自真实本地文件（只读发现 + 导入索引），不允许伪造资源
+ * - discovered_resource 保留真实绝对路径，可溯源到原始文件
+ * - 无法解析的资源 parseable=false，保留路径与基本信息，不猜测格式
+ */
+
+export const scanRuns = sqliteTable(
+  "scan_run",
+  {
+    id: text("id").primaryKey(),
+    status: text("status").notNull(), // completed | partial | failed
+    startedAt: text("started_at").notNull(),
+    finishedAt: text("finished_at").notNull(),
+    scanRoots: text("scan_roots").notNull().default("[]"), // JSON: 探测过的候选位置
+    byHarness: text("by_harness").notNull().default("{}"), // JSON: 各 Harness 资源数
+    byType: text("by_type").notNull().default("{}"), // JSON: 各类型资源数
+    totalResources: integer("total_resources").notNull().default(0),
+    parseableCount: integer("parseable_count").notNull().default(0),
+  },
+  (t) => [index("idx_scan_run_started").on(t.startedAt)]
+);
+
+export const harnessScans = sqliteTable(
+  "harness_scan",
+  {
+    id: text("id").primaryKey(),
+    scanId: text("scan_id")
+      .notNull()
+      .references(() => scanRuns.id, { onDelete: "cascade" }),
+    harnessId: text("harness_id").notNull(),
+    harnessName: text("harness_name").notNull(),
+    rootPath: text("root_path").notNull(),
+    found: integer("found", { mode: "boolean" }).notNull().default(false),
+    resourceCount: integer("resource_count").notNull().default(0),
+    scannedAt: text("scanned_at").notNull(),
+  },
+  (t) => [index("idx_harness_scan_scan").on(t.scanId)]
+);
+
+export const discoveredResources = sqliteTable(
+  "discovered_resource",
+  {
+    id: text("id").primaryKey(),
+    scanId: text("scan_id")
+      .notNull()
+      .references(() => scanRuns.id, { onDelete: "cascade" }),
+    harnessId: text("harness_id").notNull(),
+    type: text("type").notNull(), // agent | skill | command | rule | prompt | mcp | plugin | other
+    name: text("name").notNull(),
+    description: text("description").notNull().default(""),
+    source: text("source").notNull(), // Harness 展示名
+    sourcePath: text("source_path").notNull(), // 真实绝对路径（唯一）
+    framework: text("framework").notNull(),
+    version: text("version"),
+    status: text("status").notNull().default("unknown"), // enabled | unknown
+    parseable: integer("parseable", { mode: "boolean" }).notNull().default(false),
+    parseNote: text("parse_note"),
+    lastModified: text("last_modified"),
+    metadata: text("metadata").notNull().default("{}"), // JSON: 原始元数据摘要
+  },
+  (t) => [
+    uniqueIndex("uq_discovered_source_path").on(t.sourcePath),
+    index("idx_discovered_harness").on(t.harnessId),
+    index("idx_discovered_type").on(t.type),
+    index("idx_discovered_scan").on(t.scanId),
+  ]
+);
+
 export type AgentRow = typeof agents.$inferSelect;
 export type AgentRunRow = typeof agentRuns.$inferSelect;
 export type CapabilityDefinitionRow = typeof capabilityDefinitions.$inferSelect;
 export type AgentCapabilityRow = typeof agentCapabilities.$inferSelect;
 export type ProjectRow = typeof projects.$inferSelect;
 export type ProjectAgentRow = typeof projectAgents.$inferSelect;
+export type ScanRunRow = typeof scanRuns.$inferSelect;
+export type HarnessScanRow = typeof harnessScans.$inferSelect;
+export type DiscoveredResourceRow = typeof discoveredResources.$inferSelect;

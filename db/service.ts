@@ -18,6 +18,21 @@ import { canTransition } from "@/lib/runtime/contracts";
 import type { CapabilitySource, RunLifecycleStatus, RuntimeRequest } from "@/lib/runtime/contracts";
 import { createRuntime, createProviderRegistry } from "@/lib/runtime/runtime";
 import { mockProvider } from "@/lib/runtime/mock-provider";
+import { runDiscoveryScan } from "@/lib/discovery/scanner";
+import { ADAPTERS } from "@/lib/discovery/registry";
+import type {
+  DiscoveredResource,
+  DiscoveryOverview,
+  HarnessScanSummary,
+  RunScanResult,
+  ScanRun,
+  ScanStatus,
+} from "@/lib/types";
+import type {
+  DiscoveredResourceRow,
+  HarnessScanRow,
+  ScanRunRow,
+} from "./schema";
 
 /** 统一内部错误（code 对齐 ApiErrorCode；CONFLICT 语义由具体业务触发） */
 export class ServiceError extends Error {
@@ -296,4 +311,174 @@ export function detachAgentFromProject(id: string) {
 export function resetDemo() {
   clearAll();
   return runSeed();
+}
+/* ---------------- Resource Discovery（本地资源发现，V1 MVP） ----------------
+ *
+ * 编排：扫描器（只读）→ 幂等 upsert 索引（by sourcePath）→ 汇总落库。
+ * 页面 / Store 不直接接触文件系统；所有发现数据以 SQLite 为事实源。
+ */
+
+function adapterNameById(id: string): string {
+  return ADAPTERS.find((a) => a.id === id)?.name ?? id;
+}
+
+function adapterFrameworkById(id: string): string {
+  return ADAPTERS.find((a) => a.id === id)?.framework ?? "";
+}
+
+function scanRunToDomain(row: ScanRunRow | null): ScanRun | null {
+  if (!row) return null;
+  return {
+    id: row.id,
+    status: row.status as ScanStatus,
+    startedAt: row.startedAt,
+    finishedAt: row.finishedAt,
+    locations: JSON.parse(row.scanRoots) as ScanRun["locations"],
+    byHarness: JSON.parse(row.byHarness) as Record<string, number>,
+    byType: JSON.parse(row.byType) as Record<string, number>,
+    totalResources: row.totalResources,
+    parseableCount: row.parseableCount,
+  };
+}
+
+function harnessScanToDomain(
+  row: Pick<
+    HarnessScanRow,
+    "harnessId" | "harnessName" | "rootPath" | "found" | "resourceCount" | "scannedAt"
+  >
+): HarnessScanSummary {
+  return {
+    harnessId: row.harnessId,
+    harnessName: row.harnessName,
+    rootPath: row.rootPath,
+    found: row.found,
+    resourceCount: row.resourceCount,
+    scannedAt: row.scannedAt,
+  };
+}
+
+function resourceToDomain(row: DiscoveredResourceRow): DiscoveredResource {
+  return {
+    id: row.id,
+    scanId: row.scanId,
+    harnessId: row.harnessId,
+    type: row.type as DiscoveredResource["type"],
+    name: row.name,
+    description: row.description,
+    source: row.source,
+    sourcePath: row.sourcePath,
+    framework: row.framework,
+    version: row.version,
+    status: row.status === "enabled" ? "enabled" : "unknown",
+    parseable: row.parseable,
+    parseNote: row.parseNote,
+    lastModified: row.lastModified,
+    metadata: JSON.parse(row.metadata) as Record<string, unknown>,
+  };
+}
+
+/** 执行一次全量只读扫描并更新索引（幂等：by sourcePath upsert） */
+export function runResourceScan(): RunScanResult {
+  const outcome = runDiscoveryScan();
+  const now = new Date().toISOString();
+  const scanId = randomUUID();
+
+  const byHarness: Record<string, number> = {};
+  const byType: Record<string, number> = {};
+  let parseableCount = 0;
+  for (const r of outcome.resources) {
+    byHarness[r.harnessId] = (byHarness[r.harnessId] ?? 0) + 1;
+    byType[r.type] = (byType[r.type] ?? 0) + 1;
+    if (r.parseable) parseableCount += 1;
+  }
+
+  repo.insertScanRun({
+    id: scanId,
+    status: (outcome.errors.length > 0 ? "partial" : "completed") as ScanStatus,
+    startedAt: now,
+    finishedAt: now,
+    scanRoots: JSON.stringify(outcome.locations),
+    byHarness: JSON.stringify(byHarness),
+    byType: JSON.stringify(byType),
+    totalResources: outcome.resources.length,
+    parseableCount,
+  });
+
+  const harnessSummaries: HarnessScanSummary[] = [];
+  for (const h of outcome.harnessScans) {
+    repo.insertHarnessScan({
+      id: randomUUID(),
+      scanId,
+      harnessId: h.harnessId,
+      harnessName: h.harnessName,
+      rootPath: h.rootPath,
+      found: h.found,
+      resourceCount: h.resourceCount,
+      scannedAt: h.scannedAt,
+    });
+    harnessSummaries.push(harnessScanToDomain(h));
+  }
+
+  const resources: DiscoveredResource[] = [];
+  for (const r of outcome.resources) {
+    const row = repo.upsertDiscoveredResource({
+      id: randomUUID(),
+      scanId,
+      harnessId: r.harnessId,
+      type: r.type,
+      name: r.name,
+      description: r.description,
+      source: adapterNameById(r.harnessId),
+      sourcePath: r.sourcePath,
+      framework: adapterFrameworkById(r.harnessId),
+      version: r.version ?? null,
+      status: r.status ?? "unknown",
+      parseable: r.parseable,
+      parseNote: r.parseNote ?? null,
+      lastModified: r.lastModified,
+      metadata: JSON.stringify(r.metadata ?? {}),
+    });
+    resources.push(resourceToDomain(row));
+  }
+
+  return {
+    scanRun: scanRunToDomain(repo.getScanRun(scanId))!,
+    harnesses: harnessSummaries,
+    resources,
+  };
+}
+
+/** 最新一次扫描的概览（无扫描 → null 区块 + 空统计，供空态展示） */
+export function getDiscoveryOverview(): DiscoveryOverview {
+  const latest = repo.getLatestScanRun();
+  if (!latest) {
+    return { scanRun: null, harnesses: [], totalResources: 0, parseableCount: 0, lastScannedAt: null };
+  }
+  const harnesses = repo.listHarnessScansByScan(latest.id).map(harnessScanToDomain);
+  return {
+    scanRun: scanRunToDomain(latest),
+    harnesses,
+    totalResources: latest.totalResources,
+    parseableCount: latest.parseableCount,
+    lastScannedAt: latest.finishedAt,
+  };
+}
+
+/** 资源列表（支持搜索 / 类型 / Harness / 可解析过滤 + 分页） */
+export function listDiscoveredResources(q: {
+  search?: string;
+  type?: string;
+  harness?: string;
+  parseable?: boolean;
+  page: number;
+  pageSize: number;
+}) {
+  const { items, total } = repo.listDiscoveredResources(q);
+  return { items: items.map(resourceToDomain), total };
+}
+
+export function getDiscoveredResource(id: string): DiscoveredResource {
+  const row = repo.getDiscoveredResource(id);
+  if (!row) throw new ServiceError("NOT_FOUND", "资源不存在");
+  return resourceToDomain(row);
 }

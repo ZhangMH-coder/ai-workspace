@@ -447,6 +447,69 @@ Authentication / Multi-user / Permissions / 真实 LLM Provider Adapter（OpenAI
 
 `git commit`（Final Freeze）：工作区整理 + README/.env 对齐 + 计划文件封版 + 最终回归通过。
 
+---
+
+# Resource Discovery MVP（本地资源发现，真实数据验证阶段）
+
+> 在 V1 Final / Frozen 之上追加的独立能力：只读发现本机真实 AI Harness 资源，解析为统一索引（SQLite）并在新增的 Local Resources 页面可视化展示。**本阶段零 Demo / Mock 数据，一切资源来自真实本地文件；原始 Harness 文件严格只读。**
+
+## 当前阶段
+
+Resource Discovery MVP —— 实现完成、全量验证通过、待审批（不进入资源执行 / 编辑 / 删除 / 同步 / 远程部署 / MCP 调用 / 真实 AI 集成）。
+
+## 本次修改内容
+
+- **新增 3 张表**（migration `0002_majestic_aqueduct.sql`，已应用）：
+  - `scan_run`：一次扫描的汇总（状态 completed/partial/failed、覆盖位置、byHarness/byType 分布、总数、可解析数）。
+  - `harness_scan`：每次扫描对每个 Harness 的命中结果（found、resourceCount、rootPath）。
+  - `discovered_resource`：统一资源索引，`sourcePath` 唯一键（幂等 upsert，重复扫描不产生重复资源）。
+- **Adapter 层**（`lib/discovery/`）：`HarnessAdapter` 接口（id/name/framework/probe/scan）+ 6 个 Adapter：
+  - `doubao`（Doubao Skills：.skills 根 105 个 SKILL.md；.user_skills 与 C:\Users\Administrator\Doubao\skills 为空目录，如实 0）
+  - `claude`（projects→CLAUDE.md(rule)、plugins/marketplaces→plugin、根脚本→other parseable=false）
+  - `cursor`（skills-cursor→skill、agents→agent、plugins→plugin）
+  - `codex`（根 config→rule、plugins→plugin、AGENTS.md→rule）
+  - `cursor-user`（settings.json→rule、snippets→command，JSON 可解析才算）
+  - `project-agents`（CWD 根 AGENTS.md/CLAUDE.md/.claude→rule）
+- **扫描器**（`lib/discovery/scanner.ts`）：候选根从 HOME/LOCALAPPDATA/APPDATA/CWD 推导；只读头部 4KB；跳过运行态目录（node_modules/.git/cache/telemetry/sessions/tmp 等）。
+- **Repository / Service**：discovery CRUD（含 `onConflictDoUpdate target=sourcePath` 幂等 upsert）；`runResourceScan / getDiscoveryOverview / listDiscoveredResources / getDiscoveredResource`。
+- **API**（`/api/v1/resource-discovery/*`）：scan(POST) / overview / harnesses / resources(搜索/类型/Harness/可解析过滤+分页) / resources/[id]。
+- **前端**：`/resources` 列表页（统计 4 卡 + 类型分布 + Harness 网格 + 资源表）+ `/resources/[id]` 溯源详情页；Store discovery 区块；导航「本地资源」；Mock 模式返回结构化空态（不伪造）。
+- **领域类型**（`lib/types.ts`）：`DiscoveredResource / HarnessScanSummary / ScanRun / ScanLocation / DiscoveryOverview / RunScanResult` 等。
+
+## 已完成内容（含真实验证结果）
+
+- **实际发现的 Harness 与资源数**（一次全量扫描，`db:reset` 后亦稳定）：
+
+  | Harness | 命中 | 资源数 | 根路径 |
+  |---|---|---|---|
+  | Doubao Skills（.skills） | ✓ | 105（skill） | `C:\Users\Administrator\AppData\Local\Doubao\User Data\Default\.doubao\agent_mode\workspace\.skills` |
+  | Doubao（.user_skills / Doubao\skills） | ✓（存在但空） | 0 | 如实显示空目录 |
+  | Claude | ✓ | 15（rule/plugin/other） | `C:\Users\Administrator\.claude` |
+  | Cursor | ✓ | 19（skill/agent/plugin） | `C:\Users\Administrator\.cursor` |
+  | Codex CLI | ✓ | 3（rule/plugin） | `C:\Users\Administrator\.codex` |
+  | Cursor User | ✓ | 1（rule；snippets 空） | `C:\Users\Administrator\AppData\Roaming\Cursor\User` |
+  | Project 指令 | ✓ | 2（rule：AGENTS.md/CLAUDE.md） | `D:\AI workspace` |
+
+  **合计 145 个资源；128 个已解析（88.3%）。**
+- **各类型数量**：Skill 123 / Rule 19 / Plugin 2 / Other 1（按真实扫描结果）。
+- **parseable=false 共 17 个，均保留真实路径与原因，不猜测格式**：
+  - Claude 项目目录内无 CLAUDE.md（11 个，含 10 个 Temp\tmp 临时项目，如实展示）；
+  - Codex `.plugin-appserver` / Cursor `plugins\local` 无 *.json manifest（不猜插件格式）；
+  - Claude 根 `anthropic_proxy.py` 无统一资源契约（仅保留位置）。
+- **覆盖路径**：HOME、LOCALAPPDATA、APPDATA、CWD 四组候选根推导出的全部位置；未命中的 `.continue / .gemini / .aider / .code / AppData\Roaming\Code\User / D:\AI workspace\.claude / .cursor` 如实标注未命中。
+- **验证结果**：lint（0 error 0 warning）/ tsc --noEmit / db:check / build（Real + Mock 双模式）/ 生产交互（/resources 列表页、详情页溯源、控制台无应用错误）/ 只读确认（原始文件 mtime 扫描前后不变）/ 幂等（二次扫描 total 仍 145）/ Mock 模式显示「Mock 模式不执行真实扫描」空态、零伪造数据 / API 冒烟（scan→overview→resources→detail 全链）。
+- **Git**：本阶段变更已 commit（见交付汇报）。
+
+## 遗留问题
+
+- Claude `projects\` 下的 Temp 临时项目目录（无 CLAUDE.md）会被如实索引为 parseable=false 的 rule——属真实状态，后续可考虑在 Adapter 内按项目路径前缀过滤临时会话，但**不在本阶段范围**。
+- 浏览器控制台存在一条 `chrome-extension://` 扩展注入错误（非应用错误，与本地扩展环境相关，已记录）。
+
+## 下一步计划
+
+等待审批。后续可选方向（均未获批准前不实施）：资源执行 / 编辑 / 删除 / 同步 / 远程部署 / MCP 调用 / 真实 AI 集成；更多 Harness Adapter（.continue、.aider、Gemini CLI 等）；临时会话目录过滤优化。
+
+
 
 
 

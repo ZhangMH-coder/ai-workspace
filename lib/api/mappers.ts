@@ -8,9 +8,14 @@ import type {
   AgentCapability,
   AgentRun,
   CapabilityDefinition,
+  DiscoveredResource,
+  DiscoveryOverview,
+  HarnessScanSummary,
   Project,
   ProjectAgent,
+  RunScanResult,
   RunsStats,
+  ScanRun,
 } from "@/lib/types";
 import { normalizeRunStatus } from "@/lib/types";
 import type {
@@ -18,9 +23,14 @@ import type {
   AgentDTO,
   AgentRunDTO,
   CapabilityDefinitionDTO,
+  DiscoveredResourceDTO,
+  DiscoveryOverviewDTO,
+  HarnessScanSummaryDTO,
   ProjectAgentDTO,
   ProjectDTO,
   RunsStatsDTO,
+  RunScanResultDTO,
+  ScanRunDTO,
 } from "./dto";
 
 export function toAgent(d: AgentDTO): Agent {
@@ -128,5 +138,70 @@ export function toRunsStats(d: RunsStatsDTO): RunsStats {
         successRate: day.runs > 0 ? day.successRate / 100 : 0,
       };
     }),
+  };
+}
+
+/* ---------------- Resource Discovery 映射（本地资源发现，V1 MVP） ---------------- */
+
+export function toDiscoveredResource(d: DiscoveredResourceDTO): DiscoveredResource {
+  return {
+    id: d.id,
+    scanId: d.scanId,
+    harnessId: d.harnessId,
+    type: d.type,
+    name: d.name,
+    description: d.description,
+    source: d.source,
+    sourcePath: d.sourcePath,
+    framework: d.framework,
+    version: d.version,
+    status: d.status,
+    parseable: d.parseable,
+    parseNote: d.parseNote,
+    lastModified: d.lastModified,
+    metadata: d.metadata ?? {},
+  };
+}
+
+export function toHarnessScanSummary(d: HarnessScanSummaryDTO): HarnessScanSummary {
+  return {
+    harnessId: d.harnessId,
+    harnessName: d.harnessName,
+    rootPath: d.rootPath,
+    found: d.found,
+    resourceCount: d.resourceCount,
+    scannedAt: d.scannedAt,
+  };
+}
+
+export function toScanRun(d: ScanRunDTO): ScanRun {
+  return {
+    id: d.id,
+    status: d.status,
+    startedAt: d.startedAt,
+    finishedAt: d.finishedAt,
+    locations: d.locations ?? [],
+    byHarness: d.byHarness ?? {},
+    byType: d.byType ?? {},
+    totalResources: d.totalResources,
+    parseableCount: d.parseableCount,
+  };
+}
+
+export function toDiscoveryOverview(d: DiscoveryOverviewDTO): DiscoveryOverview {
+  return {
+    scanRun: d.scanRun ? toScanRun(d.scanRun) : null,
+    harnesses: (d.harnesses ?? []).map(toHarnessScanSummary),
+    totalResources: d.totalResources,
+    parseableCount: d.parseableCount,
+    lastScannedAt: d.lastScannedAt,
+  };
+}
+
+export function toRunScanResult(d: RunScanResultDTO): RunScanResult {
+  return {
+    scanRun: d.scanRun ? toScanRun(d.scanRun) : null,
+    harnesses: (d.harnesses ?? []).map(toHarnessScanSummary),
+    resources: (d.resources ?? []).map(toDiscoveredResource),
   };
 }

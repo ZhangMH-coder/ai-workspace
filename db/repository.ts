@@ -14,8 +14,11 @@ import {
   agentRuns,
   agents,
   capabilityDefinitions,
+  discoveredResources,
+  harnessScans,
   projectAgents,
   projects,
+  scanRuns,
 } from "./schema";
 
 /* ---------------- 通用分页 ---------------- */
@@ -434,4 +437,110 @@ export function insertProjectAgent(row: typeof projectAgents.$inferInsert) {
 
 export function deleteProjectAgent(id: string) {
   db.delete(projectAgents).where(eq(projectAgents.id, id)).run();
+}
+
+/* ---------------- Resource Discovery（本地资源发现，V1 MVP） ---------------- */
+
+export function insertScanRun(row: typeof scanRuns.$inferInsert) {
+  return db.insert(scanRuns).values(row).returning().get();
+}
+
+export function insertHarnessScan(row: typeof harnessScans.$inferInsert) {
+  db.insert(harnessScans).values(row).run();
+}
+
+/** 以 sourcePath 为唯一键幂等 upsert（重复扫描不产生重复资源）；返回最新行 */
+export function upsertDiscoveredResource(row: typeof discoveredResources.$inferInsert) {
+  return db
+    .insert(discoveredResources)
+    .values(row)
+    .onConflictDoUpdate({
+      target: discoveredResources.sourcePath,
+      set: {
+        scanId: row.scanId,
+        harnessId: row.harnessId,
+        type: row.type,
+        name: row.name,
+        description: row.description,
+        source: row.source,
+        framework: row.framework,
+        version: row.version,
+        status: row.status,
+        parseable: row.parseable,
+        parseNote: row.parseNote,
+        lastModified: row.lastModified,
+        metadata: row.metadata,
+      },
+    })
+    .returning()
+    .get();
+}
+
+export function getLatestScanRun() {
+  return db.select().from(scanRuns).orderBy(desc(scanRuns.startedAt)).limit(1).get() ?? null;
+}
+
+export function getScanRun(id: string) {
+  return db.select().from(scanRuns).where(eq(scanRuns.id, id)).get() ?? null;
+}
+
+export function listHarnessScansByScan(scanId: string) {
+  return db
+    .select()
+    .from(harnessScans)
+    .where(eq(harnessScans.scanId, scanId))
+    .orderBy(asc(harnessScans.harnessName))
+    .all();
+}
+
+export interface DiscoveredResourceQuery {
+  search?: string;
+  type?: string;
+  harness?: string;
+  parseable?: boolean;
+  page: number;
+  pageSize: number;
+}
+
+export function listDiscoveredResources(q: DiscoveredResourceQuery) {
+  const conds = [];
+  if (q.search) {
+    const s = `%${q.search}%`;
+    conds.push(or(like(discoveredResources.name, s), like(discoveredResources.sourcePath, s)));
+  }
+  if (q.type) conds.push(eq(discoveredResources.type, q.type));
+  if (q.harness) conds.push(eq(discoveredResources.harnessId, q.harness));
+  if (q.parseable !== undefined) conds.push(eq(discoveredResources.parseable, q.parseable));
+  const where = conds.length ? and(...conds) : undefined;
+
+  const total = db
+    .select({ n: count() })
+    .from(discoveredResources)
+    .where(where)
+    .get()?.n ?? 0;
+  const items = db
+    .select()
+    .from(discoveredResources)
+    .where(where)
+    .orderBy(desc(discoveredResources.lastModified), asc(discoveredResources.name))
+    .limit(q.pageSize)
+    .offset(offsetOf(q))
+    .all();
+  return { items, total };
+}
+
+export function getDiscoveredResource(id: string) {
+  return db.select().from(discoveredResources).where(eq(discoveredResources.id, id)).get() ?? null;
+}
+
+export function countDiscoveredResources() {
+  return db.select({ n: count() }).from(discoveredResources).get()?.n ?? 0;
+}
+
+export function listDistinctHarnessResources() {
+  return db
+    .select({ harnessId: discoveredResources.harnessId, n: count() })
+    .from(discoveredResources)
+    .groupBy(discoveredResources.harnessId)
+    .all();
 }

@@ -8,6 +8,10 @@
 import type {
   CapabilityLifecycle,
   CapabilityType,
+  ResourceStatus,
+  ResourceType,
+  ScanLocation,
+  ScanStatus,
   TimeRange,
 } from "@/lib/types";
 
@@ -110,3 +114,61 @@ export interface TimeWindowParams {
 }
 
 export type TimeRangeParam = TimeRange;
+
+/* ---------------- Resource Discovery DTO（本地资源发现，V1 MVP） ----------------
+ *
+ * DTO 与 Domain 同构（本区块数据只读展示，无独立写契约形状）；
+ * 独立定义以保留 DTO/Domain 分离的演进边界（接真实 API 时字段可能变化）。
+ */
+export interface DiscoveredResourceDTO {
+  id: string;
+  scanId: string;
+  harnessId: string;
+  type: ResourceType;
+  name: string;
+  description: string;
+  source: string;
+  sourcePath: string;
+  framework: string;
+  version: string | null;
+  status: ResourceStatus;
+  parseable: boolean;
+  parseNote: string | null;
+  lastModified: string | null;
+  metadata: Record<string, unknown>;
+}
+
+export interface HarnessScanSummaryDTO {
+  harnessId: string;
+  harnessName: string;
+  rootPath: string;
+  found: boolean;
+  resourceCount: number;
+  scannedAt: string;
+}
+
+export interface ScanRunDTO {
+  id: string;
+  status: ScanStatus;
+  startedAt: string;
+  finishedAt: string;
+  locations: ScanLocation[];
+  byHarness: Record<string, number>;
+  byType: Record<string, number>;
+  totalResources: number;
+  parseableCount: number;
+}
+
+export interface DiscoveryOverviewDTO {
+  scanRun: ScanRunDTO | null;
+  harnesses: HarnessScanSummaryDTO[];
+  totalResources: number;
+  parseableCount: number;
+  lastScannedAt: string | null;
+}
+
+export interface RunScanResultDTO {
+  scanRun: ScanRunDTO | null;
+  harnesses: HarnessScanSummaryDTO[];
+  resources: DiscoveredResourceDTO[];
+}

@@ -3,9 +3,10 @@
 /**
  * 工作区全局状态（Zustand + persist，Phase 3）
  *
- * 单一数据源：agents + runs + timeRange。
- * - 持久化：agents / runs / timeRange 写入 localStorage（key: ai-workspace-store），
- *   刷新后数据保留；actions 与 hydrated 标志不持久化。
+ * 单一数据源：agents + runs + capabilityDefinitions + agentCapabilities + timeRange。
+ * - 持久化（localStorage key: ai-workspace-store，version 2）：
+ *   agents / runs / agentCapabilities / timeRange；
+ *   actions、hydrated 标志、capabilityDefinitions（本阶段只读资产，随 seed 回填）不持久化。
  * - 演示数据可恢复：无持久化数据时 hydrate() 自动从 Mock 服务层拉取 seed；
  *   resetDemoData() 显式重置回 seed（并写回持久化）。
  * - 未来接入真实 API 时仅替换 lib/services 实现。
@@ -19,13 +20,31 @@ import {
   fetchRuns as fetchRunsService,
   runAgent as runAgentService,
 } from "@/lib/services/agents";
-import type { Agent, AgentRun, NewAgentInput, TimeRange } from "@/lib/types";
+import {
+  attachCapability as attachCapabilityService,
+  detachCapability as detachCapabilityService,
+  fetchCapabilityDefinitions as fetchCapabilityDefinitionsService,
+  setCapabilityEnabled as setCapabilityEnabledService,
+} from "@/lib/services/capabilities";
+import { seedAgentCapabilities } from "@/lib/mock-data/seed";
+import type {
+  Agent,
+  AgentCapability,
+  AgentRun,
+  CapabilityDefinition,
+  NewAgentInput,
+  TimeRange,
+} from "@/lib/types";
 
 interface WorkspaceState {
   /** 数据加载状态 */
   hydrated: boolean;
   agents: Agent[];
   runs: AgentRun[];
+  /** 能力资产（定义/资产，只读；不持久化，随 seed 回填） */
+  capabilityDefinitions: CapabilityDefinition[];
+  /** 装配关系（持久化，version 2 起） */
+  agentCapabilities: AgentCapability[];
   timeRange: TimeRange;
 
   /** 首次加载（幂等）：无持久化数据时拉取 seed */
@@ -35,6 +54,15 @@ interface WorkspaceState {
   createAgent: (input: NewAgentInput) => Promise<Agent>;
   /** 触发运行并返回新 run（调用方用于提示） */
   runAgent: (agentId: string) => Promise<AgentRun>;
+  /** 装配一个能力到 Agent（幂等：已存在则直接返回现有记录） */
+  attachCapability: (
+    agentId: string,
+    capabilityId: string
+  ) => Promise<AgentCapability>;
+  /** 启用 / 停用某个装配关系（目标不存在则抛错） */
+  setCapabilityEnabled: (id: string, enabled: boolean) => Promise<void>;
+  /** 解绑装配关系（幂等删除） */
+  detachCapability: (id: string) => Promise<void>;
   /** 重置回演示 seed 数据（持久化随之更新） */
   resetDemoData: () => Promise<void>;
 }
@@ -45,18 +73,33 @@ export const useWorkspaceStore = create<WorkspaceState>()(
       hydrated: false,
       agents: [],
       runs: [],
+      capabilityDefinitions: [],
+      agentCapabilities: [],
       timeRange: "30d",
 
       hydrate: async () => {
         if (get().hydrated) return;
-        // 持久化数据存在则直接使用；否则拉取 seed 演示数据
         const hasStored = get().agents.length > 0 || get().runs.length > 0;
         if (!hasStored) {
-          const [agents, runs] = await Promise.all([
+          // 无持久化数据：全量回填 seed（装配关系也一并重置为 seed）
+          const [agents, runs, capabilityDefinitions] = await Promise.all([
             fetchAgentsService(),
             fetchRunsService(),
+            fetchCapabilityDefinitionsService(),
           ]);
-          set({ agents, runs });
+          set({
+            agents,
+            runs,
+            capabilityDefinitions,
+            agentCapabilities: seedAgentCapabilities.map((ac) => ({ ...ac })),
+          });
+        } else {
+          // 持久化数据存在：补资产定义（只读资产不持久化，始终以 seed 为准）
+          if (get().capabilityDefinitions.length === 0) {
+            const capabilityDefinitions =
+              await fetchCapabilityDefinitionsService();
+            set({ capabilityDefinitions });
+          }
         }
         set({ hydrated: true });
       },
@@ -81,23 +124,77 @@ export const useWorkspaceStore = create<WorkspaceState>()(
         return run;
       },
 
+      attachCapability: async (agentId, capabilityId) => {
+        // 幂等：同 (agentId, capabilityId) 已有装配则直接返回，不重复创建
+        const existing = get().agentCapabilities.find(
+          (ac) => ac.agentId === agentId && ac.capabilityId === capabilityId
+        );
+        if (existing) return existing;
+        const created = await attachCapabilityService({
+          agentId,
+          capabilityId,
+        });
+        set((state) => ({
+          agentCapabilities: [created, ...state.agentCapabilities],
+        }));
+        return created;
+      },
+
+      setCapabilityEnabled: async (id, enabled) => {
+        const target = get().agentCapabilities.find((ac) => ac.id === id);
+        if (!target) throw new Error("装配关系不存在或已解绑");
+        const confirmed = await setCapabilityEnabledService({ id, enabled });
+        set((state) => ({
+          agentCapabilities: state.agentCapabilities.map((ac) =>
+            ac.id === id ? { ...ac, enabled: confirmed.enabled } : ac
+          ),
+        }));
+      },
+
+      detachCapability: async (id) => {
+        await detachCapabilityService(id);
+        set((state) => ({
+          agentCapabilities: state.agentCapabilities.filter(
+            (ac) => ac.id !== id
+          ),
+        }));
+      },
+
       resetDemoData: async () => {
-        const [agents, runs] = await Promise.all([
+        const [agents, runs, capabilityDefinitions] = await Promise.all([
           fetchAgentsService(),
           fetchRunsService(),
+          fetchCapabilityDefinitionsService(),
         ]);
-        set({ agents, runs, timeRange: "30d" });
+        set({
+          agents,
+          runs,
+          capabilityDefinitions,
+          agentCapabilities: seedAgentCapabilities.map((ac) => ({ ...ac })),
+          timeRange: "30d",
+        });
       },
     }),
     {
       name: "ai-workspace-store",
-      version: 1,
+      version: 2,
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({
         agents: state.agents,
         runs: state.runs,
+        agentCapabilities: state.agentCapabilities,
         timeRange: state.timeRange,
       }),
+      migrate: (persistedState, version) => {
+        if (version < 2) {
+          // v1 → v2：补充装配关系（seed），旧数据升级后即可管理装配
+          return {
+            ...(persistedState as object),
+            agentCapabilities: seedAgentCapabilities.map((ac) => ({ ...ac })),
+          };
+        }
+        return persistedState as object;
+      },
     }
   )
 );

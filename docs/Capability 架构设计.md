@@ -1,7 +1,7 @@
-# Capability 能力层架构设计（Phase 3 第一阶段）
+# Capability 能力层架构设计（Phase 3）
 
-> 状态：**设计已定稿，只读展示已落地**；独立 CRUD 页面为后续阶段，不在本文档范围内实现。
-> 关联代码：`lib/types.ts`（契约）、`lib/services/capabilities.ts`（Service 边界）、`lib/mock-data/seed.ts`（演示资产）、`components/agents/capability-list.tsx`（只读视图）。
+> 状态：**设计已定稿**——第一阶段只读展示已落地；第二阶段装配关系编辑已落地（本文件第八章起）。
+> 关联代码：`lib/types.ts`（契约）、`lib/services/capabilities.ts`（Service 边界）、`lib/mock-data/seed.ts`（演示资产）、`stores/workspace.ts`（单一数据源）、`components/agents/capability-list.tsx`（列表）、`components/agents/capability-picker.tsx`（装配面板）。
 
 ---
 
@@ -101,3 +101,82 @@ Agent 详情页（管理装配关系）
 ## 七、演示数据说明
 
 `lib/mock-data/seed.ts` 提供 16 个能力定义（Skills 4 / Memory 3 / Rules 5 / Tools 4）与各 Agent 的装配关系（含 2 条 `enabled: false` 用于展示停用状态）。数据为演示用途，接入真实 API 后整体替换。
+
+
+---
+
+## 八、Phase 3 第二阶段：装配关系编辑（方案 B）
+
+### 8.1 目标与范围
+
+验证 `CapabilityDefinition → AgentCapability → Agent` 三层关系可形成**真实可操作的闭环**：
+搜索可用能力 → 装配 → 启用/停用 → 解绑，全部写入同一 Store 数据源，详情页实时反映。
+
+**本阶段不做**：四类能力独立资产列表页、Definition 增删改、市场/库、Projects、Settings、真实后端。
+
+### 8.2 三态模型（不引入多个布尔）
+
+| 状态 | 表达方式 |
+| --- | --- |
+| 未装配 | 不存在 `(agentId, capabilityId)` 的 `AgentCapability` 记录 |
+| 已装配启用 | 存在且 `enabled === true` |
+| 已装配停用 | 存在且 `enabled === false` |
+
+三态由「记录存在性 + 单一 `enabled` 布尔」完整表达；**禁止**用多个易冲突的布尔字段表达同一生命周期（如 `isAttached` / `isEnabled` / `isActive`）。
+
+### 8.3 Service 写操作契约（贴近未来 Real API）
+
+```ts
+// 对应 REST 语义
+attachCapability(input: { agentId; capabilityId }): Promise<AgentCapability>   // POST /agent-capabilities
+setCapabilityEnabled(input: { id; enabled }): Promise<{ id; enabled }>         // PATCH /agent-capabilities/:id
+detachCapability(id: string): Promise<void>                                     // DELETE /agent-capabilities/:id
+```
+
+- 全部 async + 模拟延迟 + 类型化返回 + 抛错路径（网络/校验失败）。
+- Mock 实现只负责「往返 + 构造/确认实体」，**不持有状态**；数据落地唯一入口是 Store actions。
+- 失败注入不设随机：演示体验稳定优先；失败路径由组件 `try/catch` 完备处理（toast + 状态不落地），真实 API 场景直接可用。
+
+### 8.4 Store 演进（保持单一数据源）
+
+- 新增 `capabilityDefinitions: CapabilityDefinition[]`（资产，hydrate 回填，本阶段只读不持久化）
+- 新增 `agentCapabilities: AgentCapability[]`（装配，**持久化**；persist version 1 → 2，migrate 对旧数据回填 seed 装配）
+- 新增 actions（全部 async，内部走 Service，成功后 `set` 更新本地）：
+  - `attachCapability(agentId, capabilityId)` —— 幂等（已存在直接返回）
+  - `setCapabilityEnabled(id, enabled)` —— 目标不存在则抛错
+  - `detachCapability(id)` —— 幂等删除
+- `resetDemoData()` 一并重置 definitions + agentCapabilities 回 seed
+- 派生：组件经 `composeCapabilityViews(definitions, agentCapabilities)` 组装视图（纯函数），任何消费方（详情页 / 未来 Dashboard 展示）同源。
+
+### 8.5 页面信息架构与交互规范
+
+**Agent 详情页 — 已装配能力（可编辑）**
+- 头部：标题 + Badge「可管理 · Phase 3」+ 「+ 装配能力」按钮
+- 分组列表（沿用第一阶段 map 驱动分组）：
+  - 已装配启用：品牌色状态点；hover 出现「停用」按钮
+  - 已装配停用：中性状态点 + 「已停用」Badge；「启用」按钮
+  - 解绑：`Trash2` 图标按钮 → Dialog 二次确认（破坏性操作，说明可重新装配）→ 移除
+- 空状态：「尚未装配能力」+ 「装配能力」按钮（不再是"后续开放"文案）
+- 写操作中：目标按钮 spinner + disabled；成功/失败 toast
+
+**装配面板 `CapabilityPicker`（Dialog）**
+- 打开：详情页「+ 装配能力」（或空状态按钮）；打开即聚焦搜索框
+- 搜索：按名称/描述本地过滤（不额外建索引，16 条资产规模足够）
+- 列表按类型分组（skill → memory → rule → tool），三类状态各自呈现：
+  - 未装配 → 「装配」按钮
+  - 已装配启用 → 「已启用」Badge + 装配按钮禁用（不可重复装配）
+  - 已装配停用 → 「已停用」Badge + 「启用」按钮（直接恢复）
+- 空搜索：「未找到匹配的能力」空态
+- 全部操作实时写 Store → 面板与列表同步刷新（无需关闭面板）
+
+### 8.6 一致性保证
+
+装配状态只经 Store actions 变更；列表、面板、未来任何消费方都从同一 Store 读取。Dashboard 无能力展示字段，无需改动即天然一致（验证时回归确认）。
+
+### 8.7 验证清单
+
+1. lint / tsc / build 全绿
+2. 生产交互：装配（搜索 → 装配 → 列表出现启用项）→ 停用 → 重新启用 → 解绑（Dialog 确认）→ 面板三态区分
+3. 硬刷新后装配状态保留（持久化 v2）
+4. 重置演示数据恢复 seed 装配（34 条）
+5. 详情页列表与面板实时一致；控制台 0 error

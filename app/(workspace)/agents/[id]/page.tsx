@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { ArrowLeft, Bot, Loader2, Play } from "lucide-react";
+import { ArrowLeft, Bot, Loader2, Play, Plus } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { AgentStatusBadge } from "@/components/agents/status-badge";
 import { CapabilityList } from "@/components/agents/capability-list";
+import { CapabilityPicker } from "@/components/agents/capability-picker";
 import { PageHeader } from "@/components/shared/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -42,6 +43,7 @@ export default function AgentDetailPage() {
   const runAgent = useWorkspaceStore((s) => s.runAgent);
 
   const [running, setRunning] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   useEffect(() => {
     void hydrate();
@@ -192,14 +194,34 @@ export default function AgentDetailPage() {
           <Card className="rounded-xl bg-surface-1 p-5">
             <div className="flex items-center justify-between">
               <h3 className="text-[14px] font-semibold text-ink">已装配能力</h3>
-              <Badge variant="outline" className="text-[11px] font-normal text-ink-3">
-                只读 · Phase 3
-              </Badge>
+              <div className="flex items-center gap-2">
+                <Badge
+                  variant="outline"
+                  className="text-[11px] font-normal text-ink-3"
+                >
+                  可管理 · Phase 3
+                </Badge>
+                <Button size="sm" variant="outline" onClick={() => setPickerOpen(true)}>
+                  <Plus />
+                  装配能力
+                </Button>
+              </div>
             </div>
             <div className="mt-4">
-              <CapabilityList agentId={agent.id} />
+              <CapabilityList
+                agentId={agent.id}
+                agentName={agent.name}
+                onOpenPicker={() => setPickerOpen(true)}
+              />
             </div>
           </Card>
+
+          <CapabilityPicker
+            agentId={agent.id}
+            agentName={agent.name}
+            open={pickerOpen}
+            onOpenChange={setPickerOpen}
+          />
         </div>
       </div>
     </div>

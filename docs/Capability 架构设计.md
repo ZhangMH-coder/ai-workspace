@@ -224,3 +224,47 @@ Capabilities
 ### 9.5 一致性
 
 Hub / 资产详情 / Agent 详情装配管理读同一 Store（definitions + agentCapabilities + agents）。实测：Agent 详情停用能力后，Hub 详情页装配概览立即从 2/1 变为「已停用」项（零额外同步）。
+
+
+---
+
+## 十、Phase 3 第四阶段：Definition 资产生命周期管理（方案 A）
+
+### 10.1 领域规则（先于编码定稿）
+
+| 规则 | 内容 | 实现 |
+| --- | --- | --- |
+| R1 | 生命周期状态 Active/Archived **落模型**；使用状态 Used/Unused **派生**（装配数 > 0），两者正交互不推导 | `CapabilityDefinition.lifecycle`；`usedByCount` 实时计算 |
+| R2 | 归档 = **软删除**：Definition 保留（仅 lifecycle 变更），不物理删除、不自动解绑 AgentCapability | archive 只 PATCH lifecycle |
+| R3 | 已归档装配不悬空：Definition 仍在资产库，Agent 详情 / Used by 可识别并展示「已归档」 | composeCapabilityViews 仅跳过完全悬空的引用 |
+| R4 | 归档后不可被新 Agent 装配；已有装配**保留展示并冻结管理**（禁启停/解绑） | Picker UI 禁用 + Store attach 校验（双保险）；列表冻结 |
+| R5 | 恢复后重新可装配、装配关系恢复可管理 | restore PATCH lifecycle=active |
+| R6 | 创建/编辑/归档/恢复全部经 Service 层，页面不直接修改领域数据 | store actions 唯一落地入口 |
+| R7 | 保持三层模型（Definition / AgentCapability / Agent），禁止扁平化 | 无字段复制，装配仅引用 capabilityId |
+
+### 10.2 Service 写契约（对应 REST）
+
+| 操作 | 契约 | REST |
+| --- | --- | --- |
+| 创建 | `createCapability({type,name,description}) → CapabilityDefinition`（lifecycle=active） | POST /capability-definitions |
+| 编辑 | `updateCapability({id,type,name,description}) → CapabilityDefinition`（仅元信息） | PATCH /capability-definitions/:id |
+| 归档 | `archiveCapability(id) → {id, lifecycle:"archived"}` | PATCH lifecycle=archived |
+| 恢复 | `restoreCapability(id) → {id, lifecycle:"active"}` | PATCH lifecycle=active |
+
+### 10.3 Store 演进（persist v2 → v3）
+
+- `partialize` 增加 `capabilityDefinitions`（由「seed 回填只读」升级为「可写持久化」，创建/编辑/归档刷新不丢）
+- `migrate`：v1/v2 → v3 自动补 seed 定义副本（v1 同时补装配）；v3 数据原样保留
+- 写 actions 幂等处理（重复归档/恢复直接返回）；目标不存在抛错（Error 态）
+
+### 10.4 两维状态与 UI 映射
+
+| 资产 | 生命周期（模型） | 使用状态（派生） | UI |
+| --- | --- | --- | --- |
+| 网页搜索 | active | used | Active 徽章 + 使用中 + N Agent |
+| RSS 订阅汇总 | archived | used | Archived 徽章 + 使用中 + 已归档标记 + 冻结 |
+| 遗留 HTTP 回调 | archived | unused | Archived 徽章 + 未使用 + 空态引导 |
+
+### 10.5 验证口径
+
+干净环境 18 资产（16 active + 2 archived）· 49 装配；创建/编辑/归档/恢复闭环；硬刷新持久化；migrate v2 注入实测；四处（Hub / Asset Detail / Agent Detail / Picker）同源一致；lint/tsc/build 全绿。

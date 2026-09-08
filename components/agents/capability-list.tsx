@@ -129,6 +129,7 @@ export function CapabilityList({
               <div className="mt-1.5 flex flex-col gap-0.5">
                 {items.map((view) => {
                   const busy = busyId === view.assembly.id;
+                  const archived = view.definition.lifecycle === "archived";
                   return (
                     <div
                       key={view.assembly.id}
@@ -141,7 +142,11 @@ export function CapabilityList({
                         aria-hidden="true"
                       />
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-[12.5px] font-medium text-ink">
+                        <p
+                          className={`truncate text-[12.5px] font-medium ${
+                            archived ? "text-ink-3" : "text-ink"
+                          }`}
+                        >
                           {view.definition.name}
                         </p>
                         <p className="truncate text-[11.5px] text-ink-3">
@@ -150,6 +155,14 @@ export function CapabilityList({
                       </div>
 
                       <div className="flex shrink-0 items-center gap-1">
+                        {archived && (
+                          <Badge
+                            variant="outline"
+                            className="border-ink-3/30 text-[10.5px] font-normal text-ink-3"
+                          >
+                            已归档
+                          </Badge>
+                        )}
                         {!view.assembly.enabled && (
                           <Badge
                             variant="outline"
@@ -158,32 +171,45 @@ export function CapabilityList({
                             已停用
                           </Badge>
                         )}
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className={`text-[11.5px] font-normal ${
-                            view.assembly.enabled
-                              ? "text-ink-3 hover:text-ink"
-                              : "text-success hover:text-success"
-                          }`}
-                          onClick={() => void handleToggleEnabled(view)}
-                          disabled={busy}
-                        >
-                          {busy && (
-                            <Loader2 className="animate-spin" aria-hidden="true" />
-                          )}
-                          {view.assembly.enabled ? "停用" : "启用"}
-                        </Button>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className="h-7 w-7 text-ink-3 hover:text-danger"
-                          onClick={() => setDetachTarget(view)}
-                          disabled={busy}
-                          aria-label={`解绑 ${view.definition.name}`}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
+                        {archived ? (
+                          <span
+                            aria-hidden="true"
+                            className="w-[38px] text-center text-[11.5px] text-ink-3/70"
+                          >
+                            冻结
+                          </span>
+                        ) : (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className={`text-[11.5px] font-normal ${
+                              view.assembly.enabled
+                                ? "text-ink-3 hover:text-ink"
+                                : "text-success hover:text-success"
+                            }`}
+                            onClick={() => void handleToggleEnabled(view)}
+                            disabled={busy}
+                          >
+                            {busy && (
+                              <Loader2 className="animate-spin" aria-hidden="true" />
+                            )}
+                            {view.assembly.enabled ? "停用" : "启用"}
+                          </Button>
+                        )}
+                        {archived ? (
+                          <span className="w-7" aria-hidden="true" />
+                        ) : (
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-7 w-7 text-ink-3 hover:text-danger"
+                            onClick={() => setDetachTarget(view)}
+                            disabled={busy}
+                            aria-label={`解绑 ${view.definition.name}`}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
                       </div>
                     </div>
                   );

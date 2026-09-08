@@ -41,6 +41,17 @@ export function modelLabel(id: ModelId): string {
 /** 能力类型（未来可扩展，如 workflow / connector） */
 export type CapabilityType = "skill" | "memory" | "rule" | "tool";
 
+/** 能力定义的生命周期状态（资产生命周期；与「使用状态 Used/Unused」正交，使用状态为派生） */
+export type CapabilityLifecycle = "active" | "archived";
+
+export const CAPABILITY_LIFECYCLE_OPTIONS: {
+  id: CapabilityLifecycle;
+  label: string;
+}[] = [
+  { id: "active", label: "Active" },
+  { id: "archived", label: "Archived" },
+];
+
 export const CAPABILITY_TYPE_OPTIONS: {
   id: CapabilityType;
   label: string;
@@ -62,6 +73,28 @@ export interface CapabilityDefinition {
   type: CapabilityType;
   name: string;
   description: string;
+  /**
+   * 生命周期状态（软删除语义）：
+   * - archived 的定义仍保留在资产库中（不物理删除），已有装配关系保留但冻结管理；
+   * - archived 的定义不能被新的 Agent 装配；恢复（restore）后重新可装配。
+   * 「使用状态 Used/Unused」是派生值（由 AgentCapability 装配数计算），不写入本字段。
+   */
+  lifecycle: CapabilityLifecycle;
+}
+
+/** 新建能力定义的表单输入（Service 契约） */
+export interface NewCapabilityInput {
+  type: CapabilityType;
+  name: string;
+  description: string;
+}
+
+/** 编辑能力定义的字段补丁（Service 契约） */
+export interface UpdateCapabilityInput {
+  id: string;
+  name: string;
+  description: string;
+  type: CapabilityType;
 }
 
 /** Agent 装配关系（多对多中介表）：引用 Definition，携带装配上下文 */

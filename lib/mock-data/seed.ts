@@ -78,25 +78,28 @@ export const seedAgents: Agent[] = [
 
 export const seedCapabilityDefinitions: CapabilityDefinition[] = [
   // Skills
-  { id: "skill-web-search", type: "skill", name: "网页搜索", description: "实时检索网页与资讯" },
-  { id: "skill-doc-summary", type: "skill", name: "文档摘要", description: "长文档要点提炼" },
-  { id: "skill-data-viz", type: "skill", name: "数据可视化建议", description: "图表选型与口径建议" },
-  { id: "skill-copywriting", type: "skill", name: "文案生成", description: "营销文案与社媒短句" },
+  { id: "skill-web-search", type: "skill", name: "网页搜索", description: "实时检索网页与资讯", lifecycle: "active" },
+  { id: "skill-doc-summary", type: "skill", name: "文档摘要", description: "长文档要点提炼", lifecycle: "active" },
+  { id: "skill-data-viz", type: "skill", name: "数据可视化建议", description: "图表选型与口径建议", lifecycle: "active" },
+  { id: "skill-copywriting", type: "skill", name: "文案生成", description: "营销文案与社媒短句", lifecycle: "active" },
   // Memory
-  { id: "memory-long-term", type: "memory", name: "长期记忆", description: "跨会话记住关键事实" },
-  { id: "memory-semantic", type: "memory", name: "语义记忆", description: "按语义检索历史知识" },
-  { id: "memory-episodic", type: "memory", name: "情景记忆", description: "记录任务执行历史" },
+  { id: "memory-long-term", type: "memory", name: "长期记忆", description: "跨会话记住关键事实", lifecycle: "active" },
+  { id: "memory-semantic", type: "memory", name: "语义记忆", description: "按语义检索历史知识", lifecycle: "active" },
+  { id: "memory-episodic", type: "memory", name: "情景记忆", description: "记录任务执行历史", lifecycle: "active" },
   // Rules
-  { id: "rule-tone", type: "rule", name: "语气规范", description: "输出语气克制专业" },
-  { id: "rule-citation", type: "rule", name: "引用可追溯", description: "事实必须附来源" },
-  { id: "rule-privacy", type: "rule", name: "脱敏输出", description: "敏感字段自动脱敏" },
-  { id: "rule-escalation", type: "rule", name: "升级规则", description: "风险工单转人工" },
-  { id: "rule-severity", type: "rule", name: "严重级别标注", description: "异常必须标注级别" },
+  { id: "rule-tone", type: "rule", name: "语气规范", description: "输出语气克制专业", lifecycle: "active" },
+  { id: "rule-citation", type: "rule", name: "引用可追溯", description: "事实必须附来源", lifecycle: "active" },
+  { id: "rule-privacy", type: "rule", name: "脱敏输出", description: "敏感字段自动脱敏", lifecycle: "active" },
+  { id: "rule-escalation", type: "rule", name: "升级规则", description: "风险工单转人工", lifecycle: "active" },
+  { id: "rule-severity", type: "rule", name: "严重级别标注", description: "异常必须标注级别", lifecycle: "active" },
   // Tools
-  { id: "tool-slack", type: "tool", name: "Slack 通知", description: "向频道发送消息" },
-  { id: "tool-crm", type: "tool", name: "CRM 查询", description: "读取客户与工单" },
-  { id: "tool-log-query", type: "tool", name: "日志查询", description: "检索服务日志" },
-  { id: "tool-db-reader", type: "tool", name: "数据库只读查询", description: "对数据源执行只读查询" },
+  { id: "tool-slack", type: "tool", name: "Slack 通知", description: "向频道发送消息", lifecycle: "active" },
+  { id: "tool-crm", type: "tool", name: "CRM 查询", description: "读取客户与工单", lifecycle: "active" },
+  { id: "tool-log-query", type: "tool", name: "日志查询", description: "检索服务日志", lifecycle: "active" },
+  { id: "tool-db-reader", type: "tool", name: "数据库只读查询", description: "对数据源执行只读查询", lifecycle: "active" },
+  // 已归档示例（软删除演示：archived + used / archived + unused 两维组合）
+  { id: "skill-rss-digest", type: "skill", name: "RSS 订阅汇总", description: "定期汇总订阅源更新（已由网页搜索替代）", lifecycle: "archived" },
+  { id: "tool-legacy-http", type: "tool", name: "遗留 HTTP 回调", description: "旧版回调通道，已停止维护", lifecycle: "archived" },
 ];
 
 /** 每个 Agent 的装配关系：Definition 可被多个 Agent 复用（enabled 标记装配启用状态） */
@@ -154,6 +157,8 @@ export const seedAgentCapabilities: AgentCapability[] = [
   { id: "ac-ops-lq", agentId: "agent-ops", capabilityId: "tool-log-query", enabled: true, createdAt: new Date(now - 15 * DAY).toISOString() },
   { id: "ac-ops-slack", agentId: "agent-ops", capabilityId: "tool-slack", enabled: true, createdAt: new Date(now - 15 * DAY).toISOString() },
   { id: "ac-ops-dbr", agentId: "agent-ops", capabilityId: "tool-db-reader", enabled: true, createdAt: new Date(now - 15 * DAY).toISOString() },
+  // 归档示例装配：RSS 订阅汇总（archived）仍被 writer 保留装配（归档不自动解绑）
+  { id: "ac-writer-rss", agentId: "agent-writer", capabilityId: "skill-rss-digest", enabled: true, createdAt: new Date(now - 36 * DAY).toISOString() },
 ];
 
 /** 确定性伪随机（保证同一批次种子数据稳定可复算） */

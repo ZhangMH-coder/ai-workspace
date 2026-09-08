@@ -4,9 +4,11 @@
  * 工作区全局状态（Zustand + persist，Phase 3）
  *
  * 单一数据源：agents + runs + capabilityDefinitions + agentCapabilities + timeRange。
- * - 持久化（localStorage key: ai-workspace-store，version 2）：
- *   agents / runs / agentCapabilities / timeRange；
- *   actions、hydrated 标志、capabilityDefinitions（本阶段只读资产，随 seed 回填）不持久化。
+ * - 持久化（localStorage key: ai-workspace-store，version 3）：
+ *   agents / runs / agentCapabilities / capabilityDefinitions / timeRange；
+ *   actions、hydrated 标志不持久化。
+ * - version 2 → 3：capabilityDefinitions 由「只读 seed 回填」升级为「可写持久化」
+ *   （创建/编辑/归档/恢复后刷新不丢失）；migrate 为旧数据自动补 seed 副本。
  * - 演示数据可恢复：无持久化数据时 hydrate() 自动从 Mock 服务层拉取 seed；
  *   resetDemoData() 显式重置回 seed（并写回持久化）。
  * - 未来接入真实 API 时仅替换 lib/services 实现。
@@ -21,19 +23,28 @@ import {
   runAgent as runAgentService,
 } from "@/lib/services/agents";
 import {
+  archiveCapability as archiveCapabilityService,
   attachCapability as attachCapabilityService,
+  createCapability as createCapabilityService,
   detachCapability as detachCapabilityService,
   fetchCapabilityDefinitions as fetchCapabilityDefinitionsService,
+  restoreCapability as restoreCapabilityService,
   setCapabilityEnabled as setCapabilityEnabledService,
+  updateCapability as updateCapabilityService,
 } from "@/lib/services/capabilities";
-import { seedAgentCapabilities } from "@/lib/mock-data/seed";
+import {
+  seedAgentCapabilities,
+  seedCapabilityDefinitions,
+} from "@/lib/mock-data/seed";
 import type {
   Agent,
   AgentCapability,
   AgentRun,
   CapabilityDefinition,
   NewAgentInput,
+  NewCapabilityInput,
   TimeRange,
+  UpdateCapabilityInput,
 } from "@/lib/types";
 
 interface WorkspaceState {
@@ -41,7 +52,7 @@ interface WorkspaceState {
   hydrated: boolean;
   agents: Agent[];
   runs: AgentRun[];
-  /** 能力资产（定义/资产，只读；不持久化，随 seed 回填） */
+  /** 能力资产（定义/资产；version 3 起持久化，支持创建/编辑/归档/恢复） */
   capabilityDefinitions: CapabilityDefinition[];
   /** 装配关系（持久化，version 2 起） */
   agentCapabilities: AgentCapability[];
@@ -54,7 +65,7 @@ interface WorkspaceState {
   createAgent: (input: NewAgentInput) => Promise<Agent>;
   /** 触发运行并返回新 run（调用方用于提示） */
   runAgent: (agentId: string) => Promise<AgentRun>;
-  /** 装配一个能力到 Agent（幂等：已存在则直接返回现有记录） */
+  /** 装配一个能力到 Agent（幂等；archived 能力抛错拒绝） */
   attachCapability: (
     agentId: string,
     capabilityId: string
@@ -63,6 +74,14 @@ interface WorkspaceState {
   setCapabilityEnabled: (id: string, enabled: boolean) => Promise<void>;
   /** 解绑装配关系（幂等删除） */
   detachCapability: (id: string) => Promise<void>;
+  /** 新建能力定义（默认 active，立即可装配） */
+  createCapability: (input: NewCapabilityInput) => Promise<CapabilityDefinition>;
+  /** 编辑能力定义元信息（名称/描述/类型） */
+  updateCapability: (input: UpdateCapabilityInput) => Promise<void>;
+  /** 归档能力定义（软删除；已有装配保留并冻结，不可新装配） */
+  archiveCapability: (id: string) => Promise<void>;
+  /** 恢复能力定义（重新可装配、装配关系重新可管理） */
+  restoreCapability: (id: string) => Promise<void>;
   /** 重置回演示 seed 数据（持久化随之更新） */
   resetDemoData: () => Promise<void>;
 }
@@ -125,6 +144,14 @@ export const useWorkspaceStore = create<WorkspaceState>()(
       },
 
       attachCapability: async (agentId, capabilityId) => {
+        // 归档校验（规则：archived 的能力不能被新的 Agent 装配）
+        const definition = get().capabilityDefinitions.find(
+          (d) => d.id === capabilityId
+        );
+        if (!definition) throw new Error("能力不存在或已被移除");
+        if (definition.lifecycle === "archived") {
+          throw new Error("已归档的能力不能再被装配");
+        }
         // 幂等：同 (agentId, capabilityId) 已有装配则直接返回，不重复创建
         const existing = get().agentCapabilities.find(
           (ac) => ac.agentId === agentId && ac.capabilityId === capabilityId
@@ -160,6 +187,60 @@ export const useWorkspaceStore = create<WorkspaceState>()(
         }));
       },
 
+      createCapability: async (input) => {
+        const created = await createCapabilityService(input);
+        set((state) => ({
+          capabilityDefinitions: [created, ...state.capabilityDefinitions],
+        }));
+        return created;
+      },
+
+      updateCapability: async (input) => {
+        // 目标必须存在（不存在抛错，走 Error 态）
+        const target = get().capabilityDefinitions.find(
+          (d) => d.id === input.id
+        );
+        if (!target) throw new Error("能力不存在或已被移除");
+        const confirmed = await updateCapabilityService(input);
+        set((state) => ({
+          capabilityDefinitions: state.capabilityDefinitions.map((d) =>
+            d.id === input.id
+              ? {
+                  ...d,
+                  name: confirmed.name,
+                  description: confirmed.description,
+                  type: confirmed.type,
+                  // lifecycle 保持现有值（update 只改元信息，生命周期由 archive/restore 管理）
+                }
+              : d
+          ),
+        }));
+      },
+
+      archiveCapability: async (id) => {
+        const target = get().capabilityDefinitions.find((d) => d.id === id);
+        if (!target) throw new Error("能力不存在或已被移除");
+        if (target.lifecycle === "archived") return; // 幂等
+        const confirmed = await archiveCapabilityService(id);
+        set((state) => ({
+          capabilityDefinitions: state.capabilityDefinitions.map((d) =>
+            d.id === id ? { ...d, lifecycle: confirmed.lifecycle } : d
+          ),
+        }));
+      },
+
+      restoreCapability: async (id) => {
+        const target = get().capabilityDefinitions.find((d) => d.id === id);
+        if (!target) throw new Error("能力不存在或已被移除");
+        if (target.lifecycle === "active") return; // 幂等
+        const confirmed = await restoreCapabilityService(id);
+        set((state) => ({
+          capabilityDefinitions: state.capabilityDefinitions.map((d) =>
+            d.id === id ? { ...d, lifecycle: confirmed.lifecycle } : d
+          ),
+        }));
+      },
+
       resetDemoData: async () => {
         const [agents, runs, capabilityDefinitions] = await Promise.all([
           fetchAgentsService(),
@@ -177,21 +258,34 @@ export const useWorkspaceStore = create<WorkspaceState>()(
     }),
     {
       name: "ai-workspace-store",
-      version: 2,
+      version: 3,
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({
         agents: state.agents,
         runs: state.runs,
         agentCapabilities: state.agentCapabilities,
+        capabilityDefinitions: state.capabilityDefinitions,
         timeRange: state.timeRange,
       }),
       migrate: (persistedState, version) => {
-        if (version < 2) {
-          // v1 → v2：补充装配关系（seed），旧数据升级后即可管理装配
-          return {
+        if (version < 3) {
+          // v1/v2 → v3：补充能力定义（seed 副本，含 archived 示例），保证资产可写/可归档
+          const base = {
             ...(persistedState as object),
-            agentCapabilities: seedAgentCapabilities.map((ac) => ({ ...ac })),
+            capabilityDefinitions: seedCapabilityDefinitions.map((d) => ({
+              ...d,
+            })),
           };
+          if (version < 2) {
+            // v1 → v3：还需要补充装配关系（seed）
+            return {
+              ...base,
+              agentCapabilities: seedAgentCapabilities.map((ac) => ({
+                ...ac,
+              })),
+            };
+          }
+          return base;
         }
         return persistedState as object;
       },

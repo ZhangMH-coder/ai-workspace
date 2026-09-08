@@ -138,13 +138,20 @@ export function CapabilityPicker({
                       {items.map((d) => {
                         const assembly = assemblyByDef.get(d.id);
                         const busy = busyId === d.id || busyId === assembly?.id;
+                        const archived = d.lifecycle === "archived";
                         return (
                           <div
                             key={d.id}
-                            className="flex items-center gap-3 rounded-lg px-2 py-2 transition-colors duration-150 hover:bg-white/[0.03]"
+                            className={`flex items-center gap-3 rounded-lg px-2 py-2 transition-colors duration-150 ${
+                              archived ? "opacity-60" : "hover:bg-white/[0.03]"
+                            }`}
                           >
                             <div className="min-w-0 flex-1">
-                              <p className="truncate text-[12.5px] font-medium text-ink">
+                              <p
+                                className={`truncate text-[12.5px] font-medium ${
+                                  archived ? "text-ink-3" : "text-ink"
+                                }`}
+                              >
                                 {d.name}
                               </p>
                               <p className="truncate text-[11.5px] text-ink-3">
@@ -152,7 +159,14 @@ export function CapabilityPicker({
                               </p>
                             </div>
 
-                            {!assembly ? (
+                            {archived ? (
+                              <Badge
+                                variant="outline"
+                                className="shrink-0 border-ink-3/30 text-[10.5px] font-normal text-ink-3"
+                              >
+                                已归档
+                              </Badge>
+                            ) : !assembly ? (
                               <Button
                                 size="sm"
                                 onClick={() => void handleAttach(d.id, d.name)}

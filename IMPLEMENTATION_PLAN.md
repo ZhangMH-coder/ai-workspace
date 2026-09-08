@@ -19,11 +19,12 @@
 | 2026-09-08 | v0.7 | Phase 3 第四阶段 — Definition 资产管理（方案 A：资产生命周期） | 生命周期两维状态分离（lifecycle 落模型 Active/Archived；Used/Unused 派生不落字段）、创建/编辑/归档（软删除）/恢复全走 Service 写契约、persist v3 + migrate（v1/v2 平滑升级补资产）、归档后不可新装配（Picker 禁用 + Store 校验双保险）、已归档装配保留展示并冻结（不悬空）、Hub/Asset Detail/Agent Detail/Picker 四处同源、Hub 搜索 + 排序（低成本体验增强）、Loading/Success/Error/Empty 完备；lint/tsc/build/生产交互验证全绿 | ✅ 已完成并通过「Projects 业务化」审批 |
 | 2026-09-08 | v0.8 | Phase 3 第五阶段 — Projects 业务化（方案 B：最小业务闭环） | 领域模型先定稿（Workspace → Project → ProjectAgent → Agent → AgentCapability/Run；只引用不复制）、Agent ↔ Project 多对多、Run 归属 Agent 统计全派生、Capability 经 Agent 间接关联、persist v3 → v4 + migrate（向后兼容）、`/projects` 列表 + 新建 + `/projects/[id]` 详情（项目摘要 + 关联 Agent 列表 + Picker + 解绑确认）、30 天口径复用 `selectRunsInRange`（与 Dashboard 完全同源）、实时响应 Store 变化；lint/tsc/build/生产交互验证全绿 | ✅ 已完成并通过「Project 维度观察」审批 |
 | 2026-09-08 | v0.9 | Phase 3 第六阶段 — Project 维度观察（方案 C 缩小范围） | Dashboard 增加项目维度摘要（项目数/各项目 Agent 数/最近 30 天运行量/成功率/最近活跃，行可点击进详情）、Project Detail 增加「最近运行」（复用 ActivityList + selectRunsInProject，零重复统计/渲染）、Agents 卡片增加所属项目徽章（只展示不改信息架构）、全部统计复用 `selectProjectStats`/`selectRunsInProjectWindow`（统一窗口同源）、单一 Store 实时联动；lint/tsc/build/生产交互验证全绿 | ✅ 已完成并通过「V1 Review」审批 |
-| 2026-09-08 | v1.0 | V1 Architecture Review + Scope Freeze（纯审查，零代码修改） | 全量架构审查：领域模型 6 实体无复制/无第二数据源/生命周期无冲突/DB 适配良好；数据流 UI→Store→Selector→Service 合规（唯一例外为纯函数 composeCapabilityViews）；技术债务分级 P0=无 / P1=5 项（分页契约/错误模型/DTO 策略/id 策略/seed-migrate 流程）；Mock→Real 演进判定为 Service 契约足以替换；结论「Mock 边际收益已递减，推荐现在转向 Phase 4 真实后端设计」；V1 范围冻结：已具备 6 类闭环、明确延后 9 类功能 | ✅ 已完成，待审批（输出《V1 Architecture Review》） |
+| 2026-09-08 | v1.0 | V1 Architecture Review + Scope Freeze（纯审查，零代码修改） | 全量架构审查：领域模型 6 实体无复制/无第二数据源/生命周期无冲突/DB 适配良好；数据流 UI→Store→Selector→Service 合规（唯一例外为纯函数 composeCapabilityViews）；技术债务分级 P0=无 / P1=5 项（分页契约/错误模型/DTO 策略/id 策略/seed-migrate 流程）；Mock→Real 演进判定为 Service 契约足以替换；结论「Mock 边际收益已递减，推荐现在转向 Phase 4 真实后端设计」；V1 范围冻结：已具备 6 类闭环、明确延后 9 类功能 | ✅ 已完成并通过「Phase 4」审批 |
+| 2026-09-08 | v1.1 | P4-1 Backend Architecture & API Design（纯设计，零代码修改） | 分层架构（UI→Store→API Client→Route Handler→Service→Repository→SQLite）、DTO 与 Domain 分离、统一 ApiError（7 码 + 字段级）、Page 分页契约、过滤/排序/搜索契约、时间窗口契约化（客户端声明 from/to，含今天 N 自然日规则保留）、6 组资源全量 REST Contract、SQLite Schema（7 表 + PK/FK/UNIQUE/Index/CASCADE-RESTRICT 语义）、ORM 选型对比（Prisma/Drizzle/原生 → **推荐 Drizzle + better-sqlite3**）、Repository/Service 分层、Seed/Migration/Reset 三职责分离 + 防漂移规则、Mock→Real 替换路径（P4-2a~e）、风险与回滚（双模式开关）；P1 五项在契约层一次解决，P2 periodStats 顺带 P4-2 收敛 | ✅ 已完成，待审批进入 P4-2 |
 
 ## 当前阶段
 
-**V1 Architecture Review + Scope Freeze（Phase 3 第七阶段，纯审查）**（已完成；**不自动进入下一阶段**，待审批）
+**P4-1 Backend Architecture & API Design（纯设计）**（已完成；**不自动进入 P4-2**，待审批）
 
 ---
 
@@ -40,32 +41,50 @@
 | Shell | PowerShell 5.1 | 不支持 `&&`，命令以分号或独立调用执行 |
 | 实际版本组合 | next 16.3.4 / react 19.2.8 / tailwindcss ^4 / zustand 5.x（Phase 2 新增）/ framer-motion ^13.2.0 / geist ^1.7.2 / radix-ui ^1.6.7 / lucide-react ^1.42.0 / cmdk ^1.1.1 | 构建通过（见验证结果） |
 
-## 二、已完成内容（V1 Architecture Review / 纯审查，零代码修改）
+## 二、已完成内容（P4-1 纯设计 / 零代码修改）
 
-### 1. 审查范围与核验事实
-- [x] 领域模型 6 实体（Agent / AgentRun / CapabilityDefinition / AgentCapability / Project / ProjectAgent）：职责分离一致（资产 / 关系两层），**无数据复制、无隐藏第二数据源**（组件外无 localStorage）、生命周期无冲突（四组状态语义独立；Capability 两维状态正交）
-- [x] 数据流 UI → Store → Selector → Service：所有写操作经 Store actions；唯一组件直连 Service 为 `capability-list.tsx` 导入纯函数 `composeCapabilityViews`（只读派生，P3 归属问题）
-- [x] 单一时间窗口：`selectRunsInRange` 全站唯一
-- [x] 18 个 Service 契约逐个判定可替换性（Agents 4 / Capabilities 9+1纯 / Projects 5）
+### 1. 分层架构与不变式
+- [x] UI → Zustand Store → API Client → Route Handler → Service → Repository → SQLite；UI 不知 DB、Store 不知 API 细节；**DTO ≠ Domain**（mappers 隔离）
+- [x] Store 定位调整：领域数据由 API 拉取（persist 收窄为 UI 偏好，P4-2 实施）
 
-### 2. 技术债务分级
-- [x] **P0：无**（架构健康，无阻塞项）
-- [x] **P1（接后端前必须）5 项**：分页契约 / 统一错误模型 / DTO 与 Domain 分离策略 / id 服务端生成策略 / seed-migrate 同步流程文档化
-- [x] **P2（可后续）4 项**：dashboard periodStats 窗口计算收敛 / Definition 时间戳 / 嵌套 Link 限制 / 单 Store 切片评估
-- [x] **P3（可忽略）4 项**：composeCapabilityViews 归属 / uid 非 UUID / seed 相对时间不随日期平移 / 重置演示数据为演示专用
+### 2. 契约设计（P1 五项一次解决）
+- [x] **统一 ApiError**：7 错误码（VALIDATION/NOT_FOUND/CONFLICT/UNAUTHORIZED 预留/FORBIDDEN 预留/INTERNAL/RATE_LIMITED）+ 字段级 details + requestId；前端按 code 分支，不依赖响应文本
+- [x] **Page 分页契约**：`{items,page,pageSize,total,totalPages}` + LIMIT/OFFSET + cursor 演进预留
+- [x] **过滤/排序/搜索契约**：白名单 sort 字段（防注入）+ search LIKE 转义 + 等值过滤
+- [x] **时间窗口契约化**：保留「含今天 N 自然日」规则；**时区由客户端声明**（推荐 from/to 显式边界；window+tzOffset 快捷）；stats 端点回显实际窗口
+- [x] **DTO 与 Domain 分离**：lib/api/types.ts（DTO）+ mappers；Store/UI 不依赖 DTO 字段
+- [x] **服务端 ID**：UUID v4（crypto.randomUUID）；前端不再生成业务 id
 
-### 3. 结论与建议
-- [x] Mock 边际收益已递减；推荐**现在转向 Phase 4 真实后端设计**（API 契约 + DB Schema → 替换 Service 为 HTTP 客户端，前端零改动验证），而非继续堆前端
-- [x] V1 范围冻结：已具备 6 类闭环；明确延后 9 类（Project Archive/Restore/Edit、Capability Versioning、Settings、Tasks、Collaboration、权限、能力图谱等）；以后值得做：真实 AI Runtime、能力图谱、版本管理
-- [x] 产出 `docs/V1-Architecture-Review.md`（完整审查报告，含架构图/评估/债务/演进建议/冻结清单）
+### 3. API Contract（6 组资源全量）
+- [x] Agents（6 端点）/ Agent Runs（2 端点 + stats 聚合）/ Capabilities（5 端点，归档走 PATCH lifecycle）/ AgentCapabilities（4 端点，服务端校验归档装配 + 409）/ Projects（5 端点，编辑/归档预留）/ ProjectAgents（3 端点，409 幂等）
+- [x] **统计聚合端点** `/runs/stats`（?window&project=&agents=&groupBy=day|agent）：项目统计=派生的领域规则在服务端成立
 
-## 三、验证结果（V1 Architecture Review）
+### 4. DB Schema（SQLite，7 表）
+- [x] PK：TEXT uuid；FK 语义：agent_run→agent CASCADE / agent_capability→definition **RESTRICT** / project_agent→project CASCADE / project_agent→agent **RESTRICT**；UNIQUE：装配与关联防重；Index：agent_run(agent_id,started_at DESC)、started_at DESC、status/type 等
+- [x] 关系表（project_agent / agent_capability）仅存外键 + 关系属性，**不复制实体数据**
+
+### 5. ORM 选型（对比结论）
+- [x] **推荐 Drizzle + better-sqlite3**：TS 单源类型、SQLite 一等公民、迁移轻量可审（drizzle-kit）、聚合可 SQL 片段、未来 libsql 驱动切换；Prisma 较重且 SQLite 非最优；原生类型安全弱
+- [x] 兜底：node:sqlite / libsql（驱动一行切换）
+
+### 6. Seed / Migration / Reset 三职责 + 防漂移规则
+- [x] Schema 变更只走 migration（drizzle-kit generate 自动对比）；seed 幂等 upsert 仅插演示数据；reset 清业务表重跑 seed；`db:check` 纳入提交流程——根治「seed 改了 migrate 漏了」
+
+### 7. Mock → Real 替换路径（P4-2 实施计划）
+- [x] P4-2a DB+Repository → P4-2b Route Handlers+Service+ApiError → P4-2c 前端 API Client 同名替换 + persist 收窄 + periodStats 收敛（P2 顺带）→ P4-2d 全量回归 + API 文档 → P4-2e 双模式开关（可回滚）
+- [x] **前端最小改动清单如实列出**：services 实现替换（签名不变）/ persist partialize 收窄 / periodStats 收敛 / resetDemoData 语义 / 演示数据一次性重建
+
+### 8. 风险与回滚
+- [x] better-sqlite3 native 构建失败（→node:sqlite/libsql）；时区窗口漂移（→from/to 显式边界 + 跨日测试）；前端改动面（→Mock/Real 双开关灰度）；SQLite 生产部署限制（→文档标注）；旧 localStorage 脏数据（→persist 版本+1）
+
+## 三、验证结果（P4-1 纯设计）
 
 | 检查项 | 结果 |
 | --- | --- |
-| 代码修改 | ✅ 零修改（审查产物仅新增 `docs/V1-Architecture-Review.md`） |
-| lint / tsc / build | ✅ 无需执行（无代码改动；上一阶段全绿基线保持） |
-| 事实核验 | ✅ 基于代码事实（services 18 签名 / store persist v4 / 页面数据访问面 / 无第二数据源） |
+| 代码修改 | ✅ 零修改（仅新增 `docs/P4-1-Backend-Architecture-API-Design.md`） |
+| lint / tsc / build | ✅ 无需执行（无代码改动；基线保持全绿） |
+| 契约一致性 | ✅ 18 个现有 Service 签名逐项对照 API Contract，替换路径签名零改动 |
+| 范围合规 | ✅ 未创建数据库 / 未改业务代码 / 未建 Route Handler / 未引入 ORM / 未接 AI API |
 
 ## 四、技术决策记录（ADR 简表，Phase 3 第一阶段更新）
 
@@ -97,35 +116,36 @@
 | D36 | **Agents 项目关联只展示不改架构**：AgentCard 新增可选 `projectsOf` 徽章行（≤2 +N），列表结构与信息层级不变 | ✅ 落地：5 卡片徽章正确；避免嵌套 Link（卡片外层已是链接） |
 | D37 | **V1 Scope Freeze**：停止堆前端模块；P0 债务 = 无；P1 5 项（分页/错误模型/DTO/id/seed-migrate 流程）在接后端前修复；延后 9 类功能 | ✅ 审查结论（见 docs/V1-Architecture-Review.md） |
 | D38 | **真实后端切入点判定**：Mock 边际收益已递减，推荐 Phase 4 转向真实后端设计（先契约后实现，前端零改动） | ✅ 审查结论，待用户审批 |
+| D39 | **P4-1 契约总纲**：DTO≠Domain（mappers 隔离）、ApiError 7 码统一错误模型、Page 分页 + cursor 演进预留、客户端声明时区的窗口契约、服务端 UUID 生成 | ✅ 设计定稿（docs/P4-1） |
+| D40 | **ORM 选型：Drizzle + better-sqlite3**（TS 单源类型 / SQLite 一等公民 / 迁移可审 / 聚合 SQL 片段；兜底 node:sqlite、libsql） | ✅ 设计定稿 |
+| D41 | **统计聚合端点化**：`/runs/stats` 承载趋势/指标/项目统计（服务端 join project_agent 保持「项目统计=派生」）；P4-2 先全量兼容渐进切换 | ✅ 设计定稿 |
+| D42 | **Seed/Migration/Reset 三职责 + 防漂移**：Schema 变更只走 drizzle-kit migration；seed 幂等 upsert；db:check 提交流程 | ✅ 设计定稿（根治 seed/migrate 漂移） |
 
-## 五、发现的问题（V1 Architecture Review）
+## 五、发现的问题（P4-1 纯设计）
 
-1. **dashboard/page.tsx 内联 `periodStats` 重复窗口计算**（P2）：与 selectRunsInRange 同口径但违反 DRY；接后端前收敛为 Store Selector。
-2. **`capability-list.tsx` 直连 Service 导入纯函数**（P3）：`composeCapabilityViews` 只读派生，无违规行为；归属上应移至 lib。
-3. **seed / migrate 隐性契约**（P1 流程性）：seed 增字段必须同步 migrate 补丁，否则版本漂移；需文档化。
-4. **seed 相对时间特性**（P3）：seed 用 `now - N*DAY` 生成，跨天访问窗口内数字衰减；演示特性，接真实数据后消失。
-5. **AgentCard 嵌套 Link 限制**（P2）：项目徽章不可点击；未来若需点击需重构卡片结构。
+1. **时区是窗口一致性的最大隐藏风险**（设计前置解决）：前端本地时区 vs 服务端 UTC 会导致「含今天 N 自然日」漂移 → 契约强制客户端传 `from/to` 显式边界（或 window+tzOffset），服务端纯执行；测试覆盖跨日。
+2. **Store persist 与后端权威的职责冲突**（P4-2 必改点）：领域数据改为后端权威后，`partialize` 必须收窄（仅 timeRange 等 UI 状态），否则「前端持久化 vs 后端」双源竞争——已在 P4-2c 计划并注明最小改动清单。
+3. **统计 selectors 依赖全量 runs 内存计算**（渐进改造）：P4-2 先全量兼容（小数据），stats 聚合端点为正式目标，避免一次性大改。
+4. **better-sqlite3 native 构建风险**（Windows）：备选 node:sqlite / libsql 已列入风险表，Drizzle 驱动可一行切换。
+5. 既有遗留不变（截图工具链 / link-preload warning，均 P3）。
 
 ## 六、遗留问题 / 风险
 
 | 风险 | 等级 | 应对 |
 | --- | --- | --- |
-| 真实后端尚未启动（Mock 收益递减中） | P1 | 推荐 Phase 4 真实后端设计（待审批） |
-| 分页 / 错误模型 / DTO 未定稿 | P1 | Phase 4 契约先行，避免接后端时重构 |
-| runAgent 为随机数（非真实 AI） | P1 | 真实 AI Runtime 属「以后值得做」，Phase 4 可先桩实现 |
-| Settings 等占位模块 | P3 | 明确延后 |
-| 浏览器截图工具链不稳定 | P3 | 新标签路线稳定可用；不影响功能验证 |
+| P4-2 前端改动面（services 替换 + persist 收窄）比预期大 | 中 | 双模式开关（NEXT_PUBLIC_USE_MOCK）灰度；先切读后切写 |
+| better-sqlite3 native 构建失败（Windows） | 中 | node:sqlite / libsql 兜底（Drizzle 驱动切换） |
+| 时区窗口漂移 | 中 | from/to 显式边界 + 跨日/跨月测试 |
+| SQLite 生产部署（serverless）限制 | 低 | 演示/单机部署满足；文档标注未来换托管 DB |
+| 旧 localStorage 脏数据（启用后端后） | 低 | persist 版本 +1 + db:reset 一键重建 |
 
 ## 七、下一步计划
 
-1. **等待审批**：批准下一步方向。候选（供用户选择，不擅自扩大范围）：
-   - 方案 A（推荐）：**Phase 4 真实后端设计**——REST API 契约文档 + DB Schema + 分页/错误模型定稿（先纯设计文档，再实现替换 Mock，前端零改动验证）
-   - 方案 B：**先清 P1/P2 前端债务**（窗口计算收敛 / Definition 时间戳 / seed-migrate 流程文档化）再进后端
-   - 方案 C：**Settings 业务化**（用户偏好 + 工作区设置，纯前端）
-   - 方案 D：其他（用户指定）
-2. 执行任何内容前：先出方案 → 等待审批 → 实现 → 验证 → 更新本文件 → 汇报。
+1. **等待审批**：批准进入 **P4-2 实施**（范围见「二」7 节：DB+Repository → Route Handlers+Service → 前端 API Client 替换 → 全量回归 → 双模式开关）。实施前不再扩大范围；不做真实 AI API / 不做未在契约中的功能。
+2. 执行任何内容前：先出方案（如 P4-2 需要微调契约再向用户说明）→ 审批 → 实现 → 验证 → 更新本文件 → 汇报。
+3. **P4-1 收尾待办**：Git 提交（用户批准范围内执行）。
 
 ## 八、待审批事项
 
-- [ ] **A19**：批准《V1 Architecture Review》结论（P0=无 / P1 5 项 / 推荐 Phase 4 真实后端）
-- [ ] **A20**：确认下一阶段方向（候选见「七、下一步计划」）
+- [ ] **A21**：批准《P4-1 Backend Architecture & API Design》（ORM=Drizzle+better-sqlite3 / 统计端点化 / 时区契约 / 三职责 seed-migration 等结论）
+- [ ] **A22**：批准进入 **P4-2 实施**（DB+Repository → Route Handlers+Service → 前端同名替换 + persist 收窄 → 全量回归 → Mock/Real 双开关）

@@ -15,19 +15,15 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatDateTime, formatDuration, formatNumber, formatPercent, formatRelativeTime, formatTokens } from "@/lib/format";
-import { modelLabel } from "@/lib/types";
+import { modelLabel, normalizeRunStatus, runStatusMeta } from "@/lib/types";
 import { EMPTY_RUNS_STATS, useWorkspaceStore } from "@/stores/workspace";
 
-function RunBadge({ status }: { status: "success" | "failed" | "running" }) {
-  const map = {
-    success: "border-success/30 bg-success/10 text-success",
-    failed: "border-danger/30 bg-danger/10 text-danger",
-    running: "border-info/30 bg-info/10 text-info",
-  } as const;
-  const label = { success: "成功", failed: "失败", running: "运行中" } as const;
+function RunBadge({ status }: { status: string }) {
+  const s = normalizeRunStatus(status);
+  const meta = runStatusMeta[s];
   return (
-    <Badge variant="outline" className={`w-12 justify-center text-[11px] font-medium ${map[status]}`}>
-      {label[status]}
+    <Badge variant="outline" className={`w-14 justify-center text-[11px] font-medium ${meta.badge}`}>
+      {meta.label}
     </Badge>
   );
 }
@@ -92,7 +88,7 @@ export default function AgentDetailPage() {
     setRunning(true);
     try {
       const run = await runAgent(agentId);
-      toast.success(run.status === "success" ? "运行完成" : "运行失败（演示）");
+      toast.success(run.status === "succeeded" ? "运行完成" : "运行失败（演示）");
     } catch {
       toast.error("运行失败，请重试");
     } finally {

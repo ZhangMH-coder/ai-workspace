@@ -107,6 +107,13 @@ export const agentRuns = sqliteTable(
     messages: integer("messages").notNull().default(0),
     startedAt: text("started_at").notNull(),
     finishedAt: text("finished_at"),
+    // P5-2：Runtime 契约字段（model/provider 审计；input/output 用量；错误码）
+    model: text("model"),
+    provider: text("provider"),
+    inputTokens: integer("input_tokens"),
+    outputTokens: integer("output_tokens"),
+    errorCode: text("error_code"),
+    errorMessage: text("error_message"),
   },
   (t) => [
     index("idx_agent_run_agent_started").on(t.agentId, t.startedAt),

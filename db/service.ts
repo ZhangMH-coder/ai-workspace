@@ -14,6 +14,10 @@
 import { randomUUID } from "node:crypto";
 import * as repo from "./repository";
 import { clearAll, runSeed } from "./seed";
+import { canTransition } from "@/lib/runtime/contracts";
+import type { CapabilitySource, RunLifecycleStatus, RuntimeRequest } from "@/lib/runtime/contracts";
+import { createRuntime, createProviderRegistry } from "@/lib/runtime/runtime";
+import { mockProvider } from "@/lib/runtime/mock-provider";
 
 /** 统一内部错误（code 对齐 ApiErrorCode；CONFLICT 语义由具体业务触发） */
 export class ServiceError extends Error {
@@ -59,28 +63,112 @@ export function createAgent(input: CreateAgentInput) {
   return repo.insertAgent(row);
 }
 
-export function runAgent(agentId: string) {
+/* ================= AI Runtime（P5-2） ================= */
+
+/**
+ * Real 模式 CapabilitySource：SQLite 为事实数据源（Repository 查询）。
+ * Runtime 经此接口只读消费 Definition(资产) + AgentCapability(装配)。
+ */
+const realCapabilitySource: CapabilitySource = {
+  getAgent(agentId) {
+    const a = repo.getAgent(agentId);
+    if (!a) return null;
+    return { id: a.id, name: a.name, systemPrompt: a.systemPrompt, model: a.model };
+  },
+  listAssemblies(agentId) {
+    return repo.listRuntimeAssemblies(agentId);
+  },
+};
+
+/** P5-2 唯一 Provider 注册表（mock）；未来 Adapter 在此注册 */
+const realRuntime = createRuntime({
+  source: realCapabilitySource,
+  providers: createProviderRegistry({ mock: mockProvider }),
+});
+
+/**
+ * 触发 Agent 运行（P5-2 起经 Runtime 编排执行，不再直接随机造数）
+ *
+ * 执行链：Service.runAgent → Runtime.execute → MockProvider.execute
+ *         → RuntimeResult → Service 状态迁移 + 持久化 Run
+ *
+ * 状态机：queued → running → succeeded|failed|cancelled；
+ * 非法转换（succeeded→running 等）在 Service 层拦截（CONFLICT）。
+ */
+export async function runAgent(agentId: string, input?: string) {
   const agent = repo.getAgent(agentId);
   if (!agent) throw new ServiceError("NOT_FOUND", "Agent 不存在");
+
+  const nowIso = new Date().toISOString();
   const now = Date.now();
-  const durationMs = 8_000 + Math.floor(Math.random() * 220_000);
-  const status = Math.random() <= 0.86 ? "success" : "failed";
-  const run = repo.insertRun({
-    id: randomUUID(),
+
+  // 并发约束：同一 Agent 存在 queued/running 时拒绝（409）
+  const active = repo.listRuns(
+    { agentIds: [agentId], status: "queued" },
+    { page: 1, pageSize: 1 }
+  );
+  const active2 = repo.listRuns(
+    { agentIds: [agentId], status: "running" },
+    { page: 1, pageSize: 1 }
+  );
+  if (active.total + active2.total > 0) {
+    throw new ServiceError("CONFLICT", "该 Agent 已有运行中的任务，请稍后再试");
+  }
+
+  // 1) 创建 Run（queued）
+  const runId = randomUUID();
+  repo.insertRun({
+    id: runId,
     agentId,
-    status,
-    summary:
-      status === "success"
-        ? "完成一次运行任务，结果已汇总"
-        : "运行中断：上游服务超时，已记录日志",
-    durationMs,
-    tokensUsed: 900 + Math.floor(Math.random() * 38_000),
-    messages: 3 + Math.floor(Math.random() * 14),
-    startedAt: new Date(now).toISOString(),
-    finishedAt: new Date(now + durationMs).toISOString(),
+    status: "queued",
+    summary: "任务已排队，等待调度",
+    durationMs: null,
+    tokensUsed: 0,
+    messages: 0,
+    startedAt: nowIso,
+    finishedAt: null,
   });
-  repo.updateAgent(agentId, { lastRunAt: new Date(now).toISOString() });
-  return run;
+
+  // 2) queued → running（同步执行：先置 running 再执行）
+  const running = repo.updateRun(runId, { status: "running" });
+  if (!running) throw new ServiceError("NOT_FOUND", "Run 不存在");
+
+  // 3) Runtime 编排执行（Provider 选择在 Runtime 内部，Service 不接触 Provider）
+  const req: RuntimeRequest = {
+    runId,
+    agentId,
+    input: input ?? "",
+    modelConfig: { provider: "mock", model: agent.model, temperature: 0.7, maxTokens: 4096, timeoutMs: 120_000, retry: { maxAttempts: 2, backoffMs: 1_000 } },
+    source: "ui",
+  };
+  const result = await realRuntime.execute(req);
+
+  // 4) 状态迁移校验（running → 终态；非法转换拦截）
+  const target = result.status as RunLifecycleStatus;
+  if (!canTransition("running", target)) {
+    throw new ServiceError("CONFLICT", `非法状态转换: running → ${target}`);
+  }
+
+  // 5) 终态落库（含 usage / model / provider / error）
+  const finished = new Date(now + result.durationMs).toISOString();
+  repo.updateRun(runId, {
+    status: target,
+    summary: result.summary,
+    durationMs: result.durationMs,
+    tokensUsed: result.usage.totalTokens,
+    finishedAt: finished,
+    model: agent.model,
+    provider: "mock",
+    inputTokens: result.usage.inputTokens,
+    outputTokens: result.usage.outputTokens,
+    errorCode: result.error?.code,
+    errorMessage: result.error?.message,
+  });
+
+  // 6) 更新 Agent lastRunAt
+  repo.updateAgent(agentId, { lastRunAt: nowIso });
+
+  return repo.getRun(runId);
 }
 
 /* ---------------- CapabilityDefinition ---------------- */

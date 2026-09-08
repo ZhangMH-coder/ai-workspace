@@ -8,8 +8,26 @@
 /** Agent 运行状态 */
 export type AgentStatus = "active" | "idle" | "error" | "paused";
 
-/** 单次运行结果状态 */
-export type RunStatus = "success" | "failed" | "running";
+/** 单次运行结果状态（P5-2：五态生命周期；succeeded/failed/cancelled 为终态） */
+export type RunStatus = "queued" | "running" | "succeeded" | "failed" | "cancelled";
+
+/** 运行状态展示元信息（P5-2：集中维护，组件共用；兼容历史 success → succeeded） */
+export const runStatusMeta: Record<RunStatus, { label: string; badge: string }> = {
+  queued: { label: "排队中", badge: "border-white/15 bg-white/[0.06] text-ink-2" },
+  running: { label: "运行中", badge: "border-info/30 bg-info/10 text-info" },
+  succeeded: { label: "成功", badge: "border-success/30 bg-success/10 text-success" },
+  failed: { label: "失败", badge: "border-danger/30 bg-danger/10 text-danger" },
+  cancelled: { label: "已取消", badge: "border-warning/30 bg-warning/10 text-warning" },
+};
+
+/** 兼容历史 success 值（防御旧数据/旧缓存） */
+export function normalizeRunStatus(status: string): RunStatus {
+  if (status === "success") return "succeeded";
+  if (status === "queued" || status === "running" || status === "succeeded" || status === "failed" || status === "cancelled") {
+    return status;
+  }
+  return "failed";
+}
 
 /** 演示可选模型（后续可扩展为真实模型目录） */
 export type ModelId = "doubao-pro" | "doubao-lite" | "gpt-4o" | "claude-sonnet";
@@ -171,6 +189,13 @@ export interface AgentRun {
   startedAt: string; // ISO 8601
   finishedAt: string; // ISO 8601
   summary: string;
+  // P5-2：Runtime 契约字段（可选，向后兼容旧数据）
+  model?: string;
+  provider?: string;
+  inputTokens?: number;
+  outputTokens?: number;
+  errorCode?: string;
+  errorMessage?: string;
 }
 
 /** 新建 Agent 的表单输入 */

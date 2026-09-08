@@ -40,6 +40,13 @@ export interface AgentRunDTO {
   messages: number;
   startedAt: string;
   finishedAt: string | null;
+  // P5-2：Runtime 契约字段（可选，向后兼容）
+  model?: string;
+  provider?: string;
+  inputTokens?: number;
+  outputTokens?: number;
+  errorCode?: string;
+  errorMessage?: string;
 }
 
 export interface CapabilityDefinitionDTO {

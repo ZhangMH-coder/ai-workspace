@@ -1,12 +1,19 @@
 /**
- * Mock 服务层（Phase 2）
+ * Mock 服务层（Phase 2 → P5-2）
  *
  * 设计意图：界面层只依赖这里的 async 函数，不直接接触数据源。
  * 未来接入真实后端时，仅需将本文件替换为 HTTP 客户端实现，
  * 函数签名与返回类型保持不变，store 与组件零改动。
+ *
+ * P5-2：runAgent 改经 Mock Runtime 编排执行（与 Real 同构），
+ * 不再在服务层直接随机造数；Mock 装配为静态 seed（Mock 不持有装配状态）。
  */
-import { seedAgents } from "@/lib/mock-data/seed";
+import { seedAgents, seedAgentCapabilities, seedCapabilityDefinitions } from "@/lib/mock-data/seed";
 import type { Agent, AgentRun, NewAgentInput } from "@/lib/types";
+import { DEFAULT_MODEL_CONFIG } from "@/lib/runtime/contracts";
+import type { CapabilitySource } from "@/lib/runtime/contracts";
+import { createProviderRegistry, createRuntime } from "@/lib/runtime/runtime";
+import { mockProvider } from "@/lib/runtime/mock-provider";
 import { mockState, pushRun } from "./state";
 
 /** 模拟网络延迟（ms） */
@@ -20,6 +27,35 @@ function delay(ms: number): Promise<void> {
 function uid(prefix: string): string {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
 }
+
+/** Mock 模式 CapabilitySource（静态 seed 装配；Definition + AgentCapability 两层只读） */
+const mockCapabilitySource: CapabilitySource = {
+  getAgent(agentId) {
+    const a = seedAgents.find((x) => x.id === agentId);
+    if (!a) return null;
+    return { id: a.id, name: a.name, systemPrompt: a.systemPrompt, model: a.model };
+  },
+  listAssemblies(agentId) {
+    return seedAgentCapabilities
+      .filter((ac) => ac.agentId === agentId)
+      .map((ac) => {
+        const d = seedCapabilityDefinitions.find((x) => x.id === ac.capabilityId);
+        return {
+          capabilityId: ac.capabilityId,
+          enabled: ac.enabled,
+          type: d?.type ?? "",
+          name: d?.name ?? "",
+          description: d?.description ?? "",
+          lifecycle: d?.lifecycle ?? "active",
+        };
+      });
+  },
+};
+
+const mockRuntime = createRuntime({
+  source: mockCapabilitySource,
+  providers: createProviderRegistry({ mock: mockProvider }),
+});
 
 /** 获取全部智能体 */
 export async function fetchAgents(): Promise<Agent[]> {
@@ -51,27 +87,38 @@ export async function createAgent(input: NewAgentInput): Promise<Agent> {
   return agent;
 }
 
-/** 触发一次模拟运行：返回新产生的运行记录 */
+/**
+ * 触发一次模拟运行（P5-2：经 Mock Runtime 编排执行 → MockProvider → RuntimeResult）
+ * 执行链与 Real 同构：Service/MockService → Runtime.execute → MockProvider.execute
+ * → RuntimeResult → 组装 Run → pushRun（Mock 内存数据层）
+ */
 export async function runAgent(agentId: string, agentName: string): Promise<AgentRun> {
   await delay(RUN_LATENCY_MS);
   const startedAt = Date.now();
-  // 演示：90% 成功
-  const success = Math.random() > 0.1;
-  const durationMs = 12_000 + Math.floor(Math.random() * 210_000);
-  const tokensUsed = 1_200 + Math.floor(Math.random() * 32_000);
-  const messages = 3 + Math.floor(Math.random() * 10);
-  const run: AgentRun = {
-    id: uid("run"),
+  const runId = uid("run");
+  const agent = seedAgents.find((a) => a.id === agentId);
+
+  const result = await mockRuntime.execute({
+    runId,
     agentId,
-    status: success ? "success" : "failed",
-    durationMs,
-    tokensUsed,
-    messages,
+    input: "",
+    modelConfig: { ...DEFAULT_MODEL_CONFIG, model: agent?.model ?? "doubao-pro" },
+    source: "ui",
+  });
+
+  const run: AgentRun = {
+    id: runId,
+    agentId,
+    status: result.status,
+    durationMs: result.durationMs,
+    tokensUsed: result.usage.totalTokens,
+    messages: 3 + Math.floor(Math.random() * 10),
     startedAt: new Date(startedAt).toISOString(),
-    finishedAt: new Date(startedAt + durationMs).toISOString(),
-    summary: success
-      ? `「${agentName}」完成一次运行，输出 ${messages} 条消息`
-      : `「${agentName}」运行中断：模拟上游超时`,
+    finishedAt: new Date(startedAt + result.durationMs).toISOString(),
+    summary:
+      result.status === "succeeded"
+        ? `「${agentName}」完成一次运行，输出 ${result.usage.totalTokens} tokens`
+        : `「${agentName}」运行中断：${result.error?.message ?? "模拟上游超时"}`,
   };
   // 同步到 Mock 内存数据层，统计聚合（mock/runs.ts）才能反映本次运行
   pushRun(run);

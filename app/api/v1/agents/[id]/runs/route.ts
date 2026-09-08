@@ -27,7 +27,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
 export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await ctx.params;
-    const run = service.runAgent(id);
+    const run = await service.runAgent(id);
     return NextResponse.json(run, { status: 201 });
   } catch (e) {
     return handleError(e);

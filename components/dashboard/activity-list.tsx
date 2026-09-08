@@ -4,12 +4,15 @@ import Link from "next/link";
 import { Activity, Bot } from "lucide-react";
 
 import { formatDuration, formatRelativeTime, formatTokens } from "@/lib/format";
-import type { Agent, AgentRun, RunStatus } from "@/lib/types";
+import { normalizeRunStatus, runStatusMeta } from "@/lib/types";
+import type { Agent, AgentRun } from "@/lib/types";
 
-const STATUS_META: Record<RunStatus, { label: string; dot: string }> = {
-  success: { label: "成功", dot: "bg-success" },
-  failed: { label: "失败", dot: "bg-danger" },
-  running: { label: "运行中", dot: "bg-info" },
+const STATUS_DOT: Record<string, string> = {
+  queued: "bg-white/25",
+  running: "bg-info",
+  succeeded: "bg-success",
+  failed: "bg-danger",
+  cancelled: "bg-warning",
 };
 
 export function ActivityList({
@@ -34,14 +37,15 @@ export function ActivityList({
   return (
     <div className="flex flex-col">
       {runs.slice(0, 7).map((run) => {
-        const meta = STATUS_META[run.status];
+        const status = normalizeRunStatus(run.status);
+        const meta = runStatusMeta[status];
         return (
           <Link
             key={run.id}
             href={`/agents/${run.agentId}`}
             className="group flex items-center gap-3 border-b border-border/70 px-5 py-3.5 transition-colors duration-150 last:border-b-0 hover:bg-white/[0.025] focus-visible:outline-none focus-visible:bg-white/[0.025]"
           >
-            <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${meta.dot}`} />
+            <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${STATUS_DOT[status]}`} />
             <div className="min-w-0 flex-1">
               <p className="truncate text-[13px] text-ink">
                 <span className="font-medium">{agentName(run.agentId)}</span>

@@ -245,7 +245,7 @@ function buildRuns(): AgentRun[] {
   const runs: AgentRun[] = [];
   const random = seededRandom(20260908);
   const statusPool: Array<{ s: AgentRun["status"]; w: number }> = [
-    { s: "success", w: 86 },
+    { s: "succeeded", w: 86 },
     { s: "failed", w: 14 },
   ];
   const pick = (pool: Array<{ s: AgentRun["status"]; w: number }>) => {
@@ -279,7 +279,7 @@ function buildRuns(): AgentRun[] {
         messages: 3 + Math.floor(random() * 14),
         startedAt: new Date(startedAt).toISOString(),
         finishedAt: new Date(finishedAt).toISOString(),
-        summary: status === "success"
+        summary: status === "succeeded"
           ? summaries[i % summaries.length]
           : "运行中断：上游服务超时，已记录日志",
       });

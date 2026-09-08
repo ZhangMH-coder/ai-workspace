@@ -289,7 +289,7 @@
 1. **等待审批**：验收《P5-1 AI Runtime Architecture & Contract》（纯设计：Runtime 编排层 / 状态机 / Capability 映射 / Provider 接口 / Streaming 契约 / 错误与成本模型 / Mock→Real 路径）。
 2. 执行任何内容前：先出方案 → 审批 → 实现 → 验证 → 更新本文件 → 汇报。
 3. **P5-1 收尾**：Git 提交（本次执行）已完成。
-4. **P5-2（待审批）**：按 §十三 实施最小闭环——Runtime 接口 + CapabilityLoader + MockProvider + Run 状态机（migration：success→succeeded + 新列）+ `runAgent` 改经 Runtime + UI 徽章扩展 + 全量回归；**不接真实 LLM / 不实现 Streaming / Tool / Memory**。
+4. **P5-2（已完成）**：按 §十三 实施最小闭环——Runtime 接口 + CapabilityLoader + MockProvider + Run 状态机（migration：success→succeeded + 新列）+ `runAgent` 改经 Runtime + UI 徽章扩展 + 全量回归；**不接真实 LLM / 不实现 Streaming / Tool / Memory**。
 
 ## 十一、待审批事项
 
@@ -299,6 +299,88 @@
 - [x] **A24**：审批下一阶段方向 ✅ 已选定 P4-3 统计端点化收尾
 - [x] **A25**：验收《P4-3 交付汇报》✅ 已验收（批准进入 P4-4 交付增强）
 - [x] **A26**：验收《P4-4 Delivery & V1 Release Candidate Report》✅ 已验收（批准进入 P5-1 AI Runtime 设计）
-- [ ] **A27**：验收《P5-1 AI Runtime Architecture & Contract》并批准进入 P5-2 最小实施（编排层 + 状态机 + MockProvider；明确不接真实 LLM）
+- [x] **A27**：验收《P5-1 AI Runtime Architecture & Contract》并批准进入 P5-2 最小实施（编排层 + 状态机 + MockProvider；明确不接真实 LLM）✅ 已批准并完成
+
+---
+
+## P5-2 AI Runtime 最小实施（已完成）
+
+### 一、当前阶段
+
+**Phase 5 · Stage 2（P5-2）**：AI Runtime 最小实施——将 `runAgent` 演示桩正式迁移为 `Service.runAgent → Runtime.execute → CapabilityLoader → MockProvider → RuntimeResult → Run 持久化`；Run 五态状态机落地；不接任何真实 LLM / Streaming / Tool / Memory。
+
+### 二、本次修改内容
+
+**新增（4 文件）**
+- `lib/runtime/contracts.ts`：Runtime 全部契约——五态状态机（`RUN_TRANSITIONS` / `canTransition` / `isFinalRunStatus`）、`RuntimeRequest` / `ExecutionContext` / `RuntimeResult` / `RuntimeEvent` / `RuntimeError`（10 错误码）/ `TokenUsage` / `ModelConfig` / `CapabilitySource`（数据源无关注入）/ `RuntimeProvider` 接口 / `ProviderExecuteResult`（含 durationMs 与 provider error）/ `RunPatch` / `normalizeRunStatus`
+- `lib/runtime/capability-loader.ts`：`buildExecutionContext`——只消费 `enabled && lifecycle=active` 装配，按 type 解构 rules/tools/skills/memoryHints，组装 systemPrompt（注入顺序：基座 → 规则区 → 技能区 → 记忆 stub → 工具区 JSON）；`assembledCount` 含全部装配
+- `lib/runtime/mock-provider.ts`：唯一 Provider——86% 成功 / 14% 失败（P5-1 §12 演示桩语义）、8s~230s 模拟时长、900~38k tokens、`stream()` 抛错占位（不进执行路径）
+- `lib/runtime/runtime.ts`：编排层——`createRuntime` / `createProviderRegistry`；执行链：实时构建 ExecutionContext → 注册表选 Provider → 归一化消息 → Provider.execute → Provider error 归一化 failed / 成功组装 RuntimeResult
+
+**修改（12 文件）**
+- `db/schema.ts`：agent_run 加列（model / provider / input_tokens / output_tokens / error_code / error_message，最小集）
+- `drizzle/0001_dry_terror.sql`：加列 + 数据迁移 `UPDATE agent_run SET status='succeeded' WHERE status='success'`（幂等）
+- `db/repository.ts`：新增 `updateRun`（状态迁移落库）、`getRun`、`listRuntimeAssemblies`（join Definition 只读）；`runsStats` 聚合 succeeded 条件 `'success'` → `'succeeded'`
+- `db/service.ts`：`runAgent` 重写为两阶段（insert queued → running → Runtime 执行 → `canTransition` 校验 → 终态 updateRun 含 usage/model/provider/error + agent lastRunAt）；并发 queued/running 409 拦截；Real CapabilitySource（SQLite 事实源）+ Real Runtime 注册表
+- `app/api/v1/agents/[id]/runs/route.ts`：`await service.runAgent(id)`
+- `lib/services/mock/agents.ts`：`runAgent` 经 Mock Runtime 编排（Mock CapabilitySource = 静态 seed 装配；RuntimeResult → pushRun）；不再直接随机造数
+- `lib/services/mock/runs.ts`：统计 `'success'` → `'succeeded'`
+- `lib/mock-data/seed.ts` / `db/seed.ts`：seed runs 状态枚举 `'success'` → `'succeeded'`（两处时间锚逻辑不动）
+- `lib/types.ts`：`RunStatus` 五态 + `runStatusMeta` + `normalizeRunStatus`；`AgentRun` 补可选 Runtime 字段
+- `components/dashboard/activity-list.tsx`：STATUS_META → `runStatusMeta` + 五态 dot
+- `app/(workspace)/agents/[id]/page.tsx`：RunBadge 五态 + toast 判断 `succeeded`
+- `lib/api/dto.ts` / `mappers.ts`：AgentRunDTO 补可选字段 + `toAgentRun` 映射 + `normalizeRunStatus`
+
+**新增验证脚本**：`scripts/p52-verify.ts`（状态机合法/非法迁移、CapabilityLoader 三场景、Mock 完整执行链）
+
+### 三、已完成内容
+
+1. Runtime 接口落地（五态状态机 + 请求/上下文/结果/错误/Token/Provider 契约）
+2. CapabilityLoader：enabled+active 才进执行上下文；archived 不进入；实时构建无缓存
+3. MockProvider：86%/14% 演示语义 + 模拟时长/tokens；唯一 Provider 经注册表注册
+4. Run 状态机：queued→running→succeeded|failed|cancelled；终态不可逆；并发 409
+5. 数据迁移 success→succeeded（92 条全部转换，无残留）；统计口径 succeeded+failed 不变
+6. runAgent 全链经 Runtime 编排（Real + Mock 双实现同构）
+7. UI 五态展示（Dashboard 活动列表 + Agent Detail RunBadge）
+8. Mock / Real 双模式构建与运行验证
+
+### 四、验证结果（验收 A–H）
+
+| 验收项 | 结果 |
+| --- | --- |
+| A 状态机合法/非法迁移 | ✅ 脚本断言 9 组非法全部拦截 + 并发双请求 409 |
+| B Capability enabled/disabled/archived | ✅ loader 注入 4 项、排除 disabled/archived；assembledCount=6 |
+| C 迁移后统计 = P4-3 基线 | ✅ 88/80/8/90.9/1698119/daily27 完全一致 |
+| D 完整 Mock 执行链 | ✅ POST run 落库（succeeded：model/provider/input/output 全落；failed：error_code=provider_unavailable 落库） |
+| E Provider 解耦 | ✅ Service/Store/UI 无 MockProvider 直接引用（仅 Runtime 注册表 / mock agents 注册） |
+| F 双模式构建 | ✅ Real build + Mock build（NEXT_PUBLIC_USE_MOCK=1）均通过；Mock 3001 stats/runAgent 正常 |
+| G 业务回归 | ✅ Dashboard（91 运行/90.1%/1.7M 活动列表五态）、Agents、Agent Detail、Capabilities Hub 全部正常 |
+| H lint / tsc / build / API / 生产交互 | ✅ lint 0 错误 0 警告；tsc 0 错误；build 成功；API 冒烟通过；浏览器生产交互无 console error |
+
+### 五、发现的问题（本阶段）
+
+| 问题 | 级别 | 状态 |
+| --- | --- | --- |
+| migration 应用后 `runsStats` succeeded=0（repository 聚合仍按 `'success'` 过滤） | P0 | 已修复（SQL 条件改 `'succeeded'`）；修复前一次 API 查询暴露、修复后基线恢复 88/80/8 |
+| Mock 模式 runs 状态 seed 枚举仍为 `'success'`（mock/runs.ts 统计断裂风险） | P1 | 已修复（seed 与统计同步改 `'succeeded'`） |
+| `realCapabilitySource.listAssemblies` 初始实现依赖 `listAgentCapabilities`（无 Definition 字段） | P1 | 已修复（新增 `listRuntimeAssemblies` join 查询） |
+| runAgent 原为同步函数、Runtime.execute 为 async | P1 | 已修复（runAgent 改 async；route handler await） |
+
+### 六、遗留问题 / 风险
+
+| 遗留项 | 级别 | 说明 |
+| --- | --- | --- |
+| cancelled 状态无可达执行路径（无 cancel 端点） | 低 | 状态机与 UI 已支持；取消端点属 P5-3 范围 |
+| queued/running 中间态在同步执行下窗口极短（409 并发验证用双请求触发成功） | 低 | 真实 Runtime 异步队列化时自然存在 |
+| Mock seed 装配为静态快照（Mock attach/detach 不写 mockState） | 低 | 既有 Mock 架构（不持有装配状态）；Real 为事实源 |
+| 演示数据中新增 run 的 duration 分布 8s~230s 为 Mock 模拟值 | 低 | 与历史演示桩一致；真实 Provider 为实际耗时 |
+
+### 七、下一步计划
+
+1. **等待审批**：验收《P5-2 AI Runtime 最小实施交付汇报》。
+2. 建议方向（P5-3 候选，供审批）：AI Runtime 扩展——取消端点（cancelled 可达路径）/ 队列化执行（queued/running 真实窗口）/ streaming 契约接线；或接入真实 Provider Adapter（OpenAI/DeepSeek/Anthropic）之前的 API Key 与 Provider 配置管理。
+3. 未做（按范围声明）：真实 LLM、Streaming/SSE/WebSocket、Tool Calling、Memory Retrieval、Prompt Editor、Authentication、Multi-user、Capability Versioning。
+
+
 
 

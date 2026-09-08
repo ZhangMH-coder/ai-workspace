@@ -12,6 +12,7 @@ import type {
   ProjectAgent,
   RunsStats,
 } from "@/lib/types";
+import { normalizeRunStatus } from "@/lib/types";
 import type {
   AgentCapabilityDTO,
   AgentDTO,
@@ -39,7 +40,7 @@ export function toAgentRun(d: AgentRunDTO): AgentRun {
   return {
     id: d.id,
     agentId: d.agentId,
-    status: d.status as AgentRun["status"],
+    status: normalizeRunStatus(d.status),
     summary: d.summary,
     durationMs: d.durationMs ?? 0,
     tokensUsed: d.tokensUsed,
@@ -47,6 +48,13 @@ export function toAgentRun(d: AgentRunDTO): AgentRun {
     startedAt: d.startedAt,
     // 服务端保证运行完成必有完成时间；防御性兜底（未知时取开始时间）
     finishedAt: d.finishedAt ?? d.startedAt,
+    // P5-2：Runtime 契约字段（可选，向后兼容旧数据）
+    model: d.model,
+    provider: d.provider,
+    inputTokens: d.inputTokens,
+    outputTokens: d.outputTokens,
+    errorCode: d.errorCode,
+    errorMessage: d.errorMessage,
   };
 }
 

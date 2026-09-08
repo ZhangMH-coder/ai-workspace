@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 演示 Seed（P4-2a）
  *
  * 职责：仅插入演示数据，幂等（按 id upsert），可重复执行。
@@ -248,7 +248,7 @@ function buildRuns() {
     finishedAt: string;
   }> = [];
   const random = seededRandom(20260908);
-  const pickStatus = () => (random() <= 0.86 ? "success" : "failed");
+  const pickStatus = () => (random() <= 0.86 ? "succeeded" : "failed");
 
   let runIndex = 0;
   for (const agent of seedAgents) {
@@ -270,7 +270,7 @@ function buildRuns() {
         startedAt: new Date(startedAt).toISOString(),
         finishedAt: new Date(startedAt + durationMs).toISOString(),
         summary:
-          status === "success"
+          status === "succeeded"
             ? summaries[i % summaries.length]
             : "运行中断：上游服务超时，已记录日志",
       });
@@ -309,3 +309,4 @@ export function clearAll() {
   sqlite.exec("DELETE FROM capability_definition;");
   sqlite.exec("DELETE FROM agent;");
 }
+

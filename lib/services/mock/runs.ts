@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Runs Service — Mock 实现（P4-3）
  *
  * 与 HTTP 实现同名函数契约；统计从 Mock 内存数据直接聚合
@@ -69,7 +69,7 @@ export async function fetchRunsStats(q: RunsStatsQuery): Promise<RunsStats> {
     return true;
   });
 
-  const succeeded = rows.filter((r) => r.status === "success").length;
+  const succeeded = rows.filter((r) => r.status === "succeeded").length;
   const failed = rows.length - succeeded;
   const tokens = rows.reduce((sum, r) => sum + r.tokensUsed, 0);
   const avgDurationMs =
@@ -82,7 +82,7 @@ export async function fetchRunsStats(q: RunsStatsQuery): Promise<RunsStats> {
     const key = r.startedAt.slice(0, 10);
     const cur = byDate.get(key) ?? { runs: 0, succeeded: 0, failed: 0 };
     cur.runs += 1;
-    if (r.status === "success") cur.succeeded += 1;
+    if (r.status === "succeeded") cur.succeeded += 1;
     else cur.failed += 1;
     byDate.set(key, cur);
   }
@@ -119,3 +119,4 @@ export async function fetchRunsStats(q: RunsStatsQuery): Promise<RunsStats> {
     daily,
   };
 }
+

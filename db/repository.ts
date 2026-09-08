@@ -159,7 +159,7 @@ export function runsStats(f: RunsStatsFilters): {
   const totals = db
     .select({
       runs: count(),
-      succeeded: sql<number>`COALESCE(SUM(CASE WHEN ${agentRuns.status} = 'success' THEN 1 ELSE 0 END), 0)`,
+      succeeded: sql<number>`COALESCE(SUM(CASE WHEN ${agentRuns.status} = 'succeeded' THEN 1 ELSE 0 END), 0)`,
       failed: sql<number>`COALESCE(SUM(CASE WHEN ${agentRuns.status} = 'failed' THEN 1 ELSE 0 END), 0)`,
       tokens: sql<number>`COALESCE(SUM(${agentRuns.tokensUsed}), 0)`,
       avgDurationMs: sql<number>`COALESCE(AVG(${agentRuns.durationMs}), 0)`,
@@ -173,7 +173,7 @@ export function runsStats(f: RunsStatsFilters): {
     .select({
       date: sql<string>`substr(${agentRuns.startedAt}, 1, 10)`,
       runs: count(),
-      succeeded: sql<number>`COALESCE(SUM(CASE WHEN ${agentRuns.status} = 'success' THEN 1 ELSE 0 END), 0)`,
+      succeeded: sql<number>`COALESCE(SUM(CASE WHEN ${agentRuns.status} = 'succeeded' THEN 1 ELSE 0 END), 0)`,
       failed: sql<number>`COALESCE(SUM(CASE WHEN ${agentRuns.status} = 'failed' THEN 1 ELSE 0 END), 0)`,
     })
     .from(agentRuns)
@@ -207,6 +207,31 @@ export function runsStats(f: RunsStatsFilters): {
 
 export function insertRun(row: typeof agentRuns.$inferInsert) {
   return db.insert(agentRuns).values(row).returning().get();
+}
+
+export function getRun(id: string) {
+  return db.select().from(agentRuns).where(eq(agentRuns.id, id)).get() ?? null;
+}
+
+/** P5-2：Run 状态迁移 / 结果落库（Service 层校验状态机合法性后调用） */
+export function updateRun(
+  id: string,
+  patch: Partial<Pick<
+    typeof agentRuns.$inferInsert,
+    | "status"
+    | "summary"
+    | "durationMs"
+    | "tokensUsed"
+    | "finishedAt"
+    | "model"
+    | "provider"
+    | "inputTokens"
+    | "outputTokens"
+    | "errorCode"
+    | "errorMessage"
+  >>
+) {
+  return db.update(agentRuns).set(patch).where(eq(agentRuns.id, id)).returning().get();
 }
 
 /* ---------------- CapabilityDefinition ---------------- */
@@ -284,6 +309,26 @@ export function listAgentCapabilities(f: { agentId?: string; capabilityId?: stri
     .offset(offsetOf(q))
     .all();
   return { items, total };
+}
+
+/** P5-2：Runtime 装配查询（join CapabilityDefinition，只读；供 CapabilityLoader 消费） */
+export function listRuntimeAssemblies(agentId: string) {
+  return db
+    .select({
+      capabilityId: agentCapabilities.capabilityId,
+      enabled: agentCapabilities.enabled,
+      type: capabilityDefinitions.type,
+      name: capabilityDefinitions.name,
+      description: capabilityDefinitions.description,
+      lifecycle: capabilityDefinitions.lifecycle,
+    })
+    .from(agentCapabilities)
+    .innerJoin(
+      capabilityDefinitions,
+      eq(agentCapabilities.capabilityId, capabilityDefinitions.id)
+    )
+    .where(eq(agentCapabilities.agentId, agentId))
+    .all();
 }
 
 export function getAgentCapability(id: string) {

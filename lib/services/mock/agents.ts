@@ -5,8 +5,9 @@
  * 未来接入真实后端时，仅需将本文件替换为 HTTP 客户端实现，
  * 函数签名与返回类型保持不变，store 与组件零改动。
  */
-import { seedAgents, seedRuns } from "@/lib/mock-data/seed";
+import { seedAgents } from "@/lib/mock-data/seed";
 import type { Agent, AgentRun, NewAgentInput } from "@/lib/types";
+import { mockState, pushRun } from "./state";
 
 /** 模拟网络延迟（ms） */
 const LATENCY_MS = 260;
@@ -26,10 +27,12 @@ export async function fetchAgents(): Promise<Agent[]> {
   return seedAgents.map((a) => ({ ...a }));
 }
 
-/** 获取全部运行记录（已按开始时间倒序） */
-export async function fetchRuns(): Promise<AgentRun[]> {
+/** 某 Agent 的运行历史明细（详情页场景；统计不依赖此数据） */
+export async function fetchAgentRuns(agentId: string): Promise<AgentRun[]> {
   await delay(LATENCY_MS);
-  return seedRuns.map((r) => ({ ...r }));
+  return mockState.runs
+    .filter((r) => r.agentId === agentId)
+    .sort((a, b) => b.startedAt.localeCompare(a.startedAt));
 }
 
 /** 新建智能体 */
@@ -70,5 +73,7 @@ export async function runAgent(agentId: string, agentName: string): Promise<Agen
       ? `「${agentName}」完成一次运行，输出 ${messages} 条消息`
       : `「${agentName}」运行中断：模拟上游超时`,
   };
+  // 同步到 Mock 内存数据层，统计聚合（mock/runs.ts）才能反映本次运行
+  pushRun(run);
   return run;
 }

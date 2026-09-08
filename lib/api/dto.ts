@@ -82,19 +82,21 @@ export interface RunsStatsDTO {
     runs: number;
     succeeded: number;
     failed: number;
-    successRate: number;
+    successRate: number; // 0-100，一位小数（服务端聚合口径）
     tokens: number;
+    avgDurationMs: number;
+    lastRunAt: string | null; // 窗口内最近运行时间（无运行则为 null）
   };
   daily: Array<{
     date: string;
     runs: number;
     succeeded: number;
     failed: number;
-    successRate: number;
+    successRate: number; // 0-100
   }>;
 }
 
-/** 时间窗口（前端唯一实现 selectRunsInRange 计算 from/to；API 只接受显式边界） */
+/** 时间窗口（前端唯一实现 windowBoundsForRange 计算 from/to；API 只接受显式边界） */
 export interface TimeWindowParams {
   from?: string;
   to?: string;

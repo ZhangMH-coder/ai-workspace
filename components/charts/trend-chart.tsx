@@ -12,7 +12,7 @@
 import { useState } from "react";
 import { BarChart3 } from "lucide-react";
 
-import type { DailyStat } from "@/stores/workspace";
+import type { DailyStat } from "@/lib/types";
 
 const W = 640;
 const H = 240;

@@ -1,11 +1,11 @@
 "use client";
 
 /**
- * Dashboard 项目维度摘要（Phase 3 第六阶段）
+ * Dashboard 项目维度摘要（Phase 3 第六阶段 / P4-3）
  *
- * - 数据全部来自单一 Store（projects + projectAgents + runs），与 Project Detail 完全同源；
- * - 统计复用 selectProjectStats（内部走 selectRunsInProjectWindow → selectRunsInRange 统一窗口），
- *   不重新实现任何统计逻辑；
+ * - 数据全部来自单一 Store（projects + projectAgents + stats.byProject），与 Project Detail 完全同源；
+ * - 统计来自服务端 /runs/stats 聚合（byProject.recent30d，固定「含今天 30 个自然日」窗口，
+ *   与 Dashboard 统一窗口口径一致），不重新实现任何统计逻辑；
  * - 每行可点击进入对应 Project Detail。
  */
 import Link from "next/link";
@@ -14,18 +14,13 @@ import { FolderKanban, LayoutGrid } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { formatRelativeTime } from "@/lib/format";
-import {
-  selectProjectStats,
-  selectRunsInProjectWindow,
-  sortProjectsByActivity,
-  useWorkspaceStore,
-} from "@/stores/workspace";
+import { useWorkspaceStore, sortProjectsByActivity } from "@/stores/workspace";
 import { cn } from "@/lib/utils";
 
 export function ProjectsOverview({ hydrated }: { hydrated: boolean }) {
   const projects = useWorkspaceStore((s) => s.projects);
   const projectAgents = useWorkspaceStore((s) => s.projectAgents);
-  const runs = useWorkspaceStore((s) => s.runs);
+  const stats = useWorkspaceStore((s) => s.stats);
 
   if (!hydrated) {
     return (
@@ -83,22 +78,11 @@ export function ProjectsOverview({ hydrated }: { hydrated: boolean }) {
       ) : (
         <div className="flex flex-col">
           {sorted.map((p) => {
-            const stats = selectProjectStats(runs, projectAgents, p.id);
-            const recent30d = selectRunsInProjectWindow(
-              runs,
-              projectAgents,
-              p.id,
-              "30d"
-            );
-            const lastActive =
-              recent30d.length > 0
-                ? recent30d.reduce((a, b) =>
-                    new Date(a.startedAt).getTime() >
-                    new Date(b.startedAt).getTime()
-                      ? a
-                      : b
-                  ).startedAt
-                : p.updatedAt;
+            const projectStats = stats?.byProject[p.id]?.recent30d;
+            const agentCount = projectAgents.filter((pa) => pa.projectId === p.id).length;
+            const recent30dRuns = projectStats?.totals.runs ?? 0;
+            const recent30dSuccessRate = projectStats?.totals.successRate ?? 0;
+            const lastActive = projectStats?.totals.lastRunAt ?? p.updatedAt;
             return (
               <Link
                 key={p.id}
@@ -119,25 +103,25 @@ export function ProjectsOverview({ hydrated }: { hydrated: boolean }) {
                 <div className="hidden shrink-0 items-center gap-4 text-[12px] sm:flex">
                   <span className="text-ink-3">
                     <span className="font-medium tabular-nums text-ink-2">
-                      {stats.agentCount}
+                      {agentCount}
                     </span>{" "}
                     Agent
                   </span>
                   <span className="text-ink-3">
                     <span className="font-medium tabular-nums text-ink-2">
-                      {stats.recent30dRuns}
+                      {recent30dRuns}
                     </span>{" "}
                     次运行
                   </span>
                   <span
                     className={cn(
                       "w-14 text-right tabular-nums",
-                      stats.recent30dSuccessRate >= 0.9
+                      recent30dSuccessRate >= 0.9
                         ? "font-medium text-success"
                         : "text-ink-3"
                     )}
                   >
-                    {Math.round(stats.recent30dSuccessRate * 100)}%
+                    {Math.round(recent30dSuccessRate * 100)}%
                   </span>
                 </div>
                 <p className="w-24 shrink-0 text-right text-[11px] text-ink-3/70">

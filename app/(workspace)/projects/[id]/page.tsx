@@ -1,11 +1,12 @@
 "use client";
 
 /**
- * Project 详情（Phase 3 第五阶段：Projects 最小业务闭环）
+ * Project 详情（Phase 3 第五阶段：Projects 最小业务闭环 / P4-3 统计端点化）
  *
- * - 项目摘要：Agent 数 / 总运行 / 成功率 / 总 Tokens（全部派生，不复制数据）
- * - 最近 30 天口径与 Dashboard 一致（selectRunsInProjectWindow → selectRunsInRange）
- * - 关联 Agent 列表：实时响应 Store（attach / detach 即时更新）
+ * - 项目摘要：Agent 数 / 总运行 / 成功率 / 总 Tokens（stats.byProject.all，全部派生，不复制数据）
+ * - 最近 30 天统计来自服务端 /runs/stats（固定「含今天 30 个自然日」窗口，与 Dashboard 同口径）
+ * - 关联 Agent 列表：实时响应 Store（attach / detach 即时更新）；行内统计走 stats.byAgent
+ * - 最近运行明细：按需拉取（projectRunsById），复用 ActivityList
  * - 操作：关联（Picker）/ 解绑（Dialog 确认），全部经 Service → Store
  */
 import Link from "next/link";
@@ -32,11 +33,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { formatNumber, formatRelativeTime, formatTokens } from "@/lib/format";
 import { modelLabel } from "@/lib/types";
 import {
-  selectAgentStats,
+  EMPTY_RUNS_STATS,
   selectAgentsInProject,
-  selectProjectStats,
-  selectRunsInProject,
-  selectRunsInProjectWindow,
   useWorkspaceStore,
 } from "@/stores/workspace";
 
@@ -49,7 +47,9 @@ export default function ProjectDetailPage() {
   const projects = useWorkspaceStore((s) => s.projects);
   const projectAgents = useWorkspaceStore((s) => s.projectAgents);
   const agents = useWorkspaceStore((s) => s.agents);
-  const runs = useWorkspaceStore((s) => s.runs);
+  const stats = useWorkspaceStore((s) => s.stats);
+  const projectRuns = useWorkspaceStore((s) => s.projectRunsById[projectId]);
+  const fetchProjectRuns = useWorkspaceStore((s) => s.fetchProjectRuns);
   const detachAgentFromProject = useWorkspaceStore(
     (s) => s.detachAgentFromProject
   );
@@ -61,6 +61,10 @@ export default function ProjectDetailPage() {
   useEffect(() => {
     void hydrate();
   }, [hydrate]);
+
+  useEffect(() => {
+    if (hydrated) void fetchProjectRuns(projectId);
+  }, [hydrated, fetchProjectRuns, projectId]);
 
   const projectAgentsOf = useMemo(
     () => projectAgents.filter((pa) => pa.projectId === projectId),
@@ -95,20 +99,16 @@ export default function ProjectDetailPage() {
     );
   }
 
-  const stats = selectProjectStats(runs, projectAgents, projectId);
+  // P4-3：统计来自服务端 /runs/stats 缓存（all=全部时间；recent30d=固定 30 天窗口，与 Dashboard 同口径）
+  const projectStats = stats?.byProject[projectId] ?? {
+    all: EMPTY_RUNS_STATS,
+    recent30d: EMPTY_RUNS_STATS,
+  };
+  const { all, recent30d } = projectStats;
+  const agentCount = projectAgentsOf.length;
   const projectAgentsList = selectAgentsInProject(agents, projectAgents, projectId);
-  const recent30d = selectRunsInProjectWindow(
-    runs,
-    projectAgents,
-    projectId,
-    "30d"
-  );
-  const recentRuns = selectRunsInProject(runs, projectAgents, projectId)
-    .slice()
-    .sort(
-      (a, b) =>
-        new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime()
-    );
+  const recentRuns = projectRuns ?? [];
+  const lastActive = recent30d.totals.lastRunAt ?? project.updatedAt;
 
   async function handleConfirmDetach() {
     if (!detachTarget || busy) return;
@@ -147,16 +147,16 @@ export default function ProjectDetailPage() {
         </div>
         <div className="mt-3 grid grid-cols-2 divide-x divide-border/60 border-t border-border/60 lg:grid-cols-4">
           {[
-            { label: "Agent 数", value: String(stats.agentCount), hint: "已关联" },
-            { label: "总运行", value: formatNumber(stats.totalRuns), hint: "累计" },
+            { label: "Agent 数", value: String(agentCount), hint: "已关联" },
+            { label: "总运行", value: formatNumber(all.totals.runs), hint: "累计" },
             {
               label: "成功率",
-              value: `${Math.round(stats.successRate * 100)}%`,
+              value: `${Math.round(all.totals.successRate * 100)}%`,
               hint: "全部时间",
             },
             {
               label: "Tokens",
-              value: formatTokens(stats.totalTokens),
+              value: formatTokens(all.totals.tokens),
               hint: "累计",
             },
           ].map((m) => (
@@ -171,16 +171,14 @@ export default function ProjectDetailPage() {
         </div>
         <div className="flex items-center gap-2 border-t border-border/60 px-5 py-3 text-[12px]">
           <span className="text-ink-3">最近 30 天（与 Dashboard 同口径）：</span>
-          <span className="font-medium text-ink">{stats.recent30dRuns} 次运行</span>
+          <span className="font-medium text-ink">{recent30d.totals.runs} 次运行</span>
           <span className="text-ink-3">·</span>
           <span className="font-medium text-ink">
-            {Math.round(stats.recent30dSuccessRate * 100)}% 成功率
+            {Math.round(recent30d.totals.successRate * 100)}% 成功率
           </span>
-          {recent30d.length > 0 && (
-            <span className="ml-auto text-ink-3/70">
-              最近活跃 {formatRelativeTime(recent30d[0].startedAt)}
-            </span>
-          )}
+          <span className="ml-auto text-ink-3/70">
+            最近活跃 {formatRelativeTime(lastActive)}
+          </span>
         </div>
       </Card>
 
@@ -211,7 +209,7 @@ export default function ProjectDetailPage() {
         ) : (
           <ul className="flex flex-col">
             {projectAgentsList.map((agent, i) => {
-              const agentStats = selectAgentStats(runs, agent.id);
+              const agentStats = stats?.byAgent[agent.id] ?? EMPTY_RUNS_STATS;
               const pa = projectAgentsOf.find((x) => x.agentId === agent.id);
               return (
                 <li
@@ -237,13 +235,13 @@ export default function ProjectDetailPage() {
                   <div className="hidden shrink-0 items-center gap-4 text-[12px] sm:flex">
                     <div className="text-right">
                       <p className="font-medium tabular-nums text-ink">
-                        {agentStats.totalRuns} 次
+                        {agentStats.totals.runs} 次
                       </p>
                       <p className="text-[11px] text-ink-3">运行</p>
                     </div>
                     <div className="text-right">
                       <p className="font-medium tabular-nums text-ink">
-                        {Math.round(agentStats.successRate * 100)}%
+                        {Math.round(agentStats.totals.successRate * 100)}%
                       </p>
                       <p className="text-[11px] text-ink-3">成功率</p>
                     </div>

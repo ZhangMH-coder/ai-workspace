@@ -10,6 +10,7 @@ import type {
   CapabilityDefinition,
   Project,
   ProjectAgent,
+  RunsStats,
 } from "@/lib/types";
 import type {
   AgentCapabilityDTO,
@@ -18,6 +19,7 @@ import type {
   CapabilityDefinitionDTO,
   ProjectAgentDTO,
   ProjectDTO,
+  RunsStatsDTO,
 } from "./dto";
 
 export function toAgent(d: AgentDTO): Agent {
@@ -87,5 +89,36 @@ export function toProjectAgent(d: ProjectAgentDTO): ProjectAgent {
     projectId: d.projectId,
     agentId: d.agentId,
     addedAt: d.addedAt,
+  };
+}
+
+/**
+ * RunsStatsDTO → Domain RunsStats。
+ * 服务端 successRate 为 0-100（一位小数），Domain 统一为 0-1（与前端
+ * DailyStat / formatPercent 行为一致）；daily 补齐 TrendChart 需要的 label（MM-DD）。
+ */
+export function toRunsStats(d: RunsStatsDTO): RunsStats {
+  return {
+    window: d.window,
+    totals: {
+      runs: d.totals.runs,
+      succeeded: d.totals.succeeded,
+      failed: d.totals.failed,
+      successRate: d.totals.runs > 0 ? d.totals.successRate / 100 : 0,
+      tokens: d.totals.tokens,
+      avgDurationMs: d.totals.avgDurationMs,
+      lastRunAt: d.totals.lastRunAt,
+    },
+    daily: d.daily.map((day) => {
+      const [, month, dayOfMonth] = day.date.split("-");
+      return {
+        date: day.date,
+        label: `${month}-${dayOfMonth}`,
+        runs: day.runs,
+        succeeded: day.succeeded,
+        failed: day.failed,
+        successRate: day.runs > 0 ? day.successRate / 100 : 0,
+      };
+    }),
   };
 }

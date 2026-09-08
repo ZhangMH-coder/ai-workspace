@@ -50,7 +50,12 @@ interface SeedAgent {
   lastRunAt: string | null;
 }
 
-const now = Date.now();
+// P4-3 稳定性修复：时间锚取「今天 0 点」而非运行时刻（Date.now()）。
+// 全部相对时间（createdAt/lastRunAt/run.startedAt/updatedAt）以天级锚计算 →
+// 同一天内 db:reset 结果完全可复现；跨日整体平移，30 天窗口统计口径不变。
+const anchor = new Date();
+anchor.setHours(0, 0, 0, 0);
+const now = anchor.getTime();
 
 const seedAgents: SeedAgent[] = [
   {

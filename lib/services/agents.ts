@@ -6,6 +6,6 @@ import * as http from "./http/agents";
 import { USE_MOCK } from "./mode";
 
 export const fetchAgents = USE_MOCK ? mock.fetchAgents : http.fetchAgents;
-export const fetchRuns = USE_MOCK ? mock.fetchRuns : http.fetchRuns;
+export const fetchAgentRuns = USE_MOCK ? mock.fetchAgentRuns : http.fetchAgentRuns;
 export const createAgent = USE_MOCK ? mock.createAgent : http.createAgent;
 export const runAgent = USE_MOCK ? mock.runAgent : http.runAgent;

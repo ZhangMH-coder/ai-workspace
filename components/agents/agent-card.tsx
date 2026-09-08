@@ -5,8 +5,7 @@ import { ArrowUpRight, Bot } from "lucide-react";
 
 import { AgentStatusBadge } from "@/components/agents/status-badge";
 import { formatNumber, formatPercent, formatRelativeTime, formatTokens } from "@/lib/format";
-import { modelLabel, type Agent, type Project } from "@/lib/types";
-import { selectAgentStats } from "@/stores/workspace";
+import { modelLabel, type Agent, type Project, type RunsStats } from "@/lib/types";
 
 export function AgentCard({
   agent,
@@ -14,7 +13,8 @@ export function AgentCard({
   projectsOf = [],
 }: {
   agent: Agent;
-  stats: ReturnType<typeof selectAgentStats>;
+  /** 全部时间运行统计（服务端 /runs/stats 聚合） */
+  stats: RunsStats;
   /** 该 Agent 所属的项目（只引用，派生自 projectAgents） */
   projectsOf?: Project[];
 }) {
@@ -61,16 +61,16 @@ export function AgentCard({
 
       <div className="mt-4 flex items-center justify-between border-t border-border/70 pt-3.5 text-[12px]">
         <div className="flex items-center gap-4 text-ink-3">
-          <span>{formatNumber(stats.totalRuns)} 次运行</span>
-          <span className={stats.successRate > 0 ? "text-ink-2" : "text-ink-3"}>
-            {stats.totalRuns > 0 ? `${formatPercent(stats.successRate)} 成功` : "暂无运行"}
+          <span>{formatNumber(stats.totals.runs)} 次运行</span>
+          <span className={stats.totals.successRate > 0 ? "text-ink-2" : "text-ink-3"}>
+            {stats.totals.runs > 0 ? `${formatPercent(stats.totals.successRate)} 成功` : "暂无运行"}
           </span>
         </div>
         <div className="flex items-center gap-2">
           <span className="text-ink-3">
             {agent.lastRunAt ? formatRelativeTime(agent.lastRunAt) : "未运行过"}
           </span>
-          <span className="text-ink-3">{formatTokens(stats.totalTokens)}</span>
+          <span className="text-ink-3">{formatTokens(stats.totals.tokens)}</span>
           <ArrowUpRight className="h-3.5 w-3.5 text-ink-3 opacity-0 transition-all duration-150 group-hover:translate-x-0.5 group-hover:opacity-100" />
         </div>
       </div>

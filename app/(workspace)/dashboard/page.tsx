@@ -25,19 +25,15 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
 import { formatNumber, formatPercent, formatTokens } from "@/lib/format";
-import {
-  selectDailyStats,
-  selectPeriodStats,
-  selectRunsInRange,
-  useWorkspaceStore,
-} from "@/stores/workspace";
+import { useWorkspaceStore, EMPTY_RUNS_STATS } from "@/stores/workspace";
 import { TIME_RANGE_OPTIONS, timeRangeLabel } from "@/lib/types";
 import { useEffect } from "react";
 
 function useDashboardData() {
   const hydrated = useWorkspaceStore((s) => s.hydrated);
   const agents = useWorkspaceStore((s) => s.agents);
-  const runs = useWorkspaceStore((s) => s.runs);
+  const recentRuns = useWorkspaceStore((s) => s.recentRuns);
+  const stats = useWorkspaceStore((s) => s.stats);
   const timeRange = useWorkspaceStore((s) => s.timeRange);
   const setTimeRange = useWorkspaceStore((s) => s.setTimeRange);
   const hydrate = useWorkspaceStore((s) => s.hydrate);
@@ -46,7 +42,7 @@ function useDashboardData() {
     void hydrate();
   }, [hydrate]);
 
-  return { hydrated, agents, runs, timeRange, setTimeRange };
+  return { hydrated, agents, recentRuns, stats, timeRange, setTimeRange };
 }
 
 function pctDelta(current: number, previous: number): string | null {
@@ -56,22 +52,18 @@ function pctDelta(current: number, previous: number): string | null {
 }
 
 export default function DashboardPage() {
-  const { hydrated, agents, runs, timeRange, setTimeRange } = useDashboardData();
-  const days = TIME_RANGE_OPTIONS.find((t) => t.id === timeRange)?.days ?? 30;
-  const inRange = selectRunsInRange(runs, timeRange);
-  const stats = selectPeriodStats(runs, days);
-  const daily = selectDailyStats(runs, timeRange);
+  const { hydrated, agents, recentRuns, stats, timeRange, setTimeRange } = useDashboardData();
+  // P4-3：统计来自服务端 /runs/stats 聚合（hydrate 后保证存在），不再前端全量拉取 + 内存统计
+  const global = stats?.global ?? EMPTY_RUNS_STATS;
+  const previous = stats?.previous ?? EMPTY_RUNS_STATS;
 
   const activeAgents = agents.filter((a) => a.status === "active" || a.status === "idle").length;
-  const successRate =
-    inRange.length > 0
-      ? inRange.filter((r) => r.status === "success").length / inRange.length
-      : 0;
-  const failedCount = inRange.length - inRange.filter((r) => r.status === "success").length;
-  const tokens = inRange.reduce((sum, r) => sum + r.tokensUsed, 0);
+  const successRate = global.totals.successRate;
+  const failedCount = global.totals.failed;
+  const tokens = global.totals.tokens;
 
-  const runsDelta = pctDelta(stats.current.count, stats.previous.count);
-  const tokensDelta = pctDelta(stats.current.tokens, stats.previous.tokens);
+  const runsDelta = pctDelta(global.totals.runs, previous.totals.runs);
+  const tokensDelta = pctDelta(global.totals.tokens, previous.totals.tokens);
 
   return (
     <div className="flex flex-col gap-6">
@@ -129,7 +121,7 @@ export default function DashboardPage() {
             <MetricCard
               label="本月运行"
               icon={Activity}
-              value={formatNumber(stats.current.count)}
+              value={formatNumber(global.totals.runs)}
               delta={runsDelta ?? undefined}
               deltaLabel="较上一时段"
               tone={runsDelta?.startsWith("-") ? "danger" : "success"}
@@ -149,8 +141,7 @@ export default function DashboardPage() {
               delta={tokensDelta ?? undefined}
               deltaLabel="较上一时段"
               tone={tokensDelta?.startsWith("-") ? "danger" : "success"}
-            />
-          </>
+            />          </>
         )}
       </div>
 
@@ -170,7 +161,7 @@ export default function DashboardPage() {
             {hydrated ? (
               <TrendChart
                 key={timeRange}
-                data={daily}
+                data={global.daily}
                 rangeLabel={timeRangeLabel(timeRange)}
               />
             ) : (
@@ -185,7 +176,7 @@ export default function DashboardPage() {
             <Activity className="h-4 w-4 rotate-90 text-ink-3" />
           </div>
           {hydrated ? (
-            <ActivityList runs={inRange} agents={agents} />
+            <ActivityList runs={recentRuns} agents={agents} />
           ) : (
             <ActivityListSkeleton />
           )}

@@ -140,7 +140,15 @@ export interface DailyStat {
 }
 
 export function runsStats(f: RunsStatsFilters): {
-  totals: { runs: number; succeeded: number; failed: number; successRate: number; tokens: number };
+  totals: {
+    runs: number;
+    succeeded: number;
+    failed: number;
+    successRate: number;
+    tokens: number;
+    avgDurationMs: number;
+    lastRunAt: string | null;
+  };
   daily: DailyStat[];
 } {
   const conds = [gte(agentRuns.startedAt, f.from), lt(agentRuns.startedAt, f.to)];
@@ -154,6 +162,8 @@ export function runsStats(f: RunsStatsFilters): {
       succeeded: sql<number>`COALESCE(SUM(CASE WHEN ${agentRuns.status} = 'success' THEN 1 ELSE 0 END), 0)`,
       failed: sql<number>`COALESCE(SUM(CASE WHEN ${agentRuns.status} = 'failed' THEN 1 ELSE 0 END), 0)`,
       tokens: sql<number>`COALESCE(SUM(${agentRuns.tokensUsed}), 0)`,
+      avgDurationMs: sql<number>`COALESCE(AVG(${agentRuns.durationMs}), 0)`,
+      lastRunAt: sql<string | null>`MAX(${agentRuns.startedAt})`,
     })
     .from(agentRuns)
     .where(where)
@@ -188,6 +198,8 @@ export function runsStats(f: RunsStatsFilters): {
       failed: totals.failed,
       successRate: total > 0 ? Math.round((totals.succeeded / total) * 1000) / 10 : 0,
       tokens: totals.tokens,
+      avgDurationMs: Math.round(totals.avgDurationMs),
+      lastRunAt: totals.lastRunAt,
     },
     daily,
   };

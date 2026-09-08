@@ -16,7 +16,7 @@ import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatDateTime, formatDuration, formatNumber, formatPercent, formatRelativeTime, formatTokens } from "@/lib/format";
 import { modelLabel } from "@/lib/types";
-import { selectAgentStats, useWorkspaceStore } from "@/stores/workspace";
+import { EMPTY_RUNS_STATS, useWorkspaceStore } from "@/stores/workspace";
 
 function RunBadge({ status }: { status: "success" | "failed" | "running" }) {
   const map = {
@@ -38,7 +38,9 @@ export default function AgentDetailPage() {
 
   const hydrated = useWorkspaceStore((s) => s.hydrated);
   const agents = useWorkspaceStore((s) => s.agents);
-  const runs = useWorkspaceStore((s) => s.runs);
+  const stats = useWorkspaceStore((s) => s.stats);
+  const agentRuns = useWorkspaceStore((s) => s.agentRunsById[agentId]);
+  const fetchAgentRuns = useWorkspaceStore((s) => s.fetchAgentRuns);
   const hydrate = useWorkspaceStore((s) => s.hydrate);
   const runAgent = useWorkspaceStore((s) => s.runAgent);
 
@@ -48,6 +50,10 @@ export default function AgentDetailPage() {
   useEffect(() => {
     void hydrate();
   }, [hydrate]);
+
+  useEffect(() => {
+    if (hydrated) void fetchAgentRuns(agentId);
+  }, [hydrated, fetchAgentRuns, agentId]);
 
   if (!hydrated) {
     return (
@@ -76,8 +82,10 @@ export default function AgentDetailPage() {
     );
   }
 
-  const ownRuns = runs.filter((r) => r.agentId === agent.id);
-  const stats = selectAgentStats(runs, agent.id);
+  // P4-3：统计来自服务端 /runs/stats（byAgent 全部时间）；运行历史明细按需拉取
+  const agentStats = stats?.byAgent[agent.id] ?? EMPTY_RUNS_STATS;
+  const ownRuns = agentRuns ?? [];
+  const { totals } = agentStats;
 
   async function handleRun() {
     if (running) return;
@@ -120,13 +128,13 @@ export default function AgentDetailPage() {
             <div>
               <h3 className="text-[14px] font-semibold text-ink">运行历史</h3>
               <p className="mt-0.5 text-[12px] text-ink-3">
-                {formatNumber(stats.totalRuns)} 次 · 成功率{" "}
-                {stats.totalRuns > 0 ? formatPercent(stats.successRate) : "—"} · 平均{" "}
-                {stats.totalRuns > 0 ? formatDuration(stats.avgDurationMs) : "—"}
+                {formatNumber(totals.runs)} 次 · 成功率{" "}
+                {totals.runs > 0 ? formatPercent(totals.successRate) : "—"} · 平均{" "}
+                {totals.runs > 0 ? formatDuration(totals.avgDurationMs) : "—"}
               </p>
             </div>
             <Badge variant="outline" className="text-[11px] font-normal text-ink-3">
-              {formatTokens(stats.totalTokens)} tokens
+              {formatTokens(totals.tokens)} tokens
             </Badge>
           </div>
 

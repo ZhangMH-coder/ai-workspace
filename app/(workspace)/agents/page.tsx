@@ -20,7 +20,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { useWorkspaceStore, selectAgentStats } from "@/stores/workspace";
+import { useWorkspaceStore, EMPTY_RUNS_STATS } from "@/stores/workspace";
 import type { Project, ProjectAgent } from "@/lib/types";
 
 function projectsOfAgent(
@@ -37,7 +37,7 @@ function projectsOfAgent(
 export default function AgentsPage() {
   const hydrated = useWorkspaceStore((s) => s.hydrated);
   const agents = useWorkspaceStore((s) => s.agents);
-  const runs = useWorkspaceStore((s) => s.runs);
+  const stats = useWorkspaceStore((s) => s.stats);
   const projects = useWorkspaceStore((s) => s.projects);
   const projectAgents = useWorkspaceStore((s) => s.projectAgents);
   const hydrate = useWorkspaceStore((s) => s.hydrate);
@@ -140,7 +140,7 @@ export default function AgentsPage() {
               <AgentCard
                 key={agent.id}
                 agent={agent}
-                stats={selectAgentStats(runs, agent.id)}
+                stats={stats?.byAgent[agent.id] ?? EMPTY_RUNS_STATS}
                 projectsOf={projectsOfAgent(projects, projectAgents, agent.id)}
               />
             ))}

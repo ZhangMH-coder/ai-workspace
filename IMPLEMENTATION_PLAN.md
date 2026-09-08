@@ -21,15 +21,57 @@
 | 2026-09-08 | v0.9 | Phase 3 第六阶段 — Project 维度观察（方案 C 缩小范围） | Dashboard 增加项目维度摘要（项目数/各项目 Agent 数/最近 30 天运行量/成功率/最近活跃，行可点击进详情）、Project Detail 增加「最近运行」（复用 ActivityList + selectRunsInProject，零重复统计/渲染）、Agents 卡片增加所属项目徽章（只展示不改信息架构）、全部统计复用 `selectProjectStats`/`selectRunsInProjectWindow`（统一窗口同源）、单一 Store 实时联动；lint/tsc/build/生产交互验证全绿 | ✅ 已完成并通过「V1 Review」审批 |
 | 2026-09-08 | v1.0 | V1 Architecture Review + Scope Freeze（纯审查，零代码修改） | 全量架构审查：领域模型 6 实体无复制/无第二数据源/生命周期无冲突/DB 适配良好；数据流 UI→Store→Selector→Service 合规（唯一例外为纯函数 composeCapabilityViews）；技术债务分级 P0=无 / P1=5 项（分页契约/错误模型/DTO 策略/id 策略/seed-migrate 流程）；Mock→Real 演进判定为 Service 契约足以替换；结论「Mock 边际收益已递减，推荐现在转向 Phase 4 真实后端设计」；V1 范围冻结：已具备 6 类闭环、明确延后 9 类功能 | ✅ 已完成并通过「Phase 4」审批 |
 | 2026-09-08 | v1.1 | P4-1 Backend Architecture & API Design（纯设计，零代码修改） | 分层架构（UI→Store→API Client→Route Handler→Service→Repository→SQLite）、DTO 与 Domain 分离、统一 ApiError（7 码 + 字段级）、Page 分页契约、过滤/排序/搜索契约、时间窗口契约化（客户端声明 from/to，含今天 N 自然日规则保留）、6 组资源全量 REST Contract、SQLite Schema（7 表 + PK/FK/UNIQUE/Index/CASCADE-RESTRICT 语义）、ORM 选型对比（Prisma/Drizzle/原生 → **推荐 Drizzle + better-sqlite3**）、Repository/Service 分层、Seed/Migration/Reset 三职责分离 + 防漂移规则、Mock→Real 替换路径（P4-2a~e）、风险与回滚（双模式开关）；P1 五项在契约层一次解决，P2 periodStats 顺带 P4-2 收敛 | ✅ 已完成并通过 P4-2 审批 |
-| 2026-09-08 | v1.2 | P4-2 Real Backend 实施（SQLite 成为事实数据源，双模式可运行） | 时间窗口契约收敛（stats 只收显式 from/to）、DB Adapter 边界（better-sqlite3 唯一实现）；`db/schema.ts` 6 表 + `db/db.ts`（WAL+foreign_keys）+ 幂等 seed + migrate + reset + db:check（schema/migration 一致）；Repository 查询层 + `runsStats` 聚合（successRate 1 位小数）；Service 业务规则层（ServiceError 三码 + archived 装配 CONFLICT + 幂等 upsert）；17 个 Route Handler（六域 REST + stats + demo/reset）；前端 API 层（ApiError 7 码 + DTO + client + mappers + server 校验/错误映射/SQLITE_CONSTRAINT→409）；Mock/Real 双模式 services 入口（同名函数契约，组件零改动）；**persist v4→v5**（partialize 仅 timeRange，旧领域数据 migrate 明确丢弃不合并）；`resetDemoData` 改为演示数据库 reset 语义；`selectPeriodStats` 收敛 Dashboard 内联统计（P2 债务）；lint/tsc/build 全绿；Real 生产回归（创建/运行/装配/启停/解绑/项目关联真实落库 + 刷新 SQLite 恢复 + localStorage 仅 timeRange + API 错误契约按 code + stats from/to 与 P3 口径一致 91/91.2%/1.7M）；Mock 模式独立构建可运行（回滚验证） | ✅ 已完成，待审批进入下一阶段 |
+| 2026-09-08 | v1.2 | P4-2 Real Backend 实施（SQLite 成为事实数据源，双模式可运行） | 时间窗口契约收敛（stats 只收显式 from/to）、DB Adapter 边界（better-sqlite3 唯一实现）；`db/schema.ts` 6 表 + `db/db.ts`（WAL+foreign_keys）+ 幂等 seed + migrate + reset + db:check（schema/migration 一致）；Repository 查询层 + `runsStats` 聚合（successRate 1 位小数）；Service 业务规则层（ServiceError 三码 + archived 装配 CONFLICT + 幂等 upsert）；17 个 Route Handler（六域 REST + stats + demo/reset）；前端 API 层（ApiError 7 码 + DTO + client + mappers + server 校验/错误映射/SQLITE_CONSTRAINT→409）；Mock/Real 双模式 services 入口（同名函数契约，组件零改动）；**persist v4→v5**（partialize 仅 timeRange，旧领域数据 migrate 明确丢弃不合并）；`resetDemoData` 改为演示数据库 reset 语义；`selectPeriodStats` 收敛 Dashboard 内联统计（P2 债务）；lint/tsc/build 全绿；Real 生产回归（创建/运行/装配/启停/解绑/项目关联真实落库 + 刷新 SQLite 恢复 + localStorage 仅 timeRange + API 错误契约按 code + stats from/to 与 P3 口径一致 91/91.2%/1.7M）；Mock 模式独立构建可运行（回滚验证） | ✅ 已完成并通过 P4-3 审批 |
+| 2026-09-08 | v1.3 | **P4-3 统计端点化收尾（当前阶段）** | Dashboard/Project/Agent 运行统计正式改由 `GET /api/v1/runs/stats?from&to` 服务端 SQL 聚合获取，**彻底结束前端 pageSize=1000 全量拉取 + 内存聚合**；Repository `runsStats` totals 扩展 avgDurationMs/lastRunAt、stats 端点新增 `?agent=` 单 Agent 过滤；前端服务层重构（`lib/services/runs.ts` 双模式入口 + `http/runs.ts` + `mock/runs.ts` SQLite 同构内存聚合 + `mock/state.ts` Mock 内存数据层）；Store 重构（recentRuns/agentRunsById/projectRunsById + StatsCache{global/previous/byProject/byAgent}，删全部统计 selectors，保留唯一窗口实现 windowBoundsForRange）；四个页面组件改用 stats 缓存（对外 UI 行为不变）；明细分页走 `/runs?pageSize&sort` 与 `/agents/:id/runs`（200/10/8），**无任何 pageSize=1000**；**seed 天级锚修复**（Date.now()→今天 0 点，db:reset 统计稳定可复现，Mock/Real 数字完全对齐）；lint/tsc/build 全绿；Real 生产回归（指标 88/90.9%/1.7M、项目 36/47/17、Agent 26/18/30/12/6 全部同源；attach/detach 实时刷新且硬刷新 SQLite 落库恢复；7d 切换 + 硬刷新持久化；localStorage 仅 timeRange；API 冒烟 from/to 边界/空数据/单日/跨月/错误契约全过；控制台 0 错误）；Mock 独立构建验证与 Real 完全一致 | ✅ 已完成，待审批进入下一阶段 |
 
 ## 当前阶段
 
-**P4-2 Real Backend 实施**（已完成；**不自动进入下一阶段**，待审批）
+**P4-3 统计端点化收尾**（已完成；**不自动进入下一阶段**，待审批）
 
 ---
 
-## 二、已完成内容（P4-2 实施）
+## 二、已完成内容（P4-3 实施）
+
+### 1. 服务端统计端点化（P4-3 核心）
+- [x] `db/repository.ts` `runsStats` totals 扩展 **avgDurationMs**（COALESCE AVG(duration_ms)）+ **lastRunAt**（MAX(started_at)），daily 保持按日聚合（successRate 1 位小数）
+- [x] `app/api/v1/runs/stats/route.ts` 新增 **`?agent=<id>` 单 Agent 过滤**（保留 `agents=`/`project=`），from/to 校验沿用 `parseTimeRange`（成对必填、from<to → 400 VALIDATION_ERROR）
+- [x] **统计由 SQLite/Repository 直接聚合**：totals + daily 全服务端计算，前端不再拉全量 runs 内存聚合
+
+### 2. DTO / Domain 分离扩展
+- [x] `lib/api/dto.ts` `RunsStatsDTO.totals` 增 avgDurationMs/lastRunAt；`lib/api/mappers.ts` 新增 `toRunsStats`（successRate 100→1、daily 补 label MM-DD）；`lib/types.ts` 新增 domain `RunsStats`/`DailyStat`（label 字段）
+
+### 3. 前端服务层（去掉全量拉取）
+- [x] 新建 `lib/services/runs.ts`：双模式入口 `fetchRunsStats`/`fetchRecentRuns`/`fetchProjectRuns` + `export type RunsStatsQuery`
+- [x] 新建 `lib/services/http/runs.ts`：stats 端点 + `/runs?pageSize&sort=startedAt:desc` 明细分页；`fetchRecentRuns(pageSize=10)` 全局倒序、`fetchProjectRuns(agentIds, pageSize=8)` 按 agents= join
+- [x] 新建 `lib/services/mock/runs.ts`：与 SQLite 同构的内存聚合（from/to 过滤 → totals{含 avgDurationMs/lastRunAt} + daily 带 label，projectId 经 mockState.projectAgents 派生）
+- [x] 新建 `lib/services/mock/state.ts`：Mock 内存数据层（mockState{runs,projects,projectAgents} + pushRun + resetMockState），Mock 写操作与统计聚合同源
+- [x] **删除全量路径**：`lib/services/agents.ts` 与 `http/mock/agents.ts` 的 `fetchRuns`（pageSize=1000）双双移除；新增 `fetchAgentRuns(agentId)`（GET `/agents/:id/runs?pageSize=200`）；`mock/agents.ts` runAgent 走 `pushRun`、`mock/projects.ts` create/attach/detach 落地 mockState、`demo.ts` Mock reset 改 `resetMockState()`
+
+### 4. Store 重构（`stores/workspace.ts` 整文件重写）
+- [x] state：`runs: AgentRun[]` → `recentRuns`（全局最近 10）+ `agentRunsById` + `projectRunsById` + `stats: StatsCache | null`；新增 `fetchAgentRuns`/`fetchProjectRuns`（按需拉取、防重）
+- [x] `StatsCache = { range, global, previous, byProject, byAgent }`；`loadWindowStats` 用 `windowBoundsForRange(days)` + `(days, days)` 计算当前/前一窗口 from/to 并发拉取（**唯一窗口实现，无第二套日期计算**）；`loadEntityStats` 项目 all+recent30d（固定 30 天窗口）、Agent 全部时间
+- [x] 写操作联动：`runAgent` 后刷新 global/previous；`createProject/attach/detach` 后 `refreshProjectStats`；`setTimeRange` 只刷窗口统计
+- [x] **删除全部统计 selectors**（selectRunsInRange/selectPeriodStats/selectDailyStats/selectAgentStats/selectRunsInProject*/selectProjectStats），保留 `windowBoundsForRange`/`selectAgentsInProject`/`sortProjectsByActivity`；新增导出 `EMPTY_RUNS_STATS`（组件防御默认值）
+- [x] persist 保持 **version 5**：partialize 仍仅 `{timeRange}`（state 形状变化但持久化字段未变，无需升版）
+
+### 5. 组件适配（统计 UI 对外行为不变）
+- [x] dashboard：指标卡用 `stats.global.totals`（runs/successRate/failed/tokens），环比 `stats.previous`，趋势图 `stats.global.daily`，最近活动 `recentRuns`
+- [x] projects-overview / projects 列表：`stats.byProject[p.id].recent30d`（runs/successRate/lastRunAt 兜底 updatedAt）+ 实时 projectAgents 数
+- [x] project detail：摘要 `byProject.all`（agentCount 用 projectAgentsOf.length）、30 天行 `recent30d`、Agent 行 `byAgent`、最近运行 `projectRunsById`（hydrate 后 fetchProjectRuns）
+- [x] agents 列表/详情：卡片 `RunsStats` 类型 + `byAgent`；运行历史 `agentRunsById`（hydrate 后 fetchAgentRuns）
+- [x] trend-chart：`DailyStat` 类型来源改 `@/lib/types`
+
+### 6. seed 时间锚稳定化（顺手修复，用户 P4-3 批准）
+- [x] `db/seed.ts` 与 `lib/mock-data/seed.ts`：`Date.now()` → **今天 0 点天级锚**（注释 P4-3 修复意图）——同一天内 db:reset 完全可复现；跨日整体平移、30 天窗口 run 集合不变
+- [x] **修复效果**：两次 `db:reset` 后统计完全一致（88/80/8/90.9%/1698119）；**Mock 与 Real 数字完全对齐**（P4-2 遗留的 92/91.3 vs 91/91.2 差异消除）
+
+### 7. 验证（全部通过）
+- [x] lint 0 error 0 warning / tsc 0 error / build 通过（Real 与 Mock 两模式独立构建）
+- [x] db:reset 两次复跑统计完全一致（5 agents/18 definitions/49 assemblies/3 projects/6 projectAgents/92 runs；30d stats 88/80/8/90.9%/1698119，daily 27 天，项目 38/48/18、Agent 26/18/30/12/6 全同）
+- [x] API 冒烟：stats 30d/项目/Agent 维度 totals+daily 正确；单日窗口、空窗口（lastRunAt=null）、跨月正常；缺 to / 倒置 from/to → 400 VALIDATION_ERROR；`/runs?pageSize=10` 分页明细 total=92
+- [x] Real 生产回归：Dashboard 指标（活跃 3/共 5、运行 88 +2100.0%、成功率 90.9% 8 失败、Tokens 1.7M +2216.0%）与 DB 同源；项目区 36/47/17 次与 Project Detail 30 天行一致；Agents 卡片 26/18/30/12/6 与 DB 一致；**attach「内容撰稿助手」→ Agent 2→3/总运行 38→68/成功率 87→90%/30 天 36→65 实时刷新，detach 确认后回到 2/38/87%/36（写操作真实落库 + stats 实时联动）；attach 后硬刷新从 SQLite 恢复（3/68/90% 保持）**；时间范围切 7d（16/-50.0%/93.8%/344.4K）+ 硬刷新持久化；localStorage 仅 `{timeRange:"7d"}` version 5；控制台 0 error/warning
+- [x] 网络请求核查：**无任何 pageSize=1000 请求**（旧全量路径已彻底移除）
+- [x] Mock 独立构建 + 启动验证：Dashboard/Projects 与 Real 完全一致（7d 16/-50.0%/93.8%/344.4K；项目 36/47/17），控制台 0 错误——双模式回滚通道可用
 
 ### 1. 时间窗口契约收敛（用户 P4-2 审批要求）
 - [x] 统计接口只接受显式 `from/to`：`GET /api/v1/runs/stats?from=...&to=...`；前端统一 window selector（`windowBoundsForRange`）计算「含今天 N 自然日」实际边界；服务端只做「明确 from/to → 查询 → 聚合 → 返回」；**无 window+tzOffset 第二入口**
@@ -165,6 +207,10 @@
 | D45 | **DB Adapter 边界**：better-sqlite3 唯一实现，驱动隔离于 db/db.ts（WAL+foreign_keys=ON）；Service/Route Handler 零驱动判断 | ✅ 落地：未来 node:sqlite/libsql 仅改一行 |
 | D46 | **写操作全链路契约**：UI→Store→Service(双模式入口)→Route Handler→Service→Repository→SQLite；UI 不依赖 DTO；API Error 仅按 code 分支 | ✅ 落地：17 个 Route Handler + ApiError 7 码 + SQLITE_CONSTRAINT→409 |
 | D47 | **resetDemoData 语义改为演示数据库 reset**（POST /demo/reset + fetchAllData），不再是领域数据第二来源 | ✅ 落地：Mock 模式 no-op 保持可回滚 |
+| D48 | **统计端点化收尾**：Dashboard/Project/Agent 统计正式走 `/runs/stats?from&to`（服务端 SQL 聚合），删除前端全量 runs 拉取 + 内存聚合 selectors | ✅ 落地：网络请求核查无 pageSize=1000；组件 UI 行为不变 |
+| D49 | **Mock 内存数据层**（mock/state.ts mockState + pushRun + resetMockState）：Mock 写操作与统计聚合同源，语义与 Real 的 SQLite 权威源对齐 | ✅ 落地：Mock 与 Real 数字完全一致（P4-2 差异消除） |
+| D50 | **seed 天级时间锚**（Date.now() → 今天 0 点）：db:reset 同日内完全可复现、跨日整体平移不改变 30 天窗口 run 集合 | ✅ 落地：两次 reset 统计逐字节一致；消除 P4-2「seed 毫秒锚跨窗口边界漂移」 |
+| D51 | **StatsCache 缓存分层**：global/previous（随 range）、byProject/byAgent（实体维度，不随 range）；写操作只刷新受影响缓存（runAgent→窗口、attach/detach→项目） | ✅ 落地：统计 UI 实时联动且无冗余请求 |
 
 ## 七、发现的问题
 
@@ -179,27 +225,34 @@
 2. **better-sqlite3 生产服务器进程曾被环境回收**（非代码缺陷）：后台 bash 任务生命周期限制 → 改为 cmd 隐藏窗口方式托管（已稳定）；代码零改动。
 3. **seed 相对时间边界漂移**（已知特性）：Mock 92 vs Real 91 因 seed 随机 startedAt 跨 30 天窗口边界，非口径问题，DOM/Store/DB 三者始终同源自洽。
 
+### P4-3 实施中实际遇到的问题
+1. **PowerShell 内联 node -e 不可靠**：反引号/复杂引号模板字符串两次 SyntaxError → 改 Write 脚本文件再 tsx 执行（`scripts/tmp-stats-check.ts` 验证 repository.runsStats，验证后已删除）。
+2. **better-sqlite3 在 .cjs 脚本 require 报 `Database is not a constructor`**：改走项目自身 repository 验证（更贴近真实端点口径），临时脚本已清理。
+3. **Mock 首载 hydrate 慢于 1.5s 时指标区短暂空白**（非缺陷）：Mock 模式 hydrate 拉取 5 agents + 3 projects + 13 stats 请求；reload 后 hydrate 完成即正常，与 Real 数字一致。截图/验证以 hydrate 完成后为准。
+4. **Radix Selector（时间范围）在 bu 自动化会话中 ref/坐标点击不弹菜单**（工具链问题，非产品缺陷）：改用 pointerdown/up + click 事件序列或 JS dispatch 后正常；P4-2 已验收该交互，P4-3 未改相关代码。
+5. **30 天窗口统计 91 → 88 的口径修正（关键结论）**：P4-2 的 91 是「seed 毫秒锚 + now 日内时分」导致 daysAgo=29 的 run（属窗口外第 30 天）漏入窗口的边界误差；天级锚修复后回到正确口径 **88**（含今天 30 自然日 = daysAgo 0..28；previous 窗口固定 4 个 run → 环比 +2100.0%）。**这是 seed 稳定性修复的预期结果，非回归**；Mock/Real 同构后数字完全一致。
+
 
 ## 八、遗留问题 / 风险
 
 | 风险 | 等级 | 应对 |
 | --- | --- | --- |
 | **runAgent 为服务端演示桩**（86% 成功随机，真实落库；非真实 AI Runtime） | 中 | 用户明确排除范围；接口契约已按真实语义设计，未来接 AI 服务仅替换 service 内实现 |
-| **stats 端点已就绪但前端仍全量拉取**（pageSize=1000 内存聚合） | 中 | 契约与实现已就绪（from/to + totals/daily），数据量增大后前端切 stats 端点，selectors 行为不变 |
-| **seed 相对时间**：跨天访问 30 天窗口数字微变 | 低 | 已知特性；回归以 DOM/Store/DB 同源为准，不与历史快照强求一致 |
-| SQLite 生产部署（serverless）限制 | 低 | 演示/单机部署满足；文档标注未来换托管 DB |
+| **stats daily 日期为 UTC 日期口径**（substr(started_at,1,10) 分组，与本地日期最大差 8 小时；totals 与 daily 求和严格一致） | 低 | 既有行为（P4-2 起）；契约以显式 from/to 绝对边界为事实输入，daily 仅作趋势展示；未来如需要可扩展服务端按客户端时区分组参数 |
+| **SQLite 生产部署（serverless）限制** | 低 | 演示/单机部署满足；文档标注未来换托管 DB |
 | 旧 localStorage 脏数据 | 低 | persist v5 migrate 明确丢弃领域字段；db:reset 一键重建 |
 | better-sqlite3 原生模块在部分平台构建失败 | 低 | 已构建通过（Windows/Node 22）；node:sqlite/libsql 兜底 |
 
 ## 九、下一步计划
 
-1. **等待审批**：批准进入下一阶段（候选：P4-3 统计端点化收尾 / AI Runtime 接入前置设计 / 认证与多用户预留；最终由用户选定，本次不做扩范围）。
+1. **等待审批**：验收《P4-3 交付汇报》（统计端点化 / 去全量拉取 / seed 稳定 / Mock-Real 对齐 / lint-tsc-build 全绿）。
 2. 执行任何内容前：先出方案 → 审批 → 实现 → 验证 → 更新本文件 → 汇报。
-3. **P4-2 收尾**：Git 提交（本次执行）已完成。
+3. **P4-3 收尾**：Git 提交（本次执行）已完成。
 
 ## 十、待审批事项
 
 - [x] **A21**：批准《P4-1 Backend Architecture & API Design》（ORM=Drizzle+better-sqlite3 / 统计端点化 / 时区契约 / 三职责 seed-migration 等结论）✅ 已批准
 - [x] **A22**：批准进入 **P4-2 实施**（DB+Repository → Route Handlers+Service → 前端同名替换 + persist 收窄 → 全量回归 → Mock/Real 双开关）✅ 已批准并完成
-- [ ] **A23**：验收《P4-2 交付汇报》（Real 落库 / 刷新恢复 / 口径一致 / 双模式 / lint-tsc-build 全绿）
-- [ ] **A24**：审批下一阶段方向（由用户从候选中选择，不默认推进）
+- [x] **A23**：验收《P4-2 交付汇报》✅ 已验收（批准进入 P4-3）
+- [x] **A24**：审批下一阶段方向 ✅ 已选定 P4-3 统计端点化收尾
+- [ ] **A25**：验收《P4-3 交付汇报》（统计端点化 / 去全量拉取 / seed 稳定 / Mock-Real 对齐 / lint-tsc-build 全绿）

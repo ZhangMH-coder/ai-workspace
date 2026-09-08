@@ -13,16 +13,16 @@
  * - detachAgentFromProject(id)         → DELETE /project-agents/:id
  * - fetchProjects()                    → GET /projects
  * - fetchProjectAgents(projectId)      → GET /projects/:id/agents
+ *
+ * P4-3：读写统一走 Mock 内存数据层（state.ts），
+ * 统计聚合（mock/runs.ts 按 projectId 过滤）与写操作保持同源。
  */
-import {
-  seedProjectAgents,
-  seedProjects,
-} from "@/lib/mock-data/seed";
 import type {
   NewProjectInput,
   Project,
   ProjectAgent,
 } from "@/lib/types";
+import { mockState } from "./state";
 
 const LATENCY_MS = 220;
 
@@ -39,7 +39,7 @@ function uid(prefix: string): string {
 /** 获取全部项目 */
 export async function fetchProjects(): Promise<Project[]> {
   await delay(LATENCY_MS);
-  return seedProjects.map((p) => ({ ...p }));
+  return mockState.projects.map((p) => ({ ...p }));
 }
 
 /** 获取指定项目的 Agent 关联关系 */
@@ -47,7 +47,7 @@ export async function fetchProjectAgents(
   projectId: string
 ): Promise<ProjectAgent[]> {
   await delay(LATENCY_MS);
-  return seedProjectAgents
+  return mockState.projectAgents
     .filter((pa) => pa.projectId === projectId)
     .map((pa) => ({ ...pa }));
 }
@@ -55,10 +55,10 @@ export async function fetchProjectAgents(
 /** 获取全部项目关联（hydrate 全量拉取用） */
 export async function fetchAllProjectAgents(): Promise<ProjectAgent[]> {
   await delay(LATENCY_MS);
-  return seedProjectAgents.map((pa) => ({ ...pa }));
+  return mockState.projectAgents.map((pa) => ({ ...pa }));
 }
 
-/* ---------- 写操作（Mock：只做往返与实体构造，不持有状态；落地唯一入口是 Store actions） ---------- */
+/* ---------- 写操作（Mock：同步内存数据层，与 Store 落地方向一致） ---------- */
 
 /** 创建项目（默认 status=active） */
 export async function createProject(
@@ -66,7 +66,7 @@ export async function createProject(
 ): Promise<Project> {
   await delay(LATENCY_MS);
   const nowIso = new Date().toISOString();
-  return {
+  const project: Project = {
     id: uid("prj"),
     name: input.name,
     description: input.description,
@@ -74,6 +74,8 @@ export async function createProject(
     createdAt: nowIso,
     updatedAt: nowIso,
   };
+  mockState.projects.unshift(project);
+  return { ...project };
 }
 
 /** 关联一个 Agent 到项目（返回新关系；重复关联由调用方幂等处理） */
@@ -82,16 +84,18 @@ export async function attachAgentToProject(input: {
   agentId: string;
 }): Promise<ProjectAgent> {
   await delay(LATENCY_MS);
-  return {
+  const pa: ProjectAgent = {
     id: uid("pa"),
     projectId: input.projectId,
     agentId: input.agentId,
     addedAt: new Date().toISOString(),
   };
+  mockState.projectAgents.unshift(pa);
+  return { ...pa };
 }
 
 /** 解除 Agent 关联 */
 export async function detachAgentFromProject(id: string): Promise<void> {
   await delay(LATENCY_MS);
-  void id;
+  mockState.projectAgents = mockState.projectAgents.filter((pa) => pa.id !== id);
 }

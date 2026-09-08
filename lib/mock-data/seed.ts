@@ -1,9 +1,10 @@
 /**
- * 演示种子数据（Phase 2）
+ * 演示种子数据（Phase 2 / P4-3 稳定性修复）
  *
  * 说明：数据为「演示数据」，仅用于前端 Demo 展示闭环效果，
- * 不代表真实业务结果。时间基于运行时生成，保证「最近 30 天」
- * 视图在任意日期打开都有数据。
+ * 不代表真实业务结果。时间锚取「今天 0 点」（天级锚，与 db/seed.ts 同构）：
+ * - 同一天内刷新 / db:reset 结果完全可复现，统计口径稳定；
+ * - 跨日整体平移，30 天窗口内 run 集合与分布不变（不再因运行时刻跨日漂移）。
  */
 import type {
   Agent,
@@ -16,7 +17,9 @@ import type {
 
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
-const now = Date.now();
+const anchor = new Date();
+anchor.setHours(0, 0, 0, 0);
+const now = anchor.getTime();
 
 export const seedAgents: Agent[] = [
   {

@@ -1,11 +1,11 @@
 "use client";
 
 /**
- * Projects 列表（Phase 3 第五阶段：Projects 最小业务闭环）
+ * Projects 列表（Phase 3 第五阶段：Projects 最小业务闭环 / P4-3 统计端点化）
  *
- * - 数据完全来自单一 Store（projects + projectAgents + runs），全部派生，不复制数据
+ * - 数据完全来自单一 Store（projects + projectAgents + stats.byProject），全部派生，不复制数据
  * - 项目卡片：名称/描述/状态/Agent 数/最近 30 天运行与成功率/最近活跃
- * - 最近 30 天口径与 Dashboard 一致（selectRunsInRange 窗口）
+ * - 最近 30 天统计来自服务端 /runs/stats（固定「含今天 30 个自然日」窗口，与 Dashboard 同口径）
  * - 「新建项目」→ Dialog → 创建成功跳转详情引导关联 Agent
  */
 import Link from "next/link";
@@ -20,12 +20,7 @@ import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { formatRelativeTime } from "@/lib/format";
-import {
-  selectProjectStats,
-  selectRunsInProjectWindow,
-  sortProjectsByActivity,
-  useWorkspaceStore,
-} from "@/stores/workspace";
+import { useWorkspaceStore, sortProjectsByActivity } from "@/stores/workspace";
 import { useState } from "react";
 
 export default function ProjectsPage() {
@@ -36,7 +31,7 @@ export default function ProjectsPage() {
   const hydrate = useWorkspaceStore((s) => s.hydrate);
   const projects = useWorkspaceStore((s) => s.projects);
   const projectAgents = useWorkspaceStore((s) => s.projectAgents);
-  const runs = useWorkspaceStore((s) => s.runs);
+  const stats = useWorkspaceStore((s) => s.stats);
 
   useEffect(() => {
     void hydrate();
@@ -83,17 +78,11 @@ export default function ProjectsPage() {
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {sorted.map((p) => {
-            const stats = selectProjectStats(runs, projectAgents, p.id);
-            const recent30d = selectRunsInProjectWindow(
-              runs,
-              projectAgents,
-              p.id,
-              "30d"
-            );
-            const lastActive =
-              recent30d.length > 0
-                ? recent30d[0].startedAt
-                : p.updatedAt;
+            const projectStats = stats?.byProject[p.id]?.recent30d;
+            const agentCount = projectAgents.filter((pa) => pa.projectId === p.id).length;
+            const recent30dRuns = projectStats?.totals.runs ?? 0;
+            const recent30dSuccessRate = projectStats?.totals.successRate ?? 0;
+            const lastActive = projectStats?.totals.lastRunAt ?? p.updatedAt;
             return (
               <Link
                 key={p.id}
@@ -119,19 +108,19 @@ export default function ProjectsPage() {
                 </p>
 
                 <div className="mt-3 flex items-center gap-3 border-t border-border/60 pt-3 text-[12px]">
-                  <span className="text-ink-2">{stats.agentCount} 个 Agent</span>
+                  <span className="text-ink-2">{agentCount} 个 Agent</span>
                   <span className="text-ink-3">
-                    {stats.recent30dRuns} 次运行
+                    {recent30dRuns} 次运行
                   </span>
                   <span
                     className={cn(
                       "ml-auto",
-                      stats.recent30dSuccessRate >= 0.9
+                      recent30dSuccessRate >= 0.9
                         ? "text-success"
                         : "text-ink-3"
                     )}
                   >
-                    {Math.round(stats.recent30dSuccessRate * 100)}% 成功率
+                    {Math.round(recent30dSuccessRate * 100)}% 成功率
                   </span>
                 </div>
                 <p className="mt-1.5 text-[11px] text-ink-3/70">

@@ -201,3 +201,28 @@ export interface AgentStats {
   totalTokens: number;
   avgDurationMs: number;
 }
+
+/** 每日聚合（趋势图用；successRate 为 0-1，与前端 formatPercent 一致） */
+export interface DailyStat {
+  date: string; // YYYY-MM-DD
+  label: string; // MM-DD
+  runs: number;
+  succeeded: number;
+  failed: number;
+  successRate: number; // 0-1
+}
+
+/** 运行统计聚合（/api/v1/runs/stats → Domain；服务端 SQLite 直接聚合，前端不再全量拉取） */
+export interface RunsStats {
+  window: { from: string; to: string };
+  totals: {
+    runs: number;
+    succeeded: number;
+    failed: number;
+    successRate: number; // 0-1
+    tokens: number;
+    avgDurationMs: number;
+    lastRunAt: string | null; // 窗口内最近运行时间（无运行则为 null）
+  };
+  daily: DailyStat[];
+}

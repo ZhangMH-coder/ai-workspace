@@ -1,26 +1,30 @@
 "use client";
 
 /**
- * 工作区全局状态（Zustand + persist，P4-2）
+ * 工作区全局状态（Zustand + persist，P4-3）
  *
- * 单一数据源：agents + runs + capabilityDefinitions + agentCapabilities + projects + projectAgents + timeRange。
+ * 单一数据源：agents + recentRuns + capabilityDefinitions + agentCapabilities + projects + projectAgents + timeRange + stats。
  *
- * 持久化职责收敛（P4-2d）：
+ * P4-3「统计端点化收尾」核心变化：
+ * - 运行统计（Dashboard / Project / Agent）正式由 /api/v1/runs/stats 服务端聚合获取
+ *   （SQLite/Repository 直接聚合），Store 不再持有全量 runs 做内存统计；
+ * - Store 仅保留「明细子集」：recentRuns（全局最近 10 条，最近活动用）、
+ *   agentRunsById / projectRunsById（详情页按需拉取，pageSize 有界）；
+ * - stats 缓存（StatsCache）随 timeRange 刷新 global/previous，byProject/byAgent 为
+ *   全部时间 + 固定 30 天窗口聚合（与 Dashboard 同口径 windowBoundsForRange）；
+ * - persist 保持 version 5：localStorage 仍仅存 timeRange（UI 偏好），领域数据只来自 SQLite / Mock。
+ *
+ * 持久化职责（P4-2d 延续）：
  * - SQLite 为「事实数据源」；Zustand 为「客户端状态/缓存」；
- * - localStorage 仅保留必要 UI 偏好（timeRange）；领域事实数据不再持久化（version 5）。
- * - 旧版本（<5）localStorage 中的领域数据**明确丢弃、不与 SQLite 合并**（migrate 只保留 timeRange），
- *   避免产生第二数据源。
- * - hydrate() 一律从 Service 层全量拉取（Real=SQLite 数据 / Mock=seed 常量）；
- *   resetDemoData() 在 Real 模式调用 POST /api/v1/demo/reset 重置演示库后再全量拉取。
- * - 未来接入真实 API 时仅替换 lib/services 实现（当前已是双模式入口）。
+ * - 旧版本（<5）localStorage 中的领域数据**明确丢弃、不与 SQLite 合并**。
  */
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
 import {
   createAgent as createAgentService,
+  fetchAgentRuns as fetchAgentRunsService,
   fetchAgents as fetchAgentsService,
-  fetchRuns as fetchRunsService,
   runAgent as runAgentService,
 } from "@/lib/services/agents";
 import {
@@ -44,6 +48,11 @@ import {
   fetchAllProjectAgents as fetchAllProjectAgentsService,
   fetchProjects as fetchProjectsService,
 } from "@/lib/services/projects";
+import {
+  fetchProjectRuns as fetchProjectRunsService,
+  fetchRecentRuns as fetchRecentRunsService,
+  fetchRunsStats as fetchRunsStatsService,
+} from "@/lib/services/runs";
 import type {
   Agent,
   AgentCapability,
@@ -54,32 +63,72 @@ import type {
   NewProjectInput,
   Project,
   ProjectAgent,
+  RunsStats,
   TimeRange,
   UpdateCapabilityInput,
 } from "@/lib/types";
+
+/** 空统计（组件对未加载/无数据时的防御默认值） */
+export const EMPTY_RUNS_STATS: RunsStats = {
+  window: { from: "", to: "" },
+  totals: {
+    runs: 0,
+    succeeded: 0,
+    failed: 0,
+    successRate: 0,
+    tokens: 0,
+    avgDurationMs: 0,
+    lastRunAt: null,
+  },
+  daily: [],
+};
+
+/** 统计缓存：随 timeRange 变化的部分 + 全部时间/固定窗口的实体维度 */
+export interface StatsCache {
+  range: TimeRange;
+  /** 当前窗口（含今天在内的 N 个自然日）全局统计 */
+  global: RunsStats;
+  /** 前一等长窗口全局统计（环比 delta 用） */
+  previous: RunsStats;
+  /** 项目维度：全部时间 + 固定 30 天窗口（与 Dashboard 同口径） */
+  byProject: Record<string, { all: RunsStats; recent30d: RunsStats }>;
+  /** Agent 维度：全部时间 */
+  byAgent: Record<string, RunsStats>;
+}
 
 interface WorkspaceState {
   /** 数据加载状态 */
   hydrated: boolean;
   agents: Agent[];
-  runs: AgentRun[];
-  /** 能力资产（定义/资产；version 3 起持久化，支持创建/编辑/归档/恢复） */
+  /** 最近运行明细（全局最近 N 条，仅最近活动等明细场景；统计一律走 stats） */
+  recentRuns: AgentRun[];
+  /** Agent 详情运行历史（按需加载缓存） */
+  agentRunsById: Record<string, AgentRun[]>;
+  /** 项目最近运行明细（按需加载缓存） */
+  projectRunsById: Record<string, AgentRun[]>;
+  /** 能力资产（定义/资产；持久化，支持创建/编辑/归档/恢复） */
   capabilityDefinitions: CapabilityDefinition[];
-  /** 装配关系（持久化，version 2 起） */
+  /** 装配关系（持久化） */
   agentCapabilities: AgentCapability[];
-  /** 项目（业务组织上下文；version 4 起持久化，只维护关系不复制数据） */
+  /** 项目（业务组织上下文；持久化，只维护关系不复制数据） */
   projects: Project[];
   /** 项目 ↔ Agent 关联关系（多对多中介，持久化） */
   projectAgents: ProjectAgent[];
   timeRange: TimeRange;
+  /** 运行统计缓存（服务端聚合；随 timeRange 刷新 global/previous） */
+  stats: StatsCache | null;
 
   /** 首次加载（幂等）：无持久化数据时拉取 seed */
   hydrate: () => Promise<void>;
   setTimeRange: (range: TimeRange) => void;
   /** 新建并返回新 agent（调用方用于跳转） */
   createAgent: (input: NewAgentInput) => Promise<Agent>;
-  /** 触发运行并返回新 run（调用方用于提示） */
+  /** 触发运行并返回新 run（调用方用于提示）；刷新窗口统计与最近明细 */
   runAgent: (agentId: string) => Promise<AgentRun>;
+  /** 按需加载某 Agent 运行历史（明细场景，分页有界） */
+  fetchAgentRuns: (agentId: string) => Promise<void>;
+  /** 按需加载某项目最近运行（明细场景） */
+  fetchProjectRuns: (projectId: string) => Promise<void>;
   /** 装配一个能力到 Agent（幂等；archived 能力抛错拒绝） */
   attachCapability: (
     agentId: string,
@@ -106,7 +155,7 @@ interface WorkspaceState {
   ) => Promise<ProjectAgent>;
   /** 解除 Agent 关联（幂等删除） */
   detachAgentFromProject: (id: string) => Promise<void>;
-  /** 重置回演示 seed 数据（持久化随之更新） */
+  /** 重置回演示 seed 数据（Real 重置 SQLite；Mock 重置内存数据层） */
   resetDemoData: () => Promise<void>;
 }
 
@@ -115,20 +164,31 @@ export const useWorkspaceStore = create<WorkspaceState>()(
     (set, get) => ({
       hydrated: false,
       agents: [],
-      runs: [],
+      recentRuns: [],
+      agentRunsById: {},
+      projectRunsById: {},
       capabilityDefinitions: [],
       agentCapabilities: [],
       projects: [],
       projectAgents: [],
       timeRange: "30d",
+      stats: null,
 
       hydrate: async () => {
         if (get().hydrated) return;
         const all = await fetchAllData();
-        set({ ...all, hydrated: true });
+        const stats = await loadStats(get().timeRange, all.agents, all.projects);
+        set({ ...all, stats, hydrated: true });
       },
 
-      setTimeRange: (range) => set({ timeRange: range }),
+      setTimeRange: async (range) => {
+        set({ timeRange: range });
+        // 只刷新窗口相关统计（global/previous）；实体维度（byProject/byAgent）不随 range 变化
+        const cur = get().stats;
+        if (!cur) return;
+        const refreshed = await loadWindowStats(range);
+        set({ stats: { ...cur, ...refreshed } });
+      },
 
       createAgent: async (input) => {
         const agent = await createAgentService(input);
@@ -140,12 +200,45 @@ export const useWorkspaceStore = create<WorkspaceState>()(
         const agent = get().agents.find((a) => a.id === agentId);
         const run = await runAgentService(agentId, agent?.name ?? "Agent");
         set((state) => ({
-          runs: [run, ...state.runs],
+          recentRuns: [run, ...state.recentRuns].slice(0, 10),
           agents: state.agents.map((a) =>
             a.id === agentId ? { ...a, lastRunAt: run.finishedAt } : a
           ),
         }));
+        // 新运行发生在今天 → 只影响当前窗口统计，刷新 global/previous
+        const cur = get().stats;
+        if (cur) {
+          const refreshed = await loadWindowStats(cur.range);
+          set({ stats: { ...cur, ...refreshed } });
+        }
         return run;
+      },
+
+      fetchAgentRuns: async (agentId) => {
+        const cache = get().agentRunsById;
+        if (cache[agentId]) return;
+        const runs = await fetchAgentRunsService(agentId);
+        set((state) => ({
+          agentRunsById: { ...state.agentRunsById, [agentId]: runs },
+        }));
+      },
+
+      fetchProjectRuns: async (projectId) => {
+        const cache = get().projectRunsById;
+        if (cache[projectId]) return;
+        const ids = get().projectAgents
+          .filter((pa) => pa.projectId === projectId)
+          .map((pa) => pa.agentId);
+        if (ids.length === 0) {
+          set((state) => ({
+            projectRunsById: { ...state.projectRunsById, [projectId]: [] },
+          }));
+          return;
+        }
+        const runs = await fetchProjectRunsService(ids, 8);
+        set((state) => ({
+          projectRunsById: { ...state.projectRunsById, [projectId]: runs },
+        }));
       },
 
       attachCapability: async (agentId, capabilityId) => {
@@ -248,9 +341,8 @@ export const useWorkspaceStore = create<WorkspaceState>()(
 
       createProject: async (input) => {
         const created = await createProjectService(input);
-        set((state) => ({
-          projects: [created, ...state.projects],
-        }));
+        set((state) => ({ projects: [created, ...state.projects] }));
+        await refreshProjectStats(created.id, get, set);
         return created;
       },
 
@@ -270,6 +362,7 @@ export const useWorkspaceStore = create<WorkspaceState>()(
             p.id === projectId ? { ...p, updatedAt: created.addedAt } : p
           ),
         }));
+        await refreshProjectStats(projectId, get, set);
         return created;
       },
 
@@ -284,13 +377,15 @@ export const useWorkspaceStore = create<WorkspaceState>()(
               : p
           ),
         }));
+        if (target) await refreshProjectStats(target.projectId, get, set);
       },
 
       resetDemoData: async () => {
-        // Real：重置 SQLite 演示库；Mock：no-op（seed 为常量）
+        // Real：重置 SQLite 演示库；Mock：重置内存数据层（state.ts）
         await resetDemoDataService();
         const all = await fetchAllData();
-        set({ ...all, timeRange: "30d" });
+        const stats = await loadStats("30d", all.agents, all.projects);
+        set({ ...all, stats, timeRange: "30d" });
       },
     }),
     {
@@ -312,12 +407,14 @@ export const useWorkspaceStore = create<WorkspaceState>()(
   )
 );
 
-/** 全量拉取（hydrate / reset 共用；SQLite 为事实源，拉取后即权威缓存） */
+/* ---------- 全量拉取与统计加载（hydrate / reset 共用） ---------- */
+
+/** 全量拉取（实体 + 最近明细；SQLite 为事实源，拉取后即权威缓存） */
 async function fetchAllData() {
-  const [agents, runs, capabilityDefinitions, agentCapabilities, projects, projectAgents] =
+  const [agents, recentRuns, capabilityDefinitions, agentCapabilities, projects, projectAgents] =
     await Promise.all([
       fetchAgentsService(),
-      fetchRunsService(),
+      fetchRecentRunsService(10),
       fetchCapabilityDefinitionsService(),
       fetchAllAgentCapabilitiesService(),
       fetchProjectsService(),
@@ -325,7 +422,7 @@ async function fetchAllData() {
     ]);
   return {
     agents,
-    runs,
+    recentRuns,
     capabilityDefinitions,
     agentCapabilities,
     projects,
@@ -333,7 +430,83 @@ async function fetchAllData() {
   };
 }
 
-/* ---------- 派生统计（Selectors，均实时计算，不落库） ---------- */
+/** 全部时间聚合的边界（seed 最早记录约 95 天前；1970 起足够覆盖） */
+const ALL_TIME_FROM = "1970-01-01T00:00:00.000Z";
+
+function iso(ms: number): string {
+  return new Date(ms).toISOString();
+}
+
+/** 加载窗口相关统计（global 当前窗口 + previous 前一等长窗口；唯一窗口实现 windowBoundsForRange） */
+async function loadWindowStats(range: TimeRange) {
+  const days = range === "today" ? 1 : range === "7d" ? 7 : 30;
+  const bounds = windowBoundsForRange(days);
+  const prevBounds = windowBoundsForRange(days, days);
+  const [global, previous] = await Promise.all([
+    fetchRunsStatsService({ from: iso(bounds.start), to: iso(bounds.end) }),
+    fetchRunsStatsService({ from: iso(prevBounds.start), to: iso(prevBounds.end) }),
+  ]);
+  return { range, global, previous };
+}
+
+/** 加载实体维度统计：项目（全部 + 固定 30 天窗口，与 Dashboard 同口径）+ Agent（全部时间） */
+async function loadEntityStats(agents: Agent[], projects: Project[]) {
+  const allTo = iso(windowBoundsForRange(1).end); // 明天 0 点
+  const r30 = windowBoundsForRange(30);
+  const projectEntries = await Promise.all(
+    projects.map(async (p) => {
+      const [all, recent30d] = await Promise.all([
+        fetchRunsStatsService({ from: ALL_TIME_FROM, to: allTo, projectId: p.id }),
+        fetchRunsStatsService({ from: iso(r30.start), to: iso(r30.end), projectId: p.id }),
+      ]);
+      return [p.id, { all, recent30d }] as const;
+    })
+  );
+  const agentEntries = await Promise.all(
+    agents.map(async (a) => {
+      const s = await fetchRunsStatsService({ from: ALL_TIME_FROM, to: allTo, agentId: a.id });
+      return [a.id, s] as const;
+    })
+  );
+  return {
+    byProject: Object.fromEntries(projectEntries) as StatsCache["byProject"],
+    byAgent: Object.fromEntries(agentEntries) as StatsCache["byAgent"],
+  };
+}
+
+async function loadStats(range: TimeRange, agents: Agent[], projects: Project[]) {
+  const [windowStats, entityStats] = await Promise.all([
+    loadWindowStats(range),
+    loadEntityStats(agents, projects),
+  ]);
+  return { ...windowStats, ...entityStats };
+}
+
+/** 项目关联变化后刷新该项目统计（all + recent30d），保持 Dashboard / 列表 / 详情同源 */
+async function refreshProjectStats(
+  projectId: string,
+  get: () => WorkspaceState,
+  set: (fn: (s: WorkspaceState) => Partial<WorkspaceState>) => void
+) {
+  const cur = get().stats;
+  if (!cur) return;
+  const allTo = iso(windowBoundsForRange(1).end);
+  const r30 = windowBoundsForRange(30);
+  const [all, recent30d] = await Promise.all([
+    fetchRunsStatsService({ from: ALL_TIME_FROM, to: allTo, projectId }),
+    fetchRunsStatsService({ from: iso(r30.start), to: iso(r30.end), projectId }),
+  ]);
+  set((state) => ({
+    stats: state.stats
+      ? {
+          ...state.stats,
+          byProject: { ...state.stats.byProject, [projectId]: { all, recent30d } },
+        }
+      : null,
+  }));
+}
+
+/* ---------- 统一自然日窗口（唯一实现；P4-3 继续作为 stats from/to 的边界来源） ---------- */
 
 const DAY_MS = 86_400_000;
 
@@ -341,7 +514,7 @@ const DAY_MS = 86_400_000;
  * 统一自然日窗口边界（唯一实现）：
  * 窗口 = [今天 0 点 −(offsetDays+days−1) 天, 今天 0 点 + (1−offsetDays) 天)，
  * 即「含今天在内的 N 个自然日」（offsetDays=0 时）。
- * selectRunsInRange / selectPeriodStats 均基于本函数，杜绝重复日期实现。
+ * Dashboard / Project / stats 请求的 from/to 均基于本函数，杜绝重复日期实现。
  */
 export function windowBoundsForRange(
   days: number,
@@ -356,97 +529,7 @@ export function windowBoundsForRange(
   };
 }
 
-/**
- * 按时间范围过滤运行记录（统一自然日口径，与 selectDailyStats / selectPeriodStats 一致）：
- * 窗口 = [今天 0 点 −(days−1) 天, 明天 0 点)，即「含今天在内的 N 个自然日」。
- * 保证指标卡、趋势图、最近活动三处数字同源同口径。
- */
-export function selectRunsInRange(runs: AgentRun[], range: TimeRange): AgentRun[] {
-  const days = range === "today" ? 1 : range === "7d" ? 7 : 30;
-  const { start, end } = windowBoundsForRange(days);
-  return runs.filter((r) => {
-    const t = new Date(r.startedAt).getTime();
-    return t >= start && t < end;
-  });
-}
-
-/* ---------- 当前时段与上一等长时段聚合（P4-2 收敛：原 dashboard 内联 periodStats） ---------- */
-
-export interface PeriodStats {
-  current: { count: number; success: number; tokens: number };
-  previous: { count: number; success: number; tokens: number };
-}
-
-export function selectPeriodStats(runs: AgentRun[], days: number): PeriodStats {
-  const current = windowBoundsForRange(days);
-  const previous = windowBoundsForRange(days, days);
-  const summarize = (b: { start: number; end: number }) => {
-    const list = runs.filter((r) => {
-      const t = new Date(r.startedAt).getTime();
-      return t >= b.start && t < b.end;
-    });
-    return {
-      count: list.length,
-      success: list.filter((r) => r.status === "success").length,
-      tokens: list.reduce((sum, r) => sum + r.tokensUsed, 0),
-    };
-  };
-  return { current: summarize(current), previous: summarize(previous) };
-}
-
-/** 按时间范围聚合运行记录为每日统计（用于趋势图） */
-export interface DailyStat {
-  date: string; // YYYY-MM-DD
-  label: string; // MM-DD
-  runs: number;
-  succeeded: number;
-  failed: number;
-  successRate: number; // 0-1
-}
-
-export function selectDailyStats(runs: AgentRun[], range: TimeRange): DailyStat[] {
-  const days = range === "today" ? 1 : range === "7d" ? 7 : 30;
-  const stats: DailyStat[] = [];
-  for (let i = days - 1; i >= 0; i--) {
-    const dayStart = new Date();
-    dayStart.setHours(0, 0, 0, 0);
-    dayStart.setDate(dayStart.getDate() - i);
-    const dayEnd = dayStart.getTime() + 86_400_000;
-    const dayRuns = runs.filter((r) => {
-      const t = new Date(r.startedAt).getTime();
-      return t >= dayStart.getTime() && t < dayEnd;
-    });
-    const succeeded = dayRuns.filter((r) => r.status === "success").length;
-    stats.push({
-      date: dayStart.toISOString().slice(0, 10),
-      label: `${String(dayStart.getMonth() + 1).padStart(2, "0")}-${String(
-        dayStart.getDate()
-      ).padStart(2, "0")}`,
-      runs: dayRuns.length,
-      succeeded,
-      failed: dayRuns.length - succeeded,
-      successRate: dayRuns.length > 0 ? succeeded / dayRuns.length : 0,
-    });
-  }
-  return stats;
-}
-
-/** 单个 Agent 的聚合统计 */
-export function selectAgentStats(runs: AgentRun[], agentId: string) {
-  const own = runs.filter((r) => r.agentId === agentId);
-  const totalRuns = own.length;
-  const succeeded = own.filter((r) => r.status === "success").length;
-  const totalTokens = own.reduce((sum, r) => sum + r.tokensUsed, 0);
-  const totalDuration = own.reduce((sum, r) => sum + r.durationMs, 0);
-  return {
-    totalRuns,
-    successRate: totalRuns > 0 ? succeeded / totalRuns : 0,
-    totalTokens,
-    avgDurationMs: totalRuns > 0 ? totalDuration / totalRuns : 0,
-  };
-}
-
-/* ---------- Project 派生 Selectors（Phase 3 第五阶段；全部实时计算，不落库） ---------- */
+/* ---------- 关系派生 Selectors（仅 join 实体关系，不涉及运行统计；统计一律走 stats 缓存） ---------- */
 
 function projectAgentIds(
   projectAgents: ProjectAgent[],
@@ -469,67 +552,6 @@ export function selectAgentsInProject(
   return agents
     .filter((a) => ids.has(a.id))
     .sort((a, b) => a.name.localeCompare(b.name, "zh"));
-}
-
-/** 项目下全部运行记录（join ProjectAgent → AgentRun，天然属于 Agent，无 projectId 冗余） */
-export function selectRunsInProject(
-  runs: AgentRun[],
-  projectAgents: ProjectAgent[],
-  projectId: string
-): AgentRun[] {
-  const ids = projectAgentIds(projectAgents, projectId);
-  return runs.filter((r) => ids.has(r.agentId));
-}
-
-/**
- * 项目最近 N 天运行记录：复用 Dashboard 已验证的统一窗口口径
- * selectRunsInRange(runs, range)（含今天在内的 N 个自然日），不重复实现日期计算。
- */
-export function selectRunsInProjectWindow(
-  runs: AgentRun[],
-  projectAgents: ProjectAgent[],
-  projectId: string,
-  range: TimeRange
-): AgentRun[] {
-  return selectRunsInRange(
-    selectRunsInProject(runs, projectAgents, projectId),
-    range
-  );
-}
-
-/** 项目级统计摘要（全部派生；30 天窗口与 Dashboard 同口径） */
-export interface ProjectStats {
-  agentCount: number;
-  totalRuns: number;
-  successRate: number; // 0-1
-  totalTokens: number;
-  recent30dRuns: number;
-  recent30dSuccessRate: number; // 0-1
-}
-
-export function selectProjectStats(
-  runs: AgentRun[],
-  projectAgents: ProjectAgent[],
-  projectId: string
-): ProjectStats {
-  const all = selectRunsInProject(runs, projectAgents, projectId);
-  const succeeded = all.filter((r) => r.status === "success").length;
-  const recent30d = selectRunsInProjectWindow(
-    runs,
-    projectAgents,
-    projectId,
-    "30d"
-  );
-  const recent30dSucceeded = recent30d.filter((r) => r.status === "success").length;
-  return {
-    agentCount: projectAgentIds(projectAgents, projectId).size,
-    totalRuns: all.length,
-    successRate: all.length > 0 ? succeeded / all.length : 0,
-    totalTokens: all.reduce((sum, r) => sum + r.tokensUsed, 0),
-    recent30dRuns: recent30d.length,
-    recent30dSuccessRate:
-      recent30d.length > 0 ? recent30dSucceeded / recent30d.length : 0,
-  };
 }
 
 /** 项目「最近活跃」排序（updatedAt 降序） */

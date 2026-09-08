@@ -381,6 +381,73 @@
 2. 建议方向（P5-3 候选，供审批）：AI Runtime 扩展——取消端点（cancelled 可达路径）/ 队列化执行（queued/running 真实窗口）/ streaming 契约接线；或接入真实 Provider Adapter（OpenAI/DeepSeek/Anthropic）之前的 API Key 与 Provider 配置管理。
 3. 未做（按范围声明）：真实 LLM、Streaming/SSE/WebSocket、Tool Calling、Memory Retrieval、Prompt Editor、Authentication、Multi-user、Capability Versioning。
 
+---
+
+# V1 Final Freeze（最终封版）
+
+> 状态：**V1 Final / Frozen**——功能冻结，仅文档修正与已知问题修复，不新增业务功能、不做架构扩张。
+
+## 一、阶段完成总览（P1 → P5-2）
+
+| 阶段 | 内容 | 状态 |
+| --- | --- | --- |
+| **P1** | 产品外壳与基础视觉体系（App Shell / Sidebar / TopBar / Command Palette / Design Token / Typography） | ✅ 完成 |
+| **P2** | 核心闭环（Dashboard / Agents / Capability 装配 / Run 演示桩 / 时间窗口） | ✅ 完成 |
+| **P3-1** | Capability 三层模型 + Zustand 持久化 + 工程收尾 | ✅ 完成 |
+| **P3-2** | Agent Detail 装配关系编辑（搜索 / 装配 / 启停 / 解绑） | ✅ 完成 |
+| **P3-3** | Capability Asset Hub（统一四类资产模型与展示） | ✅ 完成 |
+| **P3-4** | Definition 资产生命周期（创建 / 编辑 / 归档 / 恢复，软删除） | ✅ 完成 |
+| **P3-5** | Projects 最小闭环（领域模型 + 创建 / 关联 / 详情） | ✅ 完成 |
+| **P3-6** | Dashboard / Agents 的 Project 维度观察 | ✅ 完成 |
+| **V1 Review** | 架构与产品总审查（P0=0，P1/P2 分级认可，范围冻结建议） | ✅ 通过 |
+| **P4-1** | Backend Architecture & API Design（纯设计） | ✅ 完成 |
+| **P4-2** | Real Backend（Drizzle+better-sqlite3、SQLite 事实源、DTO/Domain 分离、统一 ApiError、Mock/Real 双模式） | ✅ 完成 |
+| **P4-3** | 统计端点化收尾（去 pageSize=1000、seed 天级锚） | ✅ 完成 |
+| **P4-4** | 交付增强（Docker / README / CI / db:init 从零初始化 / V1 RC） | ✅ 完成 |
+| **P5-1** | AI Runtime 架构与契约（纯设计） | ✅ 完成 |
+| **P5-2** | AI Runtime 最小实施（状态机五态 / CapabilityLoader / MockProvider / 数据迁移 / UI 五态） | ✅ 完成 |
+| **Final Freeze** | 工作区整理、README/.env 对齐、全量最终回归、封版提交 | ✅ 本次完成 |
+
+## 二、最终回归验证结果
+
+| 检查 | 结果 |
+| --- | --- |
+| Git 工作区 | ✅ 干净（`139aed0` 含 P5-2 全部成果；无未提交修改） |
+| 临时文件清理 | ✅ 删除根目录 12 个历史阶段日志（p42/p43/p44-*.log）；保留 `scripts/p52-verify.ts`（架构验证资产）；`logs/` 仅保留最新运行日志（gitignore） |
+| README 一致性 | ✅ 同步 V1 Final 状态、AI Runtime 能力行、有意延后清单、Runtime 分层、设计文档列表、.env.example 说明、Mock 边界说明（服务端 API 始终 Real） |
+| 配置 | ✅ 新增 `.env.example`（DATABASE_URL / NEXT_PUBLIC_USE_MOCK 说明）；.gitignore 加 `!.env.example`；drizzle/docker 配置核对无缺失 |
+| 数据库 | ✅ migration 可重复（drizzle 版本表）；db:init 语义明确（migrate+空库 seed）；seed 幂等（onConflictDoUpdate）；reset 语义明确（clearAll+runSeed 保留 migration 历史）；P5-2 `success→succeeded` 迁移已记录（`drizzle/0001_dry_terror.sql`） |
+| lint / tsc / build | ✅ 0 error / 0 warning / 通过 |
+| db:check | ✅ 通过（migration 已应用且 schema 一致） |
+| Real 模式 | ✅ 启动正常；四核心页面 200；stats 93/83/10 |
+| Mock 模式 | ✅ 独立 build + 3001 启动；前端 Dashboard 显示 Mock 数据 88/90.9%；控制台无 error |
+| SQLite 持久化 | ✅ POST run → 重启 → 统计 +1 恢复（93） |
+| 控制台错误 | ✅ 无（Real 与 Mock 均验证） |
+
+## 三、当前已知问题（最终分级）
+
+| 级别 | 问题 | 状态 |
+| --- | --- | --- |
+| **P0** | 无 | — |
+| **P1** | 无 | — |
+| **P2** | cancelled 无可达路径（无 cancel 端点）；queued/running 同步窗口极短 | 有意延后至 P5-3（Runtime 扩展） |
+| **P2** | Mock 装配静态快照（attach/detach 不写 mockState） | 既有 Mock 架构（不持有装配状态），Real 为事实源 |
+| **P3** | 演示 run duration 为 Mock 模拟值；daily UTC 日期口径（totals 一致）；截图/自动化 Radix 点击工具层限制 | 低风险，保持现状 |
+
+## 四、有意延后（明确标注，非遗漏）
+
+Authentication / Multi-user / Permissions / 真实 LLM Provider Adapter（OpenAI/DeepSeek/Anthropic）/ Streaming·SSE·WebSocket / Tool Calling / Memory Retrieval / Prompt Editor / Capability Versioning / Marketplace / Project Tasks / 协作成员 / 文件管理 / Kanban / 评论 / Settings 业务化 / 云数据库部署。均属于 P5-3 及之后的产品演进，未在 V1 承诺范围内。
+
+## 五、环境限制（非代码问题）
+
+- 本机无 Docker 引擎（P4-4 记录的 Dockerfile/compose 未在本机真实引擎验证，待环境验证项）。
+- GitHub Actions CI 未在真实 GitHub 仓库运行（无远程仓库；本地 `npm run ci` 等价门禁已通过）。
+
+## 六、最终提交
+
+`git commit`（Final Freeze）：工作区整理 + README/.env 对齐 + 计划文件封版 + 最终回归通过。
+
+
 
 
 

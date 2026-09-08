@@ -21,11 +21,25 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { useWorkspaceStore, selectAgentStats } from "@/stores/workspace";
+import type { Project, ProjectAgent } from "@/lib/types";
+
+function projectsOfAgent(
+  projects: Project[],
+  projectAgents: ProjectAgent[],
+  agentId: string
+): Project[] {
+  const ids = new Set(
+    projectAgents.filter((pa) => pa.agentId === agentId).map((pa) => pa.projectId)
+  );
+  return projects.filter((p) => ids.has(p.id));
+}
 
 export default function AgentsPage() {
   const hydrated = useWorkspaceStore((s) => s.hydrated);
   const agents = useWorkspaceStore((s) => s.agents);
   const runs = useWorkspaceStore((s) => s.runs);
+  const projects = useWorkspaceStore((s) => s.projects);
+  const projectAgents = useWorkspaceStore((s) => s.projectAgents);
   const hydrate = useWorkspaceStore((s) => s.hydrate);
   const resetDemoData = useWorkspaceStore((s) => s.resetDemoData);
 
@@ -127,6 +141,7 @@ export default function AgentsPage() {
                 key={agent.id}
                 agent={agent}
                 stats={selectAgentStats(runs, agent.id)}
+                projectsOf={projectsOfAgent(projects, projectAgents, agent.id)}
               />
             ))}
           </div>

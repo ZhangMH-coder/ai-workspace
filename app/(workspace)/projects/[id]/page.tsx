@@ -10,11 +10,12 @@
  */
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { ArrowLeft, Bot, FolderKanban, Plus, Trash2, Users } from "lucide-react";
+import { ArrowLeft, Bot, FolderKanban, Plus, Trash2, Users, Activity } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { AgentStatusBadge } from "@/components/agents/status-badge";
+import { ActivityList } from "@/components/dashboard/activity-list";
 import { AgentPicker } from "@/components/projects/agent-picker";
 import { PageHeader } from "@/components/shared/page-header";
 import { Button } from "@/components/ui/button";
@@ -34,6 +35,7 @@ import {
   selectAgentStats,
   selectAgentsInProject,
   selectProjectStats,
+  selectRunsInProject,
   selectRunsInProjectWindow,
   useWorkspaceStore,
 } from "@/stores/workspace";
@@ -101,6 +103,12 @@ export default function ProjectDetailPage() {
     projectId,
     "30d"
   );
+  const recentRuns = selectRunsInProject(runs, projectAgents, projectId)
+    .slice()
+    .sort(
+      (a, b) =>
+        new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime()
+    );
 
   async function handleConfirmDetach() {
     if (!detachTarget || busy) return;
@@ -263,6 +271,20 @@ export default function ProjectDetailPage() {
             })}
           </ul>
         )}
+      </Card>
+
+      {/* 最近运行（复用 ActivityList，同源派生） */}
+      <Card className="rounded-xl bg-surface-1">
+        <div className="flex items-center gap-2 border-b border-border px-5 py-4">
+          <Activity className="h-3.5 w-3.5 rotate-90 text-ink-3" />
+          <div>
+            <h3 className="text-[14px] font-semibold text-ink">最近运行</h3>
+            <p className="mt-0.5 text-[12px] text-ink-3">
+              项目内运行记录 · 与 Dashboard 同一数据源
+            </p>
+          </div>
+        </div>
+        <ActivityList runs={recentRuns} agents={agents} />
       </Card>
 
       <AgentPicker

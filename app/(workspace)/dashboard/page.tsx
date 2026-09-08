@@ -7,6 +7,7 @@ import {
   ActivityList,
   ActivityListSkeleton,
 } from "@/components/dashboard/activity-list";
+import { ProjectsOverview } from "@/components/dashboard/projects-overview";
 import {
   MetricCard,
   MetricCardSkeleton,
@@ -218,6 +219,9 @@ export default function DashboardPage() {
           )}
         </Card>
       </div>
+
+      {/* 项目维度摘要 */}
+      <ProjectsOverview hydrated={hydrated} />
 
       {/* 快捷操作 */}
       <QuickActions />

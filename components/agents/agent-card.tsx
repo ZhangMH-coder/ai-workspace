@@ -5,15 +5,18 @@ import { ArrowUpRight, Bot } from "lucide-react";
 
 import { AgentStatusBadge } from "@/components/agents/status-badge";
 import { formatNumber, formatPercent, formatRelativeTime, formatTokens } from "@/lib/format";
-import { modelLabel, type Agent } from "@/lib/types";
+import { modelLabel, type Agent, type Project } from "@/lib/types";
 import { selectAgentStats } from "@/stores/workspace";
 
 export function AgentCard({
   agent,
   stats,
+  projectsOf = [],
 }: {
   agent: Agent;
   stats: ReturnType<typeof selectAgentStats>;
+  /** 该 Agent 所属的项目（只引用，派生自 projectAgents） */
+  projectsOf?: Project[];
 }) {
   return (
     <Link
@@ -36,6 +39,25 @@ export function AgentCard({
       <p className="mt-3 line-clamp-2 min-h-[2.5em] text-[12.5px] leading-relaxed text-ink-2">
         {agent.description}
       </p>
+
+      {projectsOf.length > 0 ? (
+        <div className="mt-3 flex flex-wrap items-center gap-1.5" aria-label="所属项目">
+          <span className="text-[11px] text-ink-3">项目</span>
+          {projectsOf.slice(0, 2).map((p) => (
+            <span
+              key={p.id}
+              className="rounded-full border border-border/70 px-2 py-0.5 text-[11px] text-ink-2"
+            >
+              {p.name}
+            </span>
+          ))}
+          {projectsOf.length > 2 ? (
+            <span className="rounded-full border border-border/70 px-2 py-0.5 text-[11px] text-ink-3">
+              +{projectsOf.length - 2}
+            </span>
+          ) : null}
+        </div>
+      ) : null}
 
       <div className="mt-4 flex items-center justify-between border-t border-border/70 pt-3.5 text-[12px]">
         <div className="flex items-center gap-4 text-ink-3">

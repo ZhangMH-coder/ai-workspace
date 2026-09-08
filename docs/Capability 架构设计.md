@@ -318,3 +318,15 @@ Workspace
 ### 11.6 验证口径
 
 干净环境 3 seed 项目；创建 → 跳转详情 → 关联（0→1 Agent）→ 解绑（→0 + 空态）→ 重新关联；30 天口径 localStorage 重算 = 页面 DOM（客服提效 38 次 87%）；硬刷新持久化（v4）；Dashboard 回归正常；lint/tsc/build 全绿。
+
+### 11.7 Phase 3 第六阶段：Project 维度观察（方案 C 缩小范围）
+
+不新增任何领域实体与统计实现，仅在展示层把 Project 维度接入现有页面：
+
+| 页面 | 增强 | 复用 |
+| --- | --- | --- |
+| Dashboard | 项目维度摘要区（行式列表：Agent 数 / 最近 30 天运行量 / 成功率 / 最近活跃，整行点击进详情） | `selectProjectStats` / `selectRunsInProjectWindow`（统一窗口） |
+| Project Detail | 「最近运行」卡片（项目内运行，按时间降序） | `selectRunsInProject` + 复用 `ActivityList`（同 props 契约） |
+| Agents | AgentCard 底部所属项目徽章（≤2 +N，纯展示） | `projectsOfAgent()`（join projectAgents → projects，不复制） |
+
+约束：统计全部派生自单一 Store；状态变化（attach/detach/createProject/run）后各页面实时一致；30 天窗口继续使用 `selectRunsInRange`；不创建 ProjectCapability；不复制 Run/Agent 数据。

@@ -10,6 +10,8 @@ import type {
   AgentCapability,
   AgentRun,
   CapabilityDefinition,
+  Project,
+  ProjectAgent,
 } from "@/lib/types";
 
 const HOUR = 3_600_000;
@@ -159,6 +161,48 @@ export const seedAgentCapabilities: AgentCapability[] = [
   { id: "ac-ops-dbr", agentId: "agent-ops", capabilityId: "tool-db-reader", enabled: true, createdAt: new Date(now - 15 * DAY).toISOString() },
   // 归档示例装配：RSS 订阅汇总（archived）仍被 writer 保留装配（归档不自动解绑）
   { id: "ac-writer-rss", agentId: "agent-writer", capabilityId: "skill-rss-digest", enabled: true, createdAt: new Date(now - 36 * DAY).toISOString() },
+];
+
+/* ---------- Project（业务组织上下文）与 ProjectAgent（项目 ↔ Agent 关系） ---------- */
+
+export const seedProjects: Project[] = [
+  {
+    id: "project-web",
+    name: "官网改版",
+    description: "官网内容生成、竞品调研与文案产出",
+    status: "active",
+    createdAt: new Date(now - 42 * DAY).toISOString(),
+    updatedAt: new Date(now - 6 * HOUR).toISOString(),
+  },
+  {
+    id: "project-support",
+    name: "客服提效",
+    description: "工单分诊、话术优化与客户数据洞察",
+    status: "active",
+    createdAt: new Date(now - 30 * DAY).toISOString(),
+    updatedAt: new Date(now - 2 * HOUR).toISOString(),
+  },
+  {
+    id: "project-data",
+    name: "数据分析平台",
+    description: "日志分析、指标监控与图表体系建设",
+    status: "active",
+    createdAt: new Date(now - 18 * DAY).toISOString(),
+    updatedAt: new Date(now - 1 * DAY).toISOString(),
+  },
+];
+
+/** 项目 ↔ Agent 多对多关系（Agent 可属于多个项目；数据不复制，仅引用 agentId） */
+export const seedProjectAgents: ProjectAgent[] = [
+  // 官网改版：撰稿 + 调研
+  { id: "pa-web-writer", projectId: "project-web", agentId: "agent-writer", addedAt: new Date(now - 40 * DAY).toISOString() },
+  { id: "pa-web-research", projectId: "project-web", agentId: "agent-research", addedAt: new Date(now - 38 * DAY).toISOString() },
+  // 客服提效：客服 + 数据
+  { id: "pa-support-support", projectId: "project-support", agentId: "agent-support", addedAt: new Date(now - 28 * DAY).toISOString() },
+  { id: "pa-support-data", projectId: "project-support", agentId: "agent-data", addedAt: new Date(now - 22 * DAY).toISOString() },
+  // 数据分析平台：数据（多项目复用）+ 运维
+  { id: "pa-data-data", projectId: "project-data", agentId: "agent-data", addedAt: new Date(now - 16 * DAY).toISOString() },
+  { id: "pa-data-ops", projectId: "project-data", agentId: "agent-ops", addedAt: new Date(now - 15 * DAY).toISOString() },
 ];
 
 /** 确定性伪随机（保证同一批次种子数据稳定可复算） */

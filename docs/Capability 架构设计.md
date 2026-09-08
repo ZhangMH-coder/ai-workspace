@@ -268,3 +268,53 @@ Hub / 资产详情 / Agent 详情装配管理读同一 Store（definitions + age
 ### 10.5 验证口径
 
 干净环境 18 资产（16 active + 2 archived）· 49 装配；创建/编辑/归档/恢复闭环；硬刷新持久化；migrate v2 注入实测；四处（Hub / Asset Detail / Agent Detail / Picker）同源一致；lint/tsc/build 全绿。
+
+
+---
+
+## 十一、Phase 3 第五阶段：Projects 领域模型与最小业务闭环（方案 B）
+
+### 11.1 定位与层级
+
+```
+Workspace
+  └─ Project（业务组织上下文：只引用，不拥有）
+       ├─ ProjectAgent（多对多中介，只引用 agentId）──> Agent（工作区级资产）
+       │                                                  ├─ AgentCapability ──> CapabilityDefinition
+       │                                                  └─ AgentRun（天然归属 Agent，无 projectId）
+       └─ 项目级统计 = 全部派生（join ProjectAgent → AgentRun），不落库
+```
+
+### 11.2 领域契约
+
+| 实体 | 字段 | 说明 |
+| --- | --- | --- |
+| `Project` | id / name / description / status / createdAt / updatedAt | status: active \| archived（软删除语义预留）；updatedAt 在关联/解绑时刷新（最近活跃排序） |
+| `ProjectAgent` | id / projectId / agentId / addedAt | 多对多中介；只引用不复制 |
+
+### 11.3 Service 写契约（对应 REST）
+
+| 操作 | 契约 | REST |
+| --- | --- | --- |
+| 列表 | `fetchProjects()` | GET /projects |
+| 关系 | `fetchProjectAgents(projectId)` | GET /projects/:id/agents |
+| 创建 | `createProject({name,description})`（默认 active） | POST /projects |
+| 关联 | `attachAgentToProject({projectId,agentId})`（幂等） | POST /project-agents |
+| 解绑 | `detachAgentFromProject(id)`（幂等） | DELETE /project-agents/:id |
+
+### 11.4 Store 演进（persist v3 → v4）
+
+- `partialize` 增加 `projects` / `projectAgents`（可写持久化）
+- `migrate` 阶梯式 v1→v2→v3→v4：依次补装配（v2）/ 能力定义（v3）/ 项目与关系（v4），旧数据平滑升级
+- 派生 Selectors：`selectAgentsInProject` / `selectRunsInProject` / `selectRunsInProjectWindow`（**复用 `selectRunsInRange` 统一自然日窗口，不重复实现日期计算**）/ `selectProjectStats` / `sortProjectsByActivity`
+
+### 11.5 关键决策
+
+- Agent ↔ Project **多对多**：Agent 是可复用资产，可同时服务多个项目（agent-support 同属客服提效 + 新建项目，统计各自独立正确）
+- Run **不加 projectId**：Run 天然属于 Agent，项目统计派生，避免最大数据量表冗余
+- Capability **不建 ProjectCapability**：经 Agent 间接关联，关系不爆炸
+- 不复制任何数据：localStorage 仅新增 projects/projectAgents，agents/runs/definitions 无副本
+
+### 11.6 验证口径
+
+干净环境 3 seed 项目；创建 → 跳转详情 → 关联（0→1 Agent）→ 解绑（→0 + 空态）→ 重新关联；30 天口径 localStorage 重算 = 页面 DOM（客服提效 38 次 87%）；硬刷新持久化（v4）；Dashboard 回归正常；lint/tsc/build 全绿。

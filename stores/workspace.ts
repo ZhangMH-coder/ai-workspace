@@ -3,12 +3,12 @@
 /**
  * 工作区全局状态（Zustand + persist，Phase 3）
  *
- * 单一数据源：agents + runs + capabilityDefinitions + agentCapabilities + timeRange。
- * - 持久化（localStorage key: ai-workspace-store，version 3）：
- *   agents / runs / agentCapabilities / capabilityDefinitions / timeRange；
+ * 单一数据源：agents + runs + capabilityDefinitions + agentCapabilities + projects + projectAgents + timeRange。
+ * - 持久化（localStorage key: ai-workspace-store，version 4）：
+ *   agents / runs / agentCapabilities / capabilityDefinitions / projects / projectAgents / timeRange；
  *   actions、hydrated 标志不持久化。
- * - version 2 → 3：capabilityDefinitions 由「只读 seed 回填」升级为「可写持久化」
- *   （创建/编辑/归档/恢复后刷新不丢失）；migrate 为旧数据自动补 seed 副本。
+ * - version 3 → 4：新增 Project 领域（projects + projectAgents 关系表，持久化）；
+ *   migrate 为旧数据自动补 seed 副本（向后兼容）。
  * - 演示数据可恢复：无持久化数据时 hydrate() 自动从 Mock 服务层拉取 seed；
  *   resetDemoData() 显式重置回 seed（并写回持久化）。
  * - 未来接入真实 API 时仅替换 lib/services 实现。
@@ -35,7 +35,15 @@ import {
 import {
   seedAgentCapabilities,
   seedCapabilityDefinitions,
+  seedProjectAgents,
+  seedProjects,
 } from "@/lib/mock-data/seed";
+import {
+  attachAgentToProject as attachAgentToProjectService,
+  createProject as createProjectService,
+  detachAgentFromProject as detachAgentFromProjectService,
+  fetchProjects as fetchProjectsService,
+} from "@/lib/services/projects";
 import type {
   Agent,
   AgentCapability,
@@ -43,6 +51,9 @@ import type {
   CapabilityDefinition,
   NewAgentInput,
   NewCapabilityInput,
+  NewProjectInput,
+  Project,
+  ProjectAgent,
   TimeRange,
   UpdateCapabilityInput,
 } from "@/lib/types";
@@ -56,6 +67,10 @@ interface WorkspaceState {
   capabilityDefinitions: CapabilityDefinition[];
   /** 装配关系（持久化，version 2 起） */
   agentCapabilities: AgentCapability[];
+  /** 项目（业务组织上下文；version 4 起持久化，只维护关系不复制数据） */
+  projects: Project[];
+  /** 项目 ↔ Agent 关联关系（多对多中介，持久化） */
+  projectAgents: ProjectAgent[];
   timeRange: TimeRange;
 
   /** 首次加载（幂等）：无持久化数据时拉取 seed */
@@ -82,6 +97,15 @@ interface WorkspaceState {
   archiveCapability: (id: string) => Promise<void>;
   /** 恢复能力定义（重新可装配、装配关系重新可管理） */
   restoreCapability: (id: string) => Promise<void>;
+  /** 创建项目（默认 active；返回新项目供跳转） */
+  createProject: (input: NewProjectInput) => Promise<Project>;
+  /** 关联 Agent 到项目（幂等：同项目同 Agent 已关联则直接返回） */
+  attachAgentToProject: (
+    projectId: string,
+    agentId: string
+  ) => Promise<ProjectAgent>;
+  /** 解除 Agent 关联（幂等删除） */
+  detachAgentFromProject: (id: string) => Promise<void>;
   /** 重置回演示 seed 数据（持久化随之更新） */
   resetDemoData: () => Promise<void>;
 }
@@ -94,26 +118,32 @@ export const useWorkspaceStore = create<WorkspaceState>()(
       runs: [],
       capabilityDefinitions: [],
       agentCapabilities: [],
+      projects: [],
+      projectAgents: [],
       timeRange: "30d",
 
       hydrate: async () => {
         if (get().hydrated) return;
         const hasStored = get().agents.length > 0 || get().runs.length > 0;
         if (!hasStored) {
-          // 无持久化数据：全量回填 seed（装配关系也一并重置为 seed）
-          const [agents, runs, capabilityDefinitions] = await Promise.all([
-            fetchAgentsService(),
-            fetchRunsService(),
-            fetchCapabilityDefinitionsService(),
-          ]);
+          // 无持久化数据：全量回填 seed（装配/项目/关系一并重置为 seed）
+          const [agents, runs, capabilityDefinitions, projects] =
+            await Promise.all([
+              fetchAgentsService(),
+              fetchRunsService(),
+              fetchCapabilityDefinitionsService(),
+              fetchProjectsService(),
+            ]);
           set({
             agents,
             runs,
             capabilityDefinitions,
             agentCapabilities: seedAgentCapabilities.map((ac) => ({ ...ac })),
+            projects,
+            projectAgents: seedProjectAgents.map((pa) => ({ ...pa })),
           });
         } else {
-          // 持久化数据存在：补资产定义（只读资产不持久化，始终以 seed 为准）
+          // 持久化数据存在：补资产定义（migrate 已保证 v4 兼容；此处为防御性回填）
           if (get().capabilityDefinitions.length === 0) {
             const capabilityDefinitions =
               await fetchCapabilityDefinitionsService();
@@ -241,53 +271,98 @@ export const useWorkspaceStore = create<WorkspaceState>()(
         }));
       },
 
+      createProject: async (input) => {
+        const created = await createProjectService(input);
+        set((state) => ({
+          projects: [created, ...state.projects],
+        }));
+        return created;
+      },
+
+      attachAgentToProject: async (projectId, agentId) => {
+        // 幂等：同 (projectId, agentId) 已关联则直接返回，不重复创建
+        const existing = get().projectAgents.find(
+          (pa) => pa.projectId === projectId && pa.agentId === agentId
+        );
+        if (existing) return existing;
+        const created = await attachAgentToProjectService({
+          projectId,
+          agentId,
+        });
+        set((state) => ({
+          projectAgents: [created, ...state.projectAgents],
+          projects: state.projects.map((p) =>
+            p.id === projectId ? { ...p, updatedAt: created.addedAt } : p
+          ),
+        }));
+        return created;
+      },
+
+      detachAgentFromProject: async (id) => {
+        const target = get().projectAgents.find((pa) => pa.id === id);
+        await detachAgentFromProjectService(id);
+        set((state) => ({
+          projectAgents: state.projectAgents.filter((pa) => pa.id !== id),
+          projects: state.projects.map((p) =>
+            p.id === target?.projectId
+              ? { ...p, updatedAt: new Date().toISOString() }
+              : p
+          ),
+        }));
+      },
+
       resetDemoData: async () => {
-        const [agents, runs, capabilityDefinitions] = await Promise.all([
-          fetchAgentsService(),
-          fetchRunsService(),
-          fetchCapabilityDefinitionsService(),
-        ]);
+        const [agents, runs, capabilityDefinitions, projects] =
+          await Promise.all([
+            fetchAgentsService(),
+            fetchRunsService(),
+            fetchCapabilityDefinitionsService(),
+            fetchProjectsService(),
+          ]);
         set({
           agents,
           runs,
           capabilityDefinitions,
           agentCapabilities: seedAgentCapabilities.map((ac) => ({ ...ac })),
+          projects,
+          projectAgents: seedProjectAgents.map((pa) => ({ ...pa })),
           timeRange: "30d",
         });
       },
     }),
     {
       name: "ai-workspace-store",
-      version: 3,
+      version: 4,
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({
         agents: state.agents,
         runs: state.runs,
         agentCapabilities: state.agentCapabilities,
         capabilityDefinitions: state.capabilityDefinitions,
+        projects: state.projects,
+        projectAgents: state.projectAgents,
         timeRange: state.timeRange,
       }),
       migrate: (persistedState, version) => {
-        if (version < 3) {
-          // v1/v2 → v3：补充能力定义（seed 副本，含 archived 示例），保证资产可写/可归档
-          const base = {
-            ...(persistedState as object),
-            capabilityDefinitions: seedCapabilityDefinitions.map((d) => ({
-              ...d,
-            })),
-          };
-          if (version < 2) {
-            // v1 → v3：还需要补充装配关系（seed）
-            return {
-              ...base,
-              agentCapabilities: seedAgentCapabilities.map((ac) => ({
-                ...ac,
-              })),
-            };
-          }
-          return base;
+        // 阶梯式向后兼容：v1 → v2 → v3 → v4，仅补缺失字段，旧数据原样保留
+        const base = { ...(persistedState as object) };
+        if (version < 4) {
+          (base as Record<string, unknown>).projects = seedProjects.map((p) => ({
+            ...p,
+          }));
+          (base as Record<string, unknown>).projectAgents = seedProjectAgents.map(
+            (pa) => ({ ...pa })
+          );
         }
-        return persistedState as object;
+        if (version < 3) {
+          (base as Record<string, unknown>).capabilityDefinitions =
+            seedCapabilityDefinitions.map((d) => ({ ...d }));
+        }
+        if (version < 2) {
+          (base as Record<string, unknown>).agentCapabilities =
+            seedAgentCapabilities.map((ac) => ({ ...ac }));
+        }
+        return base;
       },
     }
   )
@@ -362,4 +437,97 @@ export function selectAgentStats(runs: AgentRun[], agentId: string) {
     totalTokens,
     avgDurationMs: totalRuns > 0 ? totalDuration / totalRuns : 0,
   };
+}
+
+/* ---------- Project 派生 Selectors（Phase 3 第五阶段；全部实时计算，不落库） ---------- */
+
+function projectAgentIds(
+  projectAgents: ProjectAgent[],
+  projectId: string
+): Set<string> {
+  const ids = new Set<string>();
+  for (const pa of projectAgents) {
+    if (pa.projectId === projectId) ids.add(pa.agentId);
+  }
+  return ids;
+}
+
+/** 项目下的 Agent 列表（join ProjectAgent → Agent，按名称排序） */
+export function selectAgentsInProject(
+  agents: Agent[],
+  projectAgents: ProjectAgent[],
+  projectId: string
+): Agent[] {
+  const ids = projectAgentIds(projectAgents, projectId);
+  return agents
+    .filter((a) => ids.has(a.id))
+    .sort((a, b) => a.name.localeCompare(b.name, "zh"));
+}
+
+/** 项目下全部运行记录（join ProjectAgent → AgentRun，天然属于 Agent，无 projectId 冗余） */
+export function selectRunsInProject(
+  runs: AgentRun[],
+  projectAgents: ProjectAgent[],
+  projectId: string
+): AgentRun[] {
+  const ids = projectAgentIds(projectAgents, projectId);
+  return runs.filter((r) => ids.has(r.agentId));
+}
+
+/**
+ * 项目最近 N 天运行记录：复用 Dashboard 已验证的统一窗口口径
+ * selectRunsInRange(runs, range)（含今天在内的 N 个自然日），不重复实现日期计算。
+ */
+export function selectRunsInProjectWindow(
+  runs: AgentRun[],
+  projectAgents: ProjectAgent[],
+  projectId: string,
+  range: TimeRange
+): AgentRun[] {
+  return selectRunsInRange(
+    selectRunsInProject(runs, projectAgents, projectId),
+    range
+  );
+}
+
+/** 项目级统计摘要（全部派生；30 天窗口与 Dashboard 同口径） */
+export interface ProjectStats {
+  agentCount: number;
+  totalRuns: number;
+  successRate: number; // 0-1
+  totalTokens: number;
+  recent30dRuns: number;
+  recent30dSuccessRate: number; // 0-1
+}
+
+export function selectProjectStats(
+  runs: AgentRun[],
+  projectAgents: ProjectAgent[],
+  projectId: string
+): ProjectStats {
+  const all = selectRunsInProject(runs, projectAgents, projectId);
+  const succeeded = all.filter((r) => r.status === "success").length;
+  const recent30d = selectRunsInProjectWindow(
+    runs,
+    projectAgents,
+    projectId,
+    "30d"
+  );
+  const recent30dSucceeded = recent30d.filter((r) => r.status === "success").length;
+  return {
+    agentCount: projectAgentIds(projectAgents, projectId).size,
+    totalRuns: all.length,
+    successRate: all.length > 0 ? succeeded / all.length : 0,
+    totalTokens: all.reduce((sum, r) => sum + r.tokensUsed, 0),
+    recent30dRuns: recent30d.length,
+    recent30dSuccessRate:
+      recent30d.length > 0 ? recent30dSucceeded / recent30d.length : 0,
+  };
+}
+
+/** 项目「最近活跃」排序（updatedAt 降序） */
+export function sortProjectsByActivity(projects: Project[]): Project[] {
+  return [...projects].sort((a, b) =>
+    b.updatedAt.localeCompare(a.updatedAt)
+  );
 }

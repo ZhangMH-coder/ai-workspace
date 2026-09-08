@@ -106,6 +106,44 @@ export interface AgentCapability {
   createdAt: string; // ISO 8601
 }
 
+/* ---------- Project 领域模型（Phase 3 第五阶段） ----------
+ *
+ * 层级：Workspace → Project → (ProjectAgent) → Agent → (AgentCapability) → Capability
+ *                                   └─────────────── Agent → (AgentRun) → Run
+ *
+ * 原则：
+ * - Project 是「业务组织上下文」：只引用 Agent（ProjectAgent 关系表），不复制任何数据；
+ * - Agent 为工作区级资产，可属于多个 Project（多对多）；Capability 经 Agent 间接关联；
+ * - Run 天然属于 Agent（agentId 外键），项目级统计全部派生，不给 Run 加 projectId。
+ */
+
+/** 项目生命周期状态（active / archived；本阶段仅 active，归档为软删除语义预留） */
+export type ProjectStatus = "active" | "archived";
+
+/** 项目（业务组织上下文，只维护关系，不持有 Agent/Capability/Run 副本） */
+export interface Project {
+  id: string;
+  name: string;
+  description: string;
+  status: ProjectStatus;
+  createdAt: string; // ISO 8601
+  updatedAt: string; // ISO 8601，关联 Agent 时刷新（用于「最近活跃」）
+}
+
+/** 项目 ↔ Agent 关联关系（多对多中介表，模式与 AgentCapability 一致） */
+export interface ProjectAgent {
+  id: string;
+  projectId: string; // → Project.id
+  agentId: string; // → Agent.id（只引用，不复制）
+  addedAt: string; // ISO 8601
+}
+
+/** 新建项目的表单输入（Service 契约） */
+export interface NewProjectInput {
+  name: string;
+  description: string;
+}
+
 /** 智能体 */
 export interface Agent {
   id: string;

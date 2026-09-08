@@ -39,7 +39,7 @@ export function ActivityList({
           <Link
             key={run.id}
             href={`/agents/${run.agentId}`}
-            className="group flex items-center gap-3 border-b border-border/70 px-5 py-3.5 transition-colors duration-150 last:border-b-0 hover:bg-white/[0.025]"
+            className="group flex items-center gap-3 border-b border-border/70 px-5 py-3.5 transition-colors duration-150 last:border-b-0 hover:bg-white/[0.025] focus-visible:outline-none focus-visible:bg-white/[0.025]"
           >
             <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${meta.dot}`} />
             <div className="min-w-0 flex-1">

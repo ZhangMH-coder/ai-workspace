@@ -2,40 +2,20 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import {
-  ArrowLeft,
-  BookOpenText,
-  Bot,
-  BrainCircuit,
-  Loader2,
-  Play,
-  Puzzle,
-  ScrollText,
-} from "lucide-react";
+import { ArrowLeft, Bot, Loader2, Play } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { AgentStatusBadge } from "@/components/agents/status-badge";
+import { CapabilityList } from "@/components/agents/capability-list";
 import { PageHeader } from "@/components/shared/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatDateTime, formatDuration, formatNumber, formatPercent, formatRelativeTime, formatTokens } from "@/lib/format";
-import { modelLabel, type AgentCapabilities } from "@/lib/types";
+import { modelLabel } from "@/lib/types";
 import { selectAgentStats, useWorkspaceStore } from "@/stores/workspace";
-
-const CAPABILITY_META: {
-  key: keyof AgentCapabilities;
-  label: string;
-  description: string;
-  icon: typeof Puzzle;
-}[] = [
-  { key: "skills", label: "Skills", description: "技能与能力装配", icon: Puzzle },
-  { key: "memory", label: "Memory", description: "语义记忆与知识", icon: BrainCircuit },
-  { key: "rules", label: "Rules", description: "行为约束与治理", icon: ScrollText },
-  { key: "tools", label: "Tools", description: "外部工具连接", icon: BookOpenText },
-];
 
 function RunBadge({ status }: { status: "success" | "failed" | "running" }) {
   const map = {
@@ -213,27 +193,11 @@ export default function AgentDetailPage() {
             <div className="flex items-center justify-between">
               <h3 className="text-[14px] font-semibold text-ink">已装配能力</h3>
               <Badge variant="outline" className="text-[11px] font-normal text-ink-3">
-                只读 · Phase 2
+                只读 · Phase 3
               </Badge>
             </div>
-            <div className="mt-4 flex flex-col gap-1">
-              {CAPABILITY_META.map(({ key, label, description, icon: Icon }) => (
-                <div
-                  key={key}
-                  className="flex items-center gap-3 rounded-lg px-2 py-2 transition-colors duration-150 hover:bg-white/[0.03]"
-                >
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/[0.04]">
-                    <Icon className="h-3.5 w-3.5 text-ink-3" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-[13px] font-medium text-ink">{label}</p>
-                    <p className="truncate text-[12px] text-ink-3">{description}</p>
-                  </div>
-                  <span className="text-[13px] font-semibold text-ink-2">
-                    {agent.capabilities[key]}
-                  </span>
-                </div>
-              ))}
+            <div className="mt-4">
+              <CapabilityList agentId={agent.id} />
             </div>
           </Card>
         </div>

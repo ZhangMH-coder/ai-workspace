@@ -187,7 +187,7 @@ function NavLink({
       href={item.href}
       aria-current={active ? "page" : undefined}
       className={cn(
-        "group relative flex h-9 items-center rounded-lg text-[13.5px] font-medium transition-colors duration-150",
+        "group relative flex h-9 items-center rounded-lg text-[13.5px] font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/50",
         collapsed ? "justify-center" : "gap-3 px-2.5",
         active
           ? "bg-brand-soft text-white"

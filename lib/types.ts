@@ -25,12 +25,52 @@ export function modelLabel(id: ModelId): string {
   return MODEL_OPTIONS.find((m) => m.id === id)?.label ?? id;
 }
 
-/** Agent 已装配能力（Phase 2 仅只读展示，数量由种子数据提供） */
-export interface AgentCapabilities {
-  skills: number;
-  memory: number;
-  rules: number;
-  tools: number;
+/* ---------- Capability 领域模型（Phase 3） ----------
+ *
+ * 三层结构：
+ * 1. CapabilityDefinition —— 能力「定义/资产」：可被任意多个 Agent 复用的能力条目
+ * 2. AgentCapability     —— 「装配关系」：某 Agent 装配了哪个 Definition、是否启用
+ * 3. Agent               —— 持有若干条 AgentCapability（多对多中介）
+ *
+ * 边界原则：
+ * - Definition 由能力库管理（未来 Skills/Memory/Rules/Tools 独立页管理的是这类资产）
+ * - AgentCapability 记录装配上下文，不复制 Definition 内容
+ * - Agent 页面只读装配关系 + 通过 Service 拉取 Definition 元信息，不硬编码业务逻辑
+ */
+
+/** 能力类型（未来可扩展，如 workflow / connector） */
+export type CapabilityType = "skill" | "memory" | "rule" | "tool";
+
+export const CAPABILITY_TYPE_OPTIONS: {
+  id: CapabilityType;
+  label: string;
+  description: string;
+}[] = [
+  { id: "skill", label: "Skills", description: "技能与能力装配" },
+  { id: "memory", label: "Memory", description: "语义记忆与知识" },
+  { id: "rule", label: "Rules", description: "行为约束与治理" },
+  { id: "tool", label: "Tools", description: "外部工具连接" },
+];
+
+export function capabilityTypeLabel(type: CapabilityType): string {
+  return CAPABILITY_TYPE_OPTIONS.find((t) => t.id === type)?.label ?? type;
+}
+
+/** 能力定义（资产）：与 Agent 解耦，可被多个 Agent 复用 */
+export interface CapabilityDefinition {
+  id: string;
+  type: CapabilityType;
+  name: string;
+  description: string;
+}
+
+/** Agent 装配关系（多对多中介表）：引用 Definition，携带装配上下文 */
+export interface AgentCapability {
+  id: string;
+  agentId: string; // → Agent.id
+  capabilityId: string; // → CapabilityDefinition.id
+  enabled: boolean;
+  createdAt: string; // ISO 8601
 }
 
 /** 智能体 */
@@ -41,7 +81,6 @@ export interface Agent {
   model: ModelId;
   status: AgentStatus;
   systemPrompt: string;
-  capabilities: AgentCapabilities;
   createdAt: string; // ISO 8601
   lastRunAt: string | null; // ISO 8601，未运行过为 null
 }

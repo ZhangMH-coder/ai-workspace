@@ -47,25 +47,33 @@ function useDashboardData() {
   return { hydrated, agents, runs, timeRange, setTimeRange };
 }
 
-/** 当前时段与上一等长时段的运行聚合（真实计算，不造假） */
+/** 当前时段与上一等长时段的运行聚合（真实计算，不造假）
+ * 口径：与趋势图/最近活动完全一致的自然日窗口 ——
+ * current 为「含今天在内的 N 个自然日」[今天 0 点 −(N−1) 天, 明天 0 点)，
+ * previous 为紧邻的前 N 个自然日。
+ */
 function periodStats(runs: ReturnType<typeof selectRunsInRange>, days: number) {
-  const now = Date.now();
-  const periodMs = days * 86_400_000;
-  const current = runs.filter(
-    (r) => now - new Date(r.startedAt).getTime() <= periodMs
-  );
-  const previous = runs.filter(
-    (r) => {
-      const t = now - new Date(r.startedAt).getTime();
-      return t > periodMs && t <= periodMs * 2;
-    }
-  );
-  const summarize = (list: typeof current) => ({
-    count: list.length,
-    success: list.filter((r) => r.status === "success").length,
-    tokens: list.reduce((sum, r) => sum + r.tokensUsed, 0),
-  });
-  return { current: summarize(current), previous: summarize(previous) };
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const now = todayStart.getTime();
+  const dayMs = 86_400_000;
+  const currentStart = now - (days - 1) * dayMs;
+  const tomorrow = now + dayMs;
+  const summarize = (start: number, end: number) => {
+    const list = runs.filter((r) => {
+      const t = new Date(r.startedAt).getTime();
+      return t >= start && t < end;
+    });
+    return {
+      count: list.length,
+      success: list.filter((r) => r.status === "success").length,
+      tokens: list.reduce((sum, r) => sum + r.tokensUsed, 0),
+    };
+  };
+  return {
+    current: summarize(currentStart, tomorrow),
+    previous: summarize(currentStart - days * dayMs, currentStart),
+  };
 }
 
 function pctDelta(current: number, previous: number): string | null {
@@ -187,7 +195,11 @@ export default function DashboardPage() {
           </div>
           <div className="px-4 pb-4 pt-5 sm:px-5">
             {hydrated ? (
-              <TrendChart data={daily} rangeLabel={timeRangeLabel(timeRange)} />
+              <TrendChart
+                key={timeRange}
+                data={daily}
+                rangeLabel={timeRangeLabel(timeRange)}
+              />
             ) : (
               <div className="h-[240px] animate-pulse rounded-lg bg-white/[0.04]" />
             )}

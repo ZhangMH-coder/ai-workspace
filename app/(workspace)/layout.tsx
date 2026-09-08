@@ -33,6 +33,13 @@ export default function WorkspaceLayout({
   return (
     <TooltipProvider delayDuration={400}>
       <div className="flex h-svh overflow-hidden bg-background">
+        {/* 无障碍：键盘用户跳过导航直达主内容 */}
+        <a
+          href="#main-content"
+          className="sr-only z-50 rounded-lg bg-brand px-4 py-2 text-[13px] font-medium text-white focus:not-sr-only focus:fixed focus:left-4 focus:top-4"
+        >
+          跳到主内容
+        </a>
         <Sidebar
           collapsed={collapsed}
           onCollapseToggle={() => setCollapsed((value) => !value)}
@@ -44,7 +51,7 @@ export default function WorkspaceLayout({
             onMenuClick={() => setMobileOpen(true)}
             onCommandOpen={() => setCommandOpen(true)}
           />
-          <main className="min-h-0 flex-1 overflow-y-auto">
+          <main id="main-content" className="min-h-0 flex-1 overflow-y-auto">
             <div className="mx-auto w-full max-w-[1440px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
               <PageTransition>{children}</PageTransition>
             </div>

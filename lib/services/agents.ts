@@ -42,7 +42,6 @@ export async function createAgent(input: NewAgentInput): Promise<Agent> {
     model: input.model,
     status: "idle",
     systemPrompt: input.systemPrompt.trim() || "你是我的 AI 工作助手。",
-    capabilities: { skills: 0, memory: 0, rules: 0, tools: 0 },
     createdAt: new Date().toISOString(),
     lastRunAt: null,
   };

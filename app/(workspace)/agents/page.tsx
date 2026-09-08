@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { Plus } from "lucide-react";
-import { useEffect } from "react";
+import { Plus, RotateCcw } from "lucide-react";
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
 
 import {
   AgentCard,
@@ -10,6 +11,15 @@ import {
 } from "@/components/agents/agent-card";
 import { PageHeader } from "@/components/shared/page-header";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { useWorkspaceStore, selectAgentStats } from "@/stores/workspace";
 
 export default function AgentsPage() {
@@ -17,10 +27,27 @@ export default function AgentsPage() {
   const agents = useWorkspaceStore((s) => s.agents);
   const runs = useWorkspaceStore((s) => s.runs);
   const hydrate = useWorkspaceStore((s) => s.hydrate);
+  const resetDemoData = useWorkspaceStore((s) => s.resetDemoData);
+
+  const [resetOpen, setResetOpen] = useState(false);
+  const [resetting, setResetting] = useState(false);
 
   useEffect(() => {
     void hydrate();
   }, [hydrate]);
+
+  async function handleReset() {
+    setResetting(true);
+    try {
+      await resetDemoData();
+      toast.success("演示数据已重置为初始状态");
+    } catch {
+      toast.error("重置失败，请重试");
+    } finally {
+      setResetting(false);
+      setResetOpen(false);
+    }
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -28,12 +55,47 @@ export default function AgentsPage() {
         title="Agents"
         description="创建、配置与运行你的智能体"
         actions={
-          <Button asChild>
-            <Link href="/agents/new">
-              <Plus />
-              新建 Agent
-            </Link>
-          </Button>
+          <>
+            <Dialog open={resetOpen} onOpenChange={setResetOpen}>
+              <DialogTrigger asChild>
+                <Button variant="ghost" size="default">
+                  <RotateCcw />
+                  重置演示数据
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="w-[92vw] max-w-md rounded-xl">
+                <DialogHeader>
+                  <DialogTitle>重置演示数据？</DialogTitle>
+                  <DialogDescription>
+                    将丢弃当前所有 Agent 与运行记录，恢复到初始演示数据（5 个
+                    Agent）。此操作会同步更新本地持久化数据，不可撤销。
+                  </DialogDescription>
+                </DialogHeader>
+                <DialogFooter>
+                  <Button
+                    variant="ghost"
+                    onClick={() => setResetOpen(false)}
+                    disabled={resetting}
+                  >
+                    取消
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    onClick={handleReset}
+                    disabled={resetting}
+                  >
+                    {resetting ? "重置中…" : "确认重置"}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+            <Button asChild>
+              <Link href="/agents/new">
+                <Plus />
+                新建 Agent
+              </Link>
+            </Button>
+          </>
         }
       />
 

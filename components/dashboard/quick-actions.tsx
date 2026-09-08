@@ -33,7 +33,7 @@ export function QuickActions() {
           <Link
             key={action.title}
             href={action.href}
-            className="group flex items-center gap-3 rounded-xl border border-border bg-surface-1 p-4 text-left transition-all duration-150 hover:-translate-y-0.5 hover:border-white/15 hover:bg-surface-2"
+            className="group flex items-center gap-3 rounded-xl border border-border bg-surface-1 p-4 text-left transition-all duration-150 hover:-translate-y-0.5 hover:border-white/15 hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/50"
           >
             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/[0.04] transition-colors duration-150 group-hover:bg-brand-soft">
               <action.icon className="h-4 w-4 text-ink-2 transition-colors duration-150 group-hover:text-brand" />

@@ -5,7 +5,12 @@
  * 不代表真实业务结果。时间基于运行时生成，保证「最近 30 天」
  * 视图在任意日期打开都有数据。
  */
-import type { Agent, AgentRun } from "@/lib/types";
+import type {
+  Agent,
+  AgentCapability,
+  AgentRun,
+  CapabilityDefinition,
+} from "@/lib/types";
 
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
@@ -20,7 +25,6 @@ export const seedAgents: Agent[] = [
     status: "active",
     systemPrompt:
       "你是 Acme AI 的客户支持助手。回答需简洁、准确，涉及退款与故障时优先引导人工渠道。",
-    capabilities: { skills: 3, memory: 2, rules: 4, tools: 2 },
     createdAt: new Date(now - 86 * DAY).toISOString(),
     lastRunAt: new Date(now - 2 * HOUR).toISOString(),
   },
@@ -32,7 +36,6 @@ export const seedAgents: Agent[] = [
     status: "active",
     systemPrompt:
       "你是市场调研分析员。输出结构：摘要 → 关键发现 → 数据来源。引用必须可追溯。",
-    capabilities: { skills: 4, memory: 1, rules: 2, tools: 3 },
     createdAt: new Date(now - 62 * DAY).toISOString(),
     lastRunAt: new Date(now - 5 * HOUR).toISOString(),
   },
@@ -44,7 +47,6 @@ export const seedAgents: Agent[] = [
     status: "idle",
     systemPrompt:
       "你是中文内容撰稿助手。默认输出可直接使用的成稿，语气专业克制，禁止堆砌形容词。",
-    capabilities: { skills: 2, memory: 1, rules: 1, tools: 0 },
     createdAt: new Date(now - 41 * DAY).toISOString(),
     lastRunAt: new Date(now - 1 * DAY).toISOString(),
   },
@@ -56,7 +58,6 @@ export const seedAgents: Agent[] = [
     status: "error",
     systemPrompt:
       "你是数据分析师。先说明口径与假设，再给结论；涉及敏感字段时脱敏输出。",
-    capabilities: { skills: 3, memory: 3, rules: 3, tools: 4 },
     createdAt: new Date(now - 29 * DAY).toISOString(),
     lastRunAt: new Date(now - 3 * DAY).toISOString(),
   },
@@ -68,10 +69,91 @@ export const seedAgents: Agent[] = [
     status: "paused",
     systemPrompt:
       "你是运维巡检助手。只输出可执行的检查项与结论，异常必须标注严重级别。",
-    capabilities: { skills: 2, memory: 0, rules: 5, tools: 3 },
     createdAt: new Date(now - 18 * DAY).toISOString(),
     lastRunAt: null,
   },
+];
+
+/* ---------- Capability 资产（Definition）与装配关系（AgentCapability） ---------- */
+
+export const seedCapabilityDefinitions: CapabilityDefinition[] = [
+  // Skills
+  { id: "skill-web-search", type: "skill", name: "网页搜索", description: "实时检索网页与资讯" },
+  { id: "skill-doc-summary", type: "skill", name: "文档摘要", description: "长文档要点提炼" },
+  { id: "skill-data-viz", type: "skill", name: "数据可视化建议", description: "图表选型与口径建议" },
+  { id: "skill-copywriting", type: "skill", name: "文案生成", description: "营销文案与社媒短句" },
+  // Memory
+  { id: "memory-long-term", type: "memory", name: "长期记忆", description: "跨会话记住关键事实" },
+  { id: "memory-semantic", type: "memory", name: "语义记忆", description: "按语义检索历史知识" },
+  { id: "memory-episodic", type: "memory", name: "情景记忆", description: "记录任务执行历史" },
+  // Rules
+  { id: "rule-tone", type: "rule", name: "语气规范", description: "输出语气克制专业" },
+  { id: "rule-citation", type: "rule", name: "引用可追溯", description: "事实必须附来源" },
+  { id: "rule-privacy", type: "rule", name: "脱敏输出", description: "敏感字段自动脱敏" },
+  { id: "rule-escalation", type: "rule", name: "升级规则", description: "风险工单转人工" },
+  { id: "rule-severity", type: "rule", name: "严重级别标注", description: "异常必须标注级别" },
+  // Tools
+  { id: "tool-slack", type: "tool", name: "Slack 通知", description: "向频道发送消息" },
+  { id: "tool-crm", type: "tool", name: "CRM 查询", description: "读取客户与工单" },
+  { id: "tool-log-query", type: "tool", name: "日志查询", description: "检索服务日志" },
+  { id: "tool-db-reader", type: "tool", name: "数据库只读查询", description: "对数据源执行只读查询" },
+];
+
+/** 每个 Agent 的装配关系：Definition 可被多个 Agent 复用（enabled 标记装配启用状态） */
+export const seedAgentCapabilities: AgentCapability[] = [
+  // agent-support：3 skill / 2 memory / 4 rule / 2 tool
+  { id: "ac-support-ws", agentId: "agent-support", capabilityId: "skill-web-search", enabled: true, createdAt: new Date(now - 80 * DAY).toISOString() },
+  { id: "ac-support-ds", agentId: "agent-support", capabilityId: "skill-doc-summary", enabled: true, createdAt: new Date(now - 80 * DAY).toISOString() },
+  { id: "ac-support-cw", agentId: "agent-support", capabilityId: "skill-copywriting", enabled: true, createdAt: new Date(now - 60 * DAY).toISOString() },
+  { id: "ac-support-lt", agentId: "agent-support", capabilityId: "memory-long-term", enabled: true, createdAt: new Date(now - 80 * DAY).toISOString() },
+  { id: "ac-support-ep", agentId: "agent-support", capabilityId: "memory-episodic", enabled: true, createdAt: new Date(now - 70 * DAY).toISOString() },
+  { id: "ac-support-tone", agentId: "agent-support", capabilityId: "rule-tone", enabled: true, createdAt: new Date(now - 80 * DAY).toISOString() },
+  { id: "ac-support-esc", agentId: "agent-support", capabilityId: "rule-escalation", enabled: true, createdAt: new Date(now - 80 * DAY).toISOString() },
+  { id: "ac-support-priv", agentId: "agent-support", capabilityId: "rule-privacy", enabled: true, createdAt: new Date(now - 75 * DAY).toISOString() },
+  { id: "ac-support-sev", agentId: "agent-support", capabilityId: "rule-severity", enabled: true, createdAt: new Date(now - 75 * DAY).toISOString() },
+  { id: "ac-support-crm", agentId: "agent-support", capabilityId: "tool-crm", enabled: true, createdAt: new Date(now - 80 * DAY).toISOString() },
+  { id: "ac-support-slack", agentId: "agent-support", capabilityId: "tool-slack", enabled: true, createdAt: new Date(now - 60 * DAY).toISOString() },
+  // agent-research：4 skill / 1 memory / 2 rule / 3 tool
+  { id: "ac-res-ws", agentId: "agent-research", capabilityId: "skill-web-search", enabled: true, createdAt: new Date(now - 58 * DAY).toISOString() },
+  { id: "ac-res-ds", agentId: "agent-research", capabilityId: "skill-doc-summary", enabled: true, createdAt: new Date(now - 58 * DAY).toISOString() },
+  { id: "ac-res-dv", agentId: "agent-research", capabilityId: "skill-data-viz", enabled: true, createdAt: new Date(now - 40 * DAY).toISOString() },
+  { id: "ac-res-cw", agentId: "agent-research", capabilityId: "skill-copywriting", enabled: true, createdAt: new Date(now - 40 * DAY).toISOString() },
+  { id: "ac-res-sem", agentId: "agent-research", capabilityId: "memory-semantic", enabled: true, createdAt: new Date(now - 58 * DAY).toISOString() },
+  { id: "ac-res-cit", agentId: "agent-research", capabilityId: "rule-citation", enabled: true, createdAt: new Date(now - 58 * DAY).toISOString() },
+  { id: "ac-res-tone", agentId: "agent-research", capabilityId: "rule-tone", enabled: true, createdAt: new Date(now - 58 * DAY).toISOString() },
+  { id: "ac-res-dbr", agentId: "agent-research", capabilityId: "tool-db-reader", enabled: true, createdAt: new Date(now - 55 * DAY).toISOString() },
+  { id: "ac-res-slack", agentId: "agent-research", capabilityId: "tool-slack", enabled: true, createdAt: new Date(now - 45 * DAY).toISOString() },
+  { id: "ac-res-crm", agentId: "agent-research", capabilityId: "tool-crm", enabled: true, createdAt: new Date(now - 45 * DAY).toISOString() },
+  // agent-writer：2 skill / 1 memory / 1 rule / 0 tool
+  { id: "ac-writer-cw", agentId: "agent-writer", capabilityId: "skill-copywriting", enabled: true, createdAt: new Date(now - 38 * DAY).toISOString() },
+  { id: "ac-writer-ds", agentId: "agent-writer", capabilityId: "skill-doc-summary", enabled: true, createdAt: new Date(now - 38 * DAY).toISOString() },
+  { id: "ac-writer-lt", agentId: "agent-writer", capabilityId: "memory-long-term", enabled: true, createdAt: new Date(now - 38 * DAY).toISOString() },
+  { id: "ac-writer-tone", agentId: "agent-writer", capabilityId: "rule-tone", enabled: true, createdAt: new Date(now - 38 * DAY).toISOString() },
+  // agent-data：3 skill / 3 memory / 3 rule / 4 tool
+  { id: "ac-data-ws", agentId: "agent-data", capabilityId: "skill-web-search", enabled: true, createdAt: new Date(now - 26 * DAY).toISOString() },
+  { id: "ac-data-ds", agentId: "agent-data", capabilityId: "skill-doc-summary", enabled: true, createdAt: new Date(now - 26 * DAY).toISOString() },
+  { id: "ac-data-dv", agentId: "agent-data", capabilityId: "skill-data-viz", enabled: true, createdAt: new Date(now - 26 * DAY).toISOString() },
+  { id: "ac-data-lt", agentId: "agent-data", capabilityId: "memory-long-term", enabled: true, createdAt: new Date(now - 26 * DAY).toISOString() },
+  { id: "ac-data-sem", agentId: "agent-data", capabilityId: "memory-semantic", enabled: true, createdAt: new Date(now - 26 * DAY).toISOString() },
+  { id: "ac-data-ep", agentId: "agent-data", capabilityId: "memory-episodic", enabled: true, createdAt: new Date(now - 26 * DAY).toISOString() },
+  { id: "ac-data-cit", agentId: "agent-data", capabilityId: "rule-citation", enabled: true, createdAt: new Date(now - 26 * DAY).toISOString() },
+  { id: "ac-data-priv", agentId: "agent-data", capabilityId: "rule-privacy", enabled: true, createdAt: new Date(now - 26 * DAY).toISOString() },
+  { id: "ac-data-sev", agentId: "agent-data", capabilityId: "rule-severity", enabled: true, createdAt: new Date(now - 26 * DAY).toISOString() },
+  { id: "ac-data-dbr", agentId: "agent-data", capabilityId: "tool-db-reader", enabled: true, createdAt: new Date(now - 26 * DAY).toISOString() },
+  { id: "ac-data-lq", agentId: "agent-data", capabilityId: "tool-log-query", enabled: false, createdAt: new Date(now - 20 * DAY).toISOString() },
+  { id: "ac-data-slack", agentId: "agent-data", capabilityId: "tool-slack", enabled: true, createdAt: new Date(now - 20 * DAY).toISOString() },
+  { id: "ac-data-crm", agentId: "agent-data", capabilityId: "tool-crm", enabled: true, createdAt: new Date(now - 20 * DAY).toISOString() },
+  // agent-ops：2 skill / 0 memory / 5 rule / 3 tool
+  { id: "ac-ops-ds", agentId: "agent-ops", capabilityId: "skill-doc-summary", enabled: true, createdAt: new Date(now - 15 * DAY).toISOString() },
+  { id: "ac-ops-dv", agentId: "agent-ops", capabilityId: "skill-data-viz", enabled: false, createdAt: new Date(now - 15 * DAY).toISOString() },
+  { id: "ac-ops-sev", agentId: "agent-ops", capabilityId: "rule-severity", enabled: true, createdAt: new Date(now - 15 * DAY).toISOString() },
+  { id: "ac-ops-esc", agentId: "agent-ops", capabilityId: "rule-escalation", enabled: true, createdAt: new Date(now - 15 * DAY).toISOString() },
+  { id: "ac-ops-tone", agentId: "agent-ops", capabilityId: "rule-tone", enabled: true, createdAt: new Date(now - 15 * DAY).toISOString() },
+  { id: "ac-ops-cit", agentId: "agent-ops", capabilityId: "rule-citation", enabled: true, createdAt: new Date(now - 15 * DAY).toISOString() },
+  { id: "ac-ops-priv", agentId: "agent-ops", capabilityId: "rule-privacy", enabled: true, createdAt: new Date(now - 15 * DAY).toISOString() },
+  { id: "ac-ops-lq", agentId: "agent-ops", capabilityId: "tool-log-query", enabled: true, createdAt: new Date(now - 15 * DAY).toISOString() },
+  { id: "ac-ops-slack", agentId: "agent-ops", capabilityId: "tool-slack", enabled: true, createdAt: new Date(now - 15 * DAY).toISOString() },
+  { id: "ac-ops-dbr", agentId: "agent-ops", capabilityId: "tool-db-reader", enabled: true, createdAt: new Date(now - 15 * DAY).toISOString() },
 ];
 
 /** 确定性伪随机（保证同一批次种子数据稳定可复算） */

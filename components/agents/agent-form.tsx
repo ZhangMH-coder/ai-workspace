@@ -65,7 +65,7 @@ export function AgentForm() {
                   key={option.id}
                   type="button"
                   onClick={() => setModel(option.id)}
-                  className={`flex items-center gap-3 rounded-xl border p-3 text-left transition-all duration-150 ${
+                  className={`flex items-center gap-3 rounded-xl border p-3 text-left transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/50 ${
                     model === option.id
                       ? "border-brand/50 bg-brand-soft"
                       : "border-border bg-white/[0.02] hover:border-white/15"

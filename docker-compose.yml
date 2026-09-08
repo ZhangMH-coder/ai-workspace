@@ -1,0 +1,27 @@
+# AI Workspace — V1 Release Candidate 容器编排
+# 用法：docker compose up -d --build
+# 数据持久化：宿主 ./data 目录绑定挂载至容器 /app/data（SQLite 事实源），
+# 容器重建 / 重启后数据保留；禁止将数据库放入临时容器层。
+services:
+  ai-workspace:
+    build:
+      context: .
+    image: ai-workspace:v1.0.0
+    container_name: ai-workspace
+    ports:
+      - "3000:3000"
+    environment:
+      # SQLite 事实源位置（持久化卷挂载点）
+      - DATABASE_URL=/app/data/ai-workspace.db
+      # 0 = Real 模式（SQLite 权威数据源）；1 = Mock 模式（内存演示，不落库）
+      - NEXT_PUBLIC_USE_MOCK=0
+    volumes:
+      # 数据库文件持久化目录（宿主相对路径，重启保留）
+      - ./data:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/dashboard').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s

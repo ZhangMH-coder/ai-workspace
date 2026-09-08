@@ -1,4 +1,4 @@
-# IMPLEMENTATION_PLAN.md — AI Workspace 实现迭代计划
+﻿# IMPLEMENTATION_PLAN.md — AI Workspace 实现迭代计划
 
 > 项目：AI Workspace — 现代化 AI SaaS 工作台（前端 Demo）
 > 技术栈：Next.js + React + TypeScript + Tailwind CSS + shadcn/ui + Lucide Icons + Framer Motion
@@ -22,15 +22,48 @@
 | 2026-09-08 | v1.0 | V1 Architecture Review + Scope Freeze（纯审查，零代码修改） | 全量架构审查：领域模型 6 实体无复制/无第二数据源/生命周期无冲突/DB 适配良好；数据流 UI→Store→Selector→Service 合规（唯一例外为纯函数 composeCapabilityViews）；技术债务分级 P0=无 / P1=5 项（分页契约/错误模型/DTO 策略/id 策略/seed-migrate 流程）；Mock→Real 演进判定为 Service 契约足以替换；结论「Mock 边际收益已递减，推荐现在转向 Phase 4 真实后端设计」；V1 范围冻结：已具备 6 类闭环、明确延后 9 类功能 | ✅ 已完成并通过「Phase 4」审批 |
 | 2026-09-08 | v1.1 | P4-1 Backend Architecture & API Design（纯设计，零代码修改） | 分层架构（UI→Store→API Client→Route Handler→Service→Repository→SQLite）、DTO 与 Domain 分离、统一 ApiError（7 码 + 字段级）、Page 分页契约、过滤/排序/搜索契约、时间窗口契约化（客户端声明 from/to，含今天 N 自然日规则保留）、6 组资源全量 REST Contract、SQLite Schema（7 表 + PK/FK/UNIQUE/Index/CASCADE-RESTRICT 语义）、ORM 选型对比（Prisma/Drizzle/原生 → **推荐 Drizzle + better-sqlite3**）、Repository/Service 分层、Seed/Migration/Reset 三职责分离 + 防漂移规则、Mock→Real 替换路径（P4-2a~e）、风险与回滚（双模式开关）；P1 五项在契约层一次解决，P2 periodStats 顺带 P4-2 收敛 | ✅ 已完成并通过 P4-2 审批 |
 | 2026-09-08 | v1.2 | P4-2 Real Backend 实施（SQLite 成为事实数据源，双模式可运行） | 时间窗口契约收敛（stats 只收显式 from/to）、DB Adapter 边界（better-sqlite3 唯一实现）；`db/schema.ts` 6 表 + `db/db.ts`（WAL+foreign_keys）+ 幂等 seed + migrate + reset + db:check（schema/migration 一致）；Repository 查询层 + `runsStats` 聚合（successRate 1 位小数）；Service 业务规则层（ServiceError 三码 + archived 装配 CONFLICT + 幂等 upsert）；17 个 Route Handler（六域 REST + stats + demo/reset）；前端 API 层（ApiError 7 码 + DTO + client + mappers + server 校验/错误映射/SQLITE_CONSTRAINT→409）；Mock/Real 双模式 services 入口（同名函数契约，组件零改动）；**persist v4→v5**（partialize 仅 timeRange，旧领域数据 migrate 明确丢弃不合并）；`resetDemoData` 改为演示数据库 reset 语义；`selectPeriodStats` 收敛 Dashboard 内联统计（P2 债务）；lint/tsc/build 全绿；Real 生产回归（创建/运行/装配/启停/解绑/项目关联真实落库 + 刷新 SQLite 恢复 + localStorage 仅 timeRange + API 错误契约按 code + stats from/to 与 P3 口径一致 91/91.2%/1.7M）；Mock 模式独立构建可运行（回滚验证） | ✅ 已完成并通过 P4-3 审批 |
-| 2026-09-08 | v1.3 | **P4-3 统计端点化收尾（当前阶段）** | Dashboard/Project/Agent 运行统计正式改由 `GET /api/v1/runs/stats?from&to` 服务端 SQL 聚合获取，**彻底结束前端 pageSize=1000 全量拉取 + 内存聚合**；Repository `runsStats` totals 扩展 avgDurationMs/lastRunAt、stats 端点新增 `?agent=` 单 Agent 过滤；前端服务层重构（`lib/services/runs.ts` 双模式入口 + `http/runs.ts` + `mock/runs.ts` SQLite 同构内存聚合 + `mock/state.ts` Mock 内存数据层）；Store 重构（recentRuns/agentRunsById/projectRunsById + StatsCache{global/previous/byProject/byAgent}，删全部统计 selectors，保留唯一窗口实现 windowBoundsForRange）；四个页面组件改用 stats 缓存（对外 UI 行为不变）；明细分页走 `/runs?pageSize&sort` 与 `/agents/:id/runs`（200/10/8），**无任何 pageSize=1000**；**seed 天级锚修复**（Date.now()→今天 0 点，db:reset 统计稳定可复现，Mock/Real 数字完全对齐）；lint/tsc/build 全绿；Real 生产回归（指标 88/90.9%/1.7M、项目 36/47/17、Agent 26/18/30/12/6 全部同源；attach/detach 实时刷新且硬刷新 SQLite 落库恢复；7d 切换 + 硬刷新持久化；localStorage 仅 timeRange；API 冒烟 from/to 边界/空数据/单日/跨月/错误契约全过；控制台 0 错误）；Mock 独立构建验证与 Real 完全一致 | ✅ 已完成，待审批进入下一阶段 |
+| 2026-09-08 | v1.3 | **P4-3 统计端点化收尾** | Dashboard/Project/Agent 运行统计正式改由 `GET /api/v1/runs/stats?from&to` 服务端 SQL 聚合获取，**彻底结束前端 pageSize=1000 全量拉取 + 内存聚合**；Repository `runsStats` totals 扩展 avgDurationMs/lastRunAt、stats 端点新增 `?agent=` 单 Agent 过滤；前端服务层重构（`lib/services/runs.ts` 双模式入口 + `http/runs.ts` + `mock/runs.ts` SQLite 同构内存聚合 + `mock/state.ts` Mock 内存数据层）；Store 重构（recentRuns/agentRunsById/projectRunsById + StatsCache{global/previous/byProject/byAgent}，删全部统计 selectors，保留唯一窗口实现 windowBoundsForRange）；四个页面组件改用 stats 缓存（对外 UI 行为不变）；明细分页走 `/runs?pageSize&sort` 与 `/agents/:id/runs`（200/10/8），**无任何 pageSize=1000**；**seed 天级锚修复**（Date.now()→今天 0 点，db:reset 统计稳定可复现，Mock/Real 数字完全对齐）；lint/tsc/build 全绿；Real 生产回归（指标 88/90.9%/1.7M、项目 36/47/17、Agent 26/18/30/12/6 全部同源；attach/detach 实时刷新且硬刷新 SQLite 落库恢复；7d 切换 + 硬刷新持久化；localStorage 仅 timeRange；API 冒烟 from/to 边界/空数据/单日/跨月/错误契约全过；控制台 0 错误）；Mock 独立构建验证与 Real 完全一致 | ✅ 已完成并通过 P4-4 审批 |
+| 2026-09-08 | v1.4 | **P4-4 交付增强 & V1 Release Candidate（当前阶段）** | Docker 化（多阶段 Dockerfile + docker-compose + .dockerignore；SQLite 持久化卷 `./data:/app/data`；容器入口 `db:init && start`，重启数据保留）；README 完整化（环境/安装/开发/Real-Mock/初始化/构建/生产/Docker/数据位置/功能边界）；CI 最小质量门禁（GitHub Actions：npm ci → lint → tsc → db:init+db:check（DATABASE_URL=./data/ci.db 隔离）→ build；本地 `npm run ci` 等价）；新增 `db/init.ts` 从零初始化脚本（migrate + 空库 seed，幂等）；tsx 移至 dependencies（容器运行时 db 脚本）；从零初始化验证（删库 → init 5/18/49/3/6/92 → check → 二次 init seed 跳过 → build → 启动 → 访问）；稳定性回归（Real 生产全页面 + 写操作 attach/detach 落库 + Mock 独立构建与 Real 数字一致 88/90.9%/1.7M）；lint/tsc/build 全绿；seed 天级时间锚保持；P4-3 基线数字不变 | ✅ 已完成，待审批进入下一阶段 |
 
 ## 当前阶段
 
-**P4-3 统计端点化收尾**（已完成；**不自动进入下一阶段**，待审批）
+**P4-4 交付增强 & V1 Release Candidate**（已完成；**不自动进入下一阶段**，待审批）
 
 ---
 
-## 二、已完成内容（P4-3 实施）
+## 二、已完成内容（P4-4 交付增强实施）
+
+### 1. Docker 化（P4-4 核心）
+- [x] `Dockerfile` 多阶段构建（deps 全量 → build → runner）：better-sqlite3 prebuilt 优先、g++/python3 编译兜底；构建期 `mkdir data` 保证不依赖本地已有数据库；runner 仅 `npm ci --omit=dev`（tsx 已在 dependencies，容器内 db:init/db:migrate/db:check 可用）
+- [x] `docker-compose.yml`：`./data:/app/data` 绑定挂载（**SQLite 持久化目录，禁止写入临时容器层**）、`DATABASE_URL=/app/data/ai-workspace.db`、`NEXT_PUBLIC_USE_MOCK=0`、restart=unless-stopped + healthcheck
+- [x] `.dockerignore`：node_modules/.next/data/logs/docs/scripts/.git 等排除，镜像构建不依赖本地开发状态
+- [x] **容器启动语义**：`CMD = db:init && start`——首次启动自动 migration + 空库 seed；后续启动 migration 幂等、数据存在时跳过 seed（重启后数据正常保留）
+- [x] ⚠️ **验证边界**：本机未安装 Docker（环境事实），Dockerfile/compose 已按契约编写但**未在真实 Docker 引擎实测**；已在 README 给出可执行验证步骤，待有 Docker 环境机器上验证
+
+### 2. README 完整化
+- [x] 重写 `README.md`：项目简介、功能边界（已实现能力矩阵 / 明确未实现能力清单）、环境要求、安装、开发启动、Real/Mock 双模式（编译期开关 + 重构建说明）、SQLite 初始化（migration/seed/reset/db:init 职责表 + 防漂移规则）、构建、生产启动、Docker 启动（持久化契约）、数据文件位置汇总、架构简述（分层 + 领域模型 + 时间窗口口径）、CI 门禁、已知边界
+
+### 3. CI 最小质量门禁
+- [x] `.github/workflows/ci.yml`（push/PR）：checkout → setup-node 22（cache npm）→ `npm ci` → `npm run lint` → `npx tsc --noEmit` → `npm run db:init` + `npm run db:check`（**DATABASE_URL=./data/ci.db 独立路径，不依赖本地已有数据库状态**）→ `npm run build`
+- [x] 本地等价命令：`npm run ci`（lint + tsc + build）
+- [x] ⚠️ 验证边界：项目无 Git 远程（git remote 为空），workflow 无法在真实 GitHub Actions runner 执行；本地已按相同顺序完整跑通（lint/tsc/db:init/db:check/build 全绿）
+
+### 4. 从零初始化脚本
+- [x] 新增 `db/init.ts`（`npm run db:init`）：migrate（幂等）→ 若 `agent` 表为空则 runSeed（幂等 upsert），数据存在则跳过——本地开发与 Docker 容器共用的干净环境初始化入口
+- [x] `package.json`：tsx 由 devDependencies 移至 dependencies（容器运行时 db 运维脚本依赖）；新增 `db:init`、`ci` script
+- [x] **从零初始化实测**：备份移除 data/ → `db:init`（migrate+seed: 5/18/49/3/6/92）→ `db:check` 通过 → 二次 `db:init`（seed 跳过，重启保留语义）→ `build` 通过 → 生产启动 200 → 页面访问正常；备份已清理
+
+### 5. 稳定性回归（P4-4）
+- [x] **Real 生产回归**：Dashboard 88/+2100.0%/90.9%/1.7M（与 P4-3 基线一致）；Projects 36/47/17 次；Project Detail 2/38/87%/733.6K；Agents 5 卡片 26/18/30/12/6；Capabilities 18 资产/49 装配；Agent Detail 运行历史 26 次/80.8%——全部同源
+- [x] **写操作落库**：API attach tool-db-reader → agent-support 装配 11→12（服务端 UUID 201）→ 浏览器硬刷新持久化保持 → detach 还原 11（数字不污染基线）
+- [x] **persist**：localStorage 仅 `{timeRange:"30d"}` version 5（UI 偏好）
+- [x] **Mock/Real 双模式**：Mock 独立构建 + 启动，Dashboard 数字与 Real 完全一致（88/90.9%/1.7M）——双模式回滚通道可用
+- [x] **seed 天级时间锚保持**：未重新引入相对时间漂移（db/seed.ts 与 lib/mock-data/seed.ts 未再改动）
+- [x] lint 0 error 0 warning / tsc 0 error / build（Real + Mock 双模式）通过 / 控制台 0 error
+
+---
+
+## 三、已完成内容（P4-3 实施 · 历史）
 
 ### 1. 服务端统计端点化（P4-3 核心）
 - [x] `db/repository.ts` `runsStats` totals 扩展 **avgDurationMs**（COALESCE AVG(duration_ms)）+ **lastRunAt**（MAX(started_at)），daily 保持按日聚合（successRate 1 位小数）
@@ -110,7 +143,7 @@
 - [x] db:check 通过（migration 已应用且 schema 一致）；db:reset 幂等
 
 
-## 三、环境检查记录（2026-09-08，Phase 2 实测更新）
+## 四、环境检查记录（2026-09-08，Phase 2 实测更新）
 
 | 检查项 | 结果 | 说明 / 影响 |
 | --- | --- | --- |
@@ -123,7 +156,7 @@
 | Shell | PowerShell 5.1 | 不支持 `&&`，命令以分号或独立调用执行 |
 | 实际版本组合 | next 16.3.4 / react 19.2.8 / tailwindcss ^4 / zustand 5.x（Phase 2 新增）/ framer-motion ^13.2.0 / geist ^1.7.2 / radix-ui ^1.6.7 / lucide-react ^1.42.0 / cmdk ^1.1.1 | 构建通过（见验证结果） |
 
-## 四、已完成内容（P4-1 纯设计 / 零代码修改 · 历史记录）
+## 五、已完成内容（P4-1 纯设计 / 零代码修改 · 历史记录）
 
 ### 1. 分层架构与不变式
 - [x] UI → Zustand Store → API Client → Route Handler → Service → Repository → SQLite；UI 不知 DB、Store 不知 API 细节；**DTO ≠ Domain**（mappers 隔离）
@@ -159,7 +192,7 @@
 ### 8. 风险与回滚
 - [x] better-sqlite3 native 构建失败（→node:sqlite/libsql）；时区窗口漂移（→from/to 显式边界 + 跨日测试）；前端改动面（→Mock/Real 双开关灰度）；SQLite 生产部署限制（→文档标注）；旧 localStorage 脏数据（→persist 版本+1）
 
-## 五、验证结果（P4-1 纯设计）
+## 六、验证结果（P4-1 纯设计）
 
 | 检查项 | 结果 |
 | --- | --- |
@@ -168,7 +201,7 @@
 | 契约一致性 | ✅ 18 个现有 Service 签名逐项对照 API Contract，替换路径签名零改动 |
 | 范围合规 | ✅ 未创建数据库 / 未改业务代码 / 未建 Route Handler / 未引入 ORM / 未接 AI API |
 
-## 六、技术决策记录（ADR 简表）
+## 七、技术决策记录（ADR 简表）
 
 | 编号 | 决策 | 理由 / 状态 |
 | --- | --- | --- |
@@ -211,8 +244,12 @@
 | D49 | **Mock 内存数据层**（mock/state.ts mockState + pushRun + resetMockState）：Mock 写操作与统计聚合同源，语义与 Real 的 SQLite 权威源对齐 | ✅ 落地：Mock 与 Real 数字完全一致（P4-2 差异消除） |
 | D50 | **seed 天级时间锚**（Date.now() → 今天 0 点）：db:reset 同日内完全可复现、跨日整体平移不改变 30 天窗口 run 集合 | ✅ 落地：两次 reset 统计逐字节一致；消除 P4-2「seed 毫秒锚跨窗口边界漂移」 |
 | D51 | **StatsCache 缓存分层**：global/previous（随 range）、byProject/byAgent（实体维度，不随 range）；写操作只刷新受影响缓存（runAgent→窗口、attach/detach→项目） | ✅ 落地：统计 UI 实时联动且无冗余请求 |
+| D52 | **db:init 从零初始化入口**：migrate（幂等）→ 空库 seed / 有数据跳过；本地与 Docker 容器共用，语义 = 「安装 → 初始化 → 启动」 | ✅ 落地：删库实测 migrate+seed 5/18/49/3/6/92，二次 init seed 跳过 |
+| D53 | **Docker 多阶段构建 + 数据卷**：runner 仅生产依赖（--omit=dev）；SQLite 持久化目录为卷挂载点 `./data:/app/data`，数据库禁止写入临时容器层；容器入口 `db:init && start` | ✅ 落地（文件级；本机无 Docker 未引擎实测，README 附验证步骤） |
+| D54 | **CI 门禁不依赖本地数据库**：DATABASE_URL 指向 CI 独立路径 `./data/ci.db`，db:init + db:check 在干净环境执行；workflow 顺序 = ci → lint → tsc → db:init/check → build | ✅ 落地（本地等价命令全绿；无 Git 远程，workflow 未在真实 runner 执行） |
+| D55 | **tsx 移至 dependencies**：容器运行时 db 运维脚本（init/migrate/check）依赖 tsx，生产镜像 `npm ci --omit=dev` 后仍可用 | ✅ 落地：Dockerfile runner 阶段依赖此决策 |
 
-## 七、发现的问题
+## 八、发现的问题
 
 1. **时区是窗口一致性的最大隐藏风险**（设计前置解决）：前端本地时区 vs 服务端 UTC 会导致「含今天 N 自然日」漂移 → 契约强制客户端传 `from/to` 显式边界（或 window+tzOffset），服务端纯执行；测试覆盖跨日。
 2. **Store persist 与后端权威的职责冲突**（P4-2 必改点）：领域数据改为后端权威后，`partialize` 必须收窄（仅 timeRange 等 UI 状态），否则「前端持久化 vs 后端」双源竞争——已在 P4-2c 计划并注明最小改动清单。
@@ -233,7 +270,7 @@
 5. **30 天窗口统计 91 → 88 的口径修正（关键结论）**：P4-2 的 91 是「seed 毫秒锚 + now 日内时分」导致 daysAgo=29 的 run（属窗口外第 30 天）漏入窗口的边界误差；天级锚修复后回到正确口径 **88**（含今天 30 自然日 = daysAgo 0..28；previous 窗口固定 4 个 run → 环比 +2100.0%）。**这是 seed 稳定性修复的预期结果，非回归**；Mock/Real 同构后数字完全一致。
 
 
-## 八、遗留问题 / 风险
+## 九、遗留问题 / 风险
 
 | 风险 | 等级 | 应对 |
 | --- | --- | --- |
@@ -243,16 +280,20 @@
 | 旧 localStorage 脏数据 | 低 | persist v5 migrate 明确丢弃领域字段；db:reset 一键重建 |
 | better-sqlite3 原生模块在部分平台构建失败 | 低 | 已构建通过（Windows/Node 22）；node:sqlite/libsql 兜底 |
 
-## 九、下一步计划
+## 十、下一步计划
 
-1. **等待审批**：验收《P4-3 交付汇报》（统计端点化 / 去全量拉取 / seed 稳定 / Mock-Real 对齐 / lint-tsc-build 全绿）。
+1. **等待审批**：验收《P4-4 Delivery & V1 Release Candidate Report》（Docker 化 / README / CI / 从零初始化 / 稳定性回归 / lint-tsc-build 全绿）。
 2. 执行任何内容前：先出方案 → 审批 → 实现 → 验证 → 更新本文件 → 汇报。
-3. **P4-3 收尾**：Git 提交（本次执行）已完成。
+3. **P4-4 收尾**：Git 提交（本次执行）已完成。
+4. **候选方向（待审批后选定）**：P5 候选——真实 AI Runtime 接入前置设计（Service 内 runAgent 桩替换为真实 AI 服务契约）/ 认证与多用户隔离（接续 P4-1 预留 UNAUTHORIZED/FORBIDDEN）/ Capability Versioning / 交付后续（Docker 实测、CI 上真实 runner、部署文档）。
 
-## 十、待审批事项
+## 十一、待审批事项
 
 - [x] **A21**：批准《P4-1 Backend Architecture & API Design》（ORM=Drizzle+better-sqlite3 / 统计端点化 / 时区契约 / 三职责 seed-migration 等结论）✅ 已批准
 - [x] **A22**：批准进入 **P4-2 实施**（DB+Repository → Route Handlers+Service → 前端同名替换 + persist 收窄 → 全量回归 → Mock/Real 双开关）✅ 已批准并完成
 - [x] **A23**：验收《P4-2 交付汇报》✅ 已验收（批准进入 P4-3）
 - [x] **A24**：审批下一阶段方向 ✅ 已选定 P4-3 统计端点化收尾
-- [ ] **A25**：验收《P4-3 交付汇报》（统计端点化 / 去全量拉取 / seed 稳定 / Mock-Real 对齐 / lint-tsc-build 全绿）
+- [x] **A25**：验收《P4-3 交付汇报》✅ 已验收（批准进入 P4-4 交付增强）
+- [ ] **A26**：验收《P4-4 Delivery & V1 Release Candidate Report》并审批下一阶段方向（候选：AI Runtime 接入前置设计 / 认证与多用户 / Capability Versioning / Docker+CI 实测落地）
+
+

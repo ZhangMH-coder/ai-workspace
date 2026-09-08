@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  quality:
+    name: lint · tsc · db · build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # 干净依赖：不依赖任何本地 node_modules / 数据库状态
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: TypeScript check
+        run: npx tsc --noEmit
+
+      # 从零初始化：migration + 空库 seed（DATABASE_URL 指向 CI 独立路径，
+      # 与本地 data/ 完全隔离；drizzle.config.ts 读取同一环境变量）
+      - name: Initialize database (migrate + seed-if-empty)
+        run: npm run db:init
+        env:
+          DATABASE_URL: ./data/ci.db
+
+      # 校验 migration 已应用且 schema 与迁移一致
+      - name: db:check (schema / migration consistency)
+        run: npm run db:check
+        env:
+          DATABASE_URL: ./data/ci.db
+
+      # 生产构建（此时 data/ 已由 db:init 创建，构建期 SQLite 连接可用）
+      - name: Build
+        run: npm run build

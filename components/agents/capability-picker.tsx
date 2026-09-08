@@ -9,7 +9,7 @@
  * - 操作经 Store actions（内部走 Service 写契约），成功/失败均有 toast 反馈
  */
 import { useMemo, useState } from "react";
-import { BookOpenText, BrainCircuit, Loader2, Puzzle, ScrollText, Search, type LucideIcon } from "lucide-react";
+import { Loader2, Search } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -23,15 +23,9 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { CAPABILITY_TYPE_OPTIONS, type CapabilityType } from "@/lib/types";
+import { CAPABILITY_TYPE_ICONS } from "@/lib/capability-meta";
+import { CAPABILITY_TYPE_OPTIONS } from "@/lib/types";
 import { useWorkspaceStore } from "@/stores/workspace";
-
-const TYPE_ICONS: Record<CapabilityType, LucideIcon> = {
-  skill: Puzzle,
-  memory: BrainCircuit,
-  rule: ScrollText,
-  tool: BookOpenText,
-};
 
 export function CapabilityPicker({
   agentId,
@@ -128,7 +122,7 @@ export function CapabilityPicker({
               {CAPABILITY_TYPE_OPTIONS.map((type) => {
                 const items = filtered.filter((d) => d.type === type.id);
                 if (items.length === 0) return null;
-                const Icon = TYPE_ICONS[type.id];
+                const Icon = CAPABILITY_TYPE_ICONS[type.id];
                 return (
                   <div key={type.id}>
                     <div className="flex items-center gap-2 px-1">

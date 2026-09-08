@@ -10,15 +10,7 @@
  * - 三态：已装配启用（品牌色状态点）/ 已装配停用（中性点 + Badge）；未装配在装配面板中呈现
  */
 import { useState } from "react";
-import {
-  BookOpenText,
-  BrainCircuit,
-  Loader2,
-  Puzzle,
-  ScrollText,
-  Trash2,
-  type LucideIcon,
-} from "lucide-react";
+import { Loader2, Puzzle, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -31,19 +23,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { CAPABILITY_TYPE_ICONS } from "@/lib/capability-meta";
 import {
   composeCapabilityViews,
   type AgentCapabilityView,
 } from "@/lib/services/capabilities";
-import { CAPABILITY_TYPE_OPTIONS, type CapabilityType } from "@/lib/types";
+import { CAPABILITY_TYPE_OPTIONS } from "@/lib/types";
 import { useWorkspaceStore } from "@/stores/workspace";
-
-const TYPE_ICONS: Record<CapabilityType, LucideIcon> = {
-  skill: Puzzle,
-  memory: BrainCircuit,
-  rule: ScrollText,
-  tool: BookOpenText,
-};
 
 export function CapabilityList({
   agentId,
@@ -127,7 +113,7 @@ export function CapabilityList({
         {CAPABILITY_TYPE_OPTIONS.map((type) => {
           const items = groups[type.id];
           if (!items || items.length === 0) return null;
-          const Icon = TYPE_ICONS[type.id];
+          const Icon = CAPABILITY_TYPE_ICONS[type.id];
           const enabledCount = items.filter((v) => v.assembly.enabled).length;
           return (
             <div key={type.id}>

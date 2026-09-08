@@ -180,3 +180,47 @@ detachCapability(id: string): Promise<void>                                     
 3. 硬刷新后装配状态保留（持久化 v2）
 4. 重置演示数据恢复 seed 装配（34 条）
 5. 详情页列表与面板实时一致；控制台 0 error
+
+
+---
+
+## 九、Phase 3 第三阶段：Capability Asset Hub（方案 A 重定义）
+
+### 9.1 目标
+
+把 `CapabilityDefinition` 资产层真正呈现，让用户理解「系统有哪些能力资产、类型、状态、被哪些 Agent 使用」，并进一步验证 Definition 作为独立资产的复用价值。
+
+### 9.2 统一信息架构（四类共用，不复制页面）
+
+```
+Capabilities
+├─ All            /capabilities
+├─ Skills         /capabilities?type=skill
+├─ Memory         /capabilities?type=memory
+├─ Rules          /capabilities?type=rule
+└─ Tools          /capabilities?type=tool
+```
+
+- 单一路由 `/capabilities`（列表）+ `/capabilities/[id]`（详情）；筛选由 URL query 驱动（可分享、可刷新）
+- 旧占位路由 `/skills|/memory|/rules|/tools` 301 重定向到对应筛选 URL
+- 侧栏四项合并为一项 **Capabilities**（`lib/navigation.ts` 唯一来源，命令面板/顶栏自动同步）
+
+### 9.3 资产列表与详情
+
+| 字段 | 来源 | 说明 |
+| --- | --- | --- |
+| 名称 / 描述 | `CapabilityDefinition` | 直接展示 |
+| 类型 | `CapabilityDefinition.type` | 共享徽章组件（图标 + 标签） |
+| 状态 | **派生**（装配数 > 0 = 使用中，否则未使用） | 不加冗余模型字段，实时计算 |
+| 被装配数 | `AgentCapability` 计数 | N 个 Agent |
+
+详情页 = 基本信息（类型/状态/描述/标识/装配数）+ **Used by**（装配该资产的 Agent 列表：装配时间、Agent 状态、装配「已启用/已停用」，点击跳 Agent 详情）+ 装配概览（总使用/已启用/已停用）。
+
+### 9.4 共享收敛
+
+- `lib/capability-meta.ts`：`CAPABILITY_TYPE_ICONS` 唯一来源（Agent 装配列表 / 装配面板 / Hub 共用）
+- `components/capabilities/capability-type-badge.tsx`：类型徽章共享组件
+
+### 9.5 一致性
+
+Hub / 资产详情 / Agent 详情装配管理读同一 Store（definitions + agentCapabilities + agents）。实测：Agent 详情停用能力后，Hub 详情页装配概览立即从 2/1 变为「已停用」项（零额外同步）。

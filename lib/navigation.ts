@@ -1,12 +1,9 @@
 import {
+  Blocks,
   Bot,
-  BrainCircuit,
   FolderKanban,
   LayoutDashboard,
   Settings,
-  ShieldCheck,
-  Sparkles,
-  Wrench,
   type LucideIcon,
 } from "lucide-react";
 
@@ -51,28 +48,10 @@ export const navGroups: NavGroup[] = [
         description: "创建与配置智能体",
       },
       {
-        title: "Skills",
-        href: "/skills",
-        icon: Sparkles,
-        description: "技能市场与能力装配",
-      },
-      {
-        title: "Memory",
-        href: "/memory",
-        icon: BrainCircuit,
-        description: "语义记忆与知识沉淀",
-      },
-      {
-        title: "Rules",
-        href: "/rules",
-        icon: ShieldCheck,
-        description: "行为约束与治理规则",
-      },
-      {
-        title: "Tools",
-        href: "/tools",
-        icon: Wrench,
-        description: "外部工具与连接器",
+        title: "Capabilities",
+        href: "/capabilities",
+        icon: Blocks,
+        description: "能力资产库：Skills / Memory / Rules / Tools",
       },
     ],
   },

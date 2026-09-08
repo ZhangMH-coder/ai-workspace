@@ -23,11 +23,12 @@
 | 2026-09-08 | v1.1 | P4-1 Backend Architecture & API Design（纯设计，零代码修改） | 分层架构（UI→Store→API Client→Route Handler→Service→Repository→SQLite）、DTO 与 Domain 分离、统一 ApiError（7 码 + 字段级）、Page 分页契约、过滤/排序/搜索契约、时间窗口契约化（客户端声明 from/to，含今天 N 自然日规则保留）、6 组资源全量 REST Contract、SQLite Schema（7 表 + PK/FK/UNIQUE/Index/CASCADE-RESTRICT 语义）、ORM 选型对比（Prisma/Drizzle/原生 → **推荐 Drizzle + better-sqlite3**）、Repository/Service 分层、Seed/Migration/Reset 三职责分离 + 防漂移规则、Mock→Real 替换路径（P4-2a~e）、风险与回滚（双模式开关）；P1 五项在契约层一次解决，P2 periodStats 顺带 P4-2 收敛 | ✅ 已完成并通过 P4-2 审批 |
 | 2026-09-08 | v1.2 | P4-2 Real Backend 实施（SQLite 成为事实数据源，双模式可运行） | 时间窗口契约收敛（stats 只收显式 from/to）、DB Adapter 边界（better-sqlite3 唯一实现）；`db/schema.ts` 6 表 + `db/db.ts`（WAL+foreign_keys）+ 幂等 seed + migrate + reset + db:check（schema/migration 一致）；Repository 查询层 + `runsStats` 聚合（successRate 1 位小数）；Service 业务规则层（ServiceError 三码 + archived 装配 CONFLICT + 幂等 upsert）；17 个 Route Handler（六域 REST + stats + demo/reset）；前端 API 层（ApiError 7 码 + DTO + client + mappers + server 校验/错误映射/SQLITE_CONSTRAINT→409）；Mock/Real 双模式 services 入口（同名函数契约，组件零改动）；**persist v4→v5**（partialize 仅 timeRange，旧领域数据 migrate 明确丢弃不合并）；`resetDemoData` 改为演示数据库 reset 语义；`selectPeriodStats` 收敛 Dashboard 内联统计（P2 债务）；lint/tsc/build 全绿；Real 生产回归（创建/运行/装配/启停/解绑/项目关联真实落库 + 刷新 SQLite 恢复 + localStorage 仅 timeRange + API 错误契约按 code + stats from/to 与 P3 口径一致 91/91.2%/1.7M）；Mock 模式独立构建可运行（回滚验证） | ✅ 已完成并通过 P4-3 审批 |
 | 2026-09-08 | v1.3 | **P4-3 统计端点化收尾** | Dashboard/Project/Agent 运行统计正式改由 `GET /api/v1/runs/stats?from&to` 服务端 SQL 聚合获取，**彻底结束前端 pageSize=1000 全量拉取 + 内存聚合**；Repository `runsStats` totals 扩展 avgDurationMs/lastRunAt、stats 端点新增 `?agent=` 单 Agent 过滤；前端服务层重构（`lib/services/runs.ts` 双模式入口 + `http/runs.ts` + `mock/runs.ts` SQLite 同构内存聚合 + `mock/state.ts` Mock 内存数据层）；Store 重构（recentRuns/agentRunsById/projectRunsById + StatsCache{global/previous/byProject/byAgent}，删全部统计 selectors，保留唯一窗口实现 windowBoundsForRange）；四个页面组件改用 stats 缓存（对外 UI 行为不变）；明细分页走 `/runs?pageSize&sort` 与 `/agents/:id/runs`（200/10/8），**无任何 pageSize=1000**；**seed 天级锚修复**（Date.now()→今天 0 点，db:reset 统计稳定可复现，Mock/Real 数字完全对齐）；lint/tsc/build 全绿；Real 生产回归（指标 88/90.9%/1.7M、项目 36/47/17、Agent 26/18/30/12/6 全部同源；attach/detach 实时刷新且硬刷新 SQLite 落库恢复；7d 切换 + 硬刷新持久化；localStorage 仅 timeRange；API 冒烟 from/to 边界/空数据/单日/跨月/错误契约全过；控制台 0 错误）；Mock 独立构建验证与 Real 完全一致 | ✅ 已完成并通过 P4-4 审批 |
-| 2026-09-08 | v1.4 | **P4-4 交付增强 & V1 Release Candidate（当前阶段）** | Docker 化（多阶段 Dockerfile + docker-compose + .dockerignore；SQLite 持久化卷 `./data:/app/data`；容器入口 `db:init && start`，重启数据保留）；README 完整化（环境/安装/开发/Real-Mock/初始化/构建/生产/Docker/数据位置/功能边界）；CI 最小质量门禁（GitHub Actions：npm ci → lint → tsc → db:init+db:check（DATABASE_URL=./data/ci.db 隔离）→ build；本地 `npm run ci` 等价）；新增 `db/init.ts` 从零初始化脚本（migrate + 空库 seed，幂等）；tsx 移至 dependencies（容器运行时 db 脚本）；从零初始化验证（删库 → init 5/18/49/3/6/92 → check → 二次 init seed 跳过 → build → 启动 → 访问）；稳定性回归（Real 生产全页面 + 写操作 attach/detach 落库 + Mock 独立构建与 Real 数字一致 88/90.9%/1.7M）；lint/tsc/build 全绿；seed 天级时间锚保持；P4-3 基线数字不变 | ✅ 已完成，待审批进入下一阶段 |
+| 2026-09-08 | v1.4 | **P4-4 交付增强 & V1 Release Candidate** | Docker 化（多阶段 Dockerfile + docker-compose + .dockerignore；SQLite 持久化卷 `./data:/app/data`；容器入口 `db:init && start`，重启数据保留）；README 完整化（环境/安装/开发/Real-Mock/初始化/构建/生产/Docker/数据位置/功能边界）；CI 最小质量门禁（GitHub Actions：npm ci → lint → tsc → db:init+db:check（DATABASE_URL=./data/ci.db 隔离）→ build；本地 `npm run ci` 等价）；新增 `db/init.ts` 从零初始化脚本（migrate + 空库 seed，幂等）；tsx 移至 dependencies（容器运行时 db 脚本）；从零初始化验证（删库 → init 5/18/49/3/6/92 → check → 二次 init seed 跳过 → build → 启动 → 访问）；稳定性回归（Real 生产全页面 + 写操作 attach/detach 落库 + Mock 独立构建与 Real 数字一致 88/90.9%/1.7M）；lint/tsc/build 全绿；seed 天级时间锚保持；P4-3 基线数字不变 | ✅ 已完成并通过 P5-1 审批 |
+| 2026-09-08 | v1.5 | **P5-1 AI Runtime 架构与契约设计（纯设计，当前阶段）** | 交付 `docs/P5-1-AI-Runtime-Architecture-Contract.md`：目标架构 Agent→Runtime→Model/Prompt/Context/Capability/Execution→Run；Runtime 编排层（lib/runtime/*）位于 Service 与 Provider 之间；RuntimeRequest/ModelConfig/ExecutionContext/RuntimeResult/RuntimeEvent/RuntimeError/TokenUsage 域模型；Run 状态机五态（queued/running/succeeded/failed/cancelled）+ 合法转换 + 存量 success→succeeded 迁移策略 + 统计分母显式定义；Capability 两层只读消费（Definition 资产 + AgentCapability 装配 → ExecutionContext，四类职责与注入顺序）；统一 RuntimeProvider 接口（Adapter 注册表，禁止 Service 硬编码）；Streaming Event 契约（delta/tool_call/tool_result/finish/error + SSE 细则，P5-2 不实现）；错误分层（API/Runtime/Provider/Tool/Timeout-Cancel → Run 落库 error_code）；Token/Cost 模型（input/output/total 落库、cost 扩展位不落库）；持久化边界（Run 落库、事件流仅内存、完整 output 不持久化）；Mock→Real 双模式替换路径（P5-2 仅 MockProvider + 编排层）；P5-2 最小实施计划（10 项，明确不做清单）；风险与边界 | ✅ 已完成，待审批进入 P5-2 |
 
 ## 当前阶段
 
-**P4-4 交付增强 & V1 Release Candidate**（已完成；**不自动进入下一阶段**，待审批）
+**P5-1 AI Runtime 架构与契约设计（纯设计）**（已完成；**不自动进入下一阶段**，待审批）
 
 ---
 
@@ -248,6 +249,9 @@
 | D53 | **Docker 多阶段构建 + 数据卷**：runner 仅生产依赖（--omit=dev）；SQLite 持久化目录为卷挂载点 `./data:/app/data`，数据库禁止写入临时容器层；容器入口 `db:init && start` | ✅ 落地（文件级；本机无 Docker 未引擎实测，README 附验证步骤） |
 | D54 | **CI 门禁不依赖本地数据库**：DATABASE_URL 指向 CI 独立路径 `./data/ci.db`，db:init + db:check 在干净环境执行；workflow 顺序 = ci → lint → tsc → db:init/check → build | ✅ 落地（本地等价命令全绿；无 Git 远程，workflow 未在真实 runner 执行） |
 | D55 | **tsx 移至 dependencies**：容器运行时 db 运维脚本（init/migrate/check）依赖 tsx，生产镜像 `npm ci --omit=dev` 后仍可用 | ✅ 落地：Dockerfile runner 阶段依赖此决策 |
+| D56 | **Runtime 编排层**（P5-1）：Service.runAgent 与 Provider 之间新增 Runtime（lib/runtime/*）；Service 不依赖 Provider、Provider 选择由 Runtime 内部基于 Agent.model 决定 | ✅ 设计落地：P5-1 文档 §二/§三/§七 |
+| D57 | **Run 状态机五态**（P5-1）：queued/running/succeeded/failed/cancelled + 合法转换 + 终态不可逆 + 单 Agent 串行 409；存量 success→succeeded 走数据迁移；统计分母（succeeded+failed）显式定义 | ✅ 设计落地：P5-1 文档 §五 |
+| D58 | **Capability 两层只读消费**（P5-1）：Runtime 实时读 Definition(资产)+AgentCapability(装配) 构建 ExecutionContext；四类职责（Skills 描述注入/Memory 占位/Rules 约束注入/Tools 清单注入）；无缓存 = 无第二数据源 | ✅ 设计落地：P5-1 文档 §六 |
 
 ## 八、发现的问题
 
@@ -282,10 +286,10 @@
 
 ## 十、下一步计划
 
-1. **等待审批**：验收《P4-4 Delivery & V1 Release Candidate Report》（Docker 化 / README / CI / 从零初始化 / 稳定性回归 / lint-tsc-build 全绿）。
+1. **等待审批**：验收《P5-1 AI Runtime Architecture & Contract》（纯设计：Runtime 编排层 / 状态机 / Capability 映射 / Provider 接口 / Streaming 契约 / 错误与成本模型 / Mock→Real 路径）。
 2. 执行任何内容前：先出方案 → 审批 → 实现 → 验证 → 更新本文件 → 汇报。
-3. **P4-4 收尾**：Git 提交（本次执行）已完成。
-4. **候选方向（待审批后选定）**：P5 候选——真实 AI Runtime 接入前置设计（Service 内 runAgent 桩替换为真实 AI 服务契约）/ 认证与多用户隔离（接续 P4-1 预留 UNAUTHORIZED/FORBIDDEN）/ Capability Versioning / 交付后续（Docker 实测、CI 上真实 runner、部署文档）。
+3. **P5-1 收尾**：Git 提交（本次执行）已完成。
+4. **P5-2（待审批）**：按 §十三 实施最小闭环——Runtime 接口 + CapabilityLoader + MockProvider + Run 状态机（migration：success→succeeded + 新列）+ `runAgent` 改经 Runtime + UI 徽章扩展 + 全量回归；**不接真实 LLM / 不实现 Streaming / Tool / Memory**。
 
 ## 十一、待审批事项
 
@@ -294,6 +298,7 @@
 - [x] **A23**：验收《P4-2 交付汇报》✅ 已验收（批准进入 P4-3）
 - [x] **A24**：审批下一阶段方向 ✅ 已选定 P4-3 统计端点化收尾
 - [x] **A25**：验收《P4-3 交付汇报》✅ 已验收（批准进入 P4-4 交付增强）
-- [ ] **A26**：验收《P4-4 Delivery & V1 Release Candidate Report》并审批下一阶段方向（候选：AI Runtime 接入前置设计 / 认证与多用户 / Capability Versioning / Docker+CI 实测落地）
+- [x] **A26**：验收《P4-4 Delivery & V1 Release Candidate Report》✅ 已验收（批准进入 P5-1 AI Runtime 设计）
+- [ ] **A27**：验收《P5-1 AI Runtime Architecture & Contract》并批准进入 P5-2 最小实施（编排层 + 状态机 + MockProvider；明确不接真实 LLM）
 
 

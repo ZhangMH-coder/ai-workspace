@@ -10,7 +10,7 @@
  * - CHECK 枚举约束由应用层（zod + Service）保证，避免 drizzle-kit 与手改 SQL 漂移
  * - 关系表（agent_capability / project_agent）只存外键 + 关系属性，不复制实体数据
  */
-import { sqliteTable, text, integer, index, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, real, index, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 export const agents = sqliteTable(
   "agent",
@@ -196,6 +196,90 @@ export const discoveredResources = sqliteTable(
   ]
 );
 
+/* ---------------- Resource Intelligence（Phase 2：能力分析 / 能力索引） ----------------
+ *
+ * 边界原则：
+ * - 事实层（discovered_resource）与 AI 分析层（resource_analysis / resource_capability）严格分离
+ * - 分析输入全部来自真实文件（只读），零 Demo / Mock 数据
+ * - resource_analysis 保留历史：同一资源可对应多次分析（不同输入指纹/分析器版本），
+ *   通过 isCurrent 标记当前有效分析；唯一约束保证同一资源+同一输入指纹+同一分析器版本不重复生成
+ * - resource_capability 必须可追溯：evidenceRef + evidenceSnippet 指向真实文件位置
+ */
+
+export const resourceAnalyses = sqliteTable(
+  "resource_analysis",
+  {
+    id: text("id").primaryKey(),
+    resourceId: text("resource_id")
+      .notNull()
+      .references(() => discoveredResources.id, { onDelete: "cascade" }),
+    /** pending | analyzed | failed | expired */
+    status: text("status").notNull(),
+    /** heuristic | llm */
+    strategy: text("strategy").notNull(),
+    /** 分析器版本，如 "heuristic-v1"；版本升级触发全量重分析 */
+    analyzerVersion: text("analyzer_version").notNull(),
+    /** 记录创建时间（历史语义：保留多次分析记录） */
+    createdAt: text("created_at").notNull(),
+    /** 成功完成时间 */
+    analyzedAt: text("analyzed_at"),
+    /** sha1(sourcePath|lastModified|size|metaHash)：增量分析判定 */
+    inputFingerprint: text("input_fingerprint").notNull(),
+    /** 分析时读到的文件 mtime */
+    resourceMtime: text("resource_mtime"),
+    /** 当前有效分析标记（同资源只有一条 isCurrent=true） */
+    isCurrent: integer("is_current", { mode: "boolean" }).notNull().default(false),
+    errorCode: text("error_code"),
+    errorMessage: text("error_message"),
+    /** 分析器产出的一句话能力总述 */
+    summary: text("summary"),
+  },
+  (t) => [
+    // 同一资源 + 同一输入指纹 + 同一分析器版本 → 只保留一条（防止重复生成；重试更新同键记录）
+    uniqueIndex("uq_analysis_resource_fp_version").on(
+      t.resourceId,
+      t.inputFingerprint,
+      t.analyzerVersion
+    ),
+    index("idx_analysis_resource").on(t.resourceId),
+    index("idx_analysis_status").on(t.status),
+  ]
+);
+
+export const resourceCapabilities = sqliteTable(
+  "resource_capability",
+  {
+    id: text("id").primaryKey(),
+    analysisId: text("analysis_id")
+      .notNull()
+      .references(() => resourceAnalyses.id, { onDelete: "cascade" }),
+    resourceId: text("resource_id")
+      .notNull()
+      .references(() => discoveredResources.id, { onDelete: "cascade" }),
+    /** 能力动词短语，如 "从 RSS 源抓取并生成摘要" */
+    capability: text("capability").notNull(),
+    /** text_summary | web_research | code_gen | data_analysis | automation | content_creation | dev_tool | other */
+    category: text("category").notNull(),
+    /** JSON: 匹配用关键词数组 */
+    keywords: text("keywords").notNull().default("[]"),
+    /** 0-1 置信度（heuristic 为规则强度） */
+    confidence: real("confidence").notNull().default(0),
+    /** 证据定位，如 "SKILL.md#description" */
+    evidenceRef: text("evidence_ref").notNull(),
+    /** 证据原文片段（短，≤500 字符） */
+    evidenceSnippet: text("evidence_snippet").notNull(),
+    /** JSON: 本次归纳依赖的输入摘要 */
+    inputContext: text("input_context").notNull().default("{}"),
+    /** 未来执行层提示（仅描述，不执行） */
+    executionHint: text("execution_hint"),
+  },
+  (t) => [
+    uniqueIndex("uq_capability_analysis_cap").on(t.analysisId, t.capability),
+    index("idx_capability_resource").on(t.resourceId),
+    index("idx_capability_category").on(t.category),
+  ]
+);
+
 export type AgentRow = typeof agents.$inferSelect;
 export type AgentRunRow = typeof agentRuns.$inferSelect;
 export type CapabilityDefinitionRow = typeof capabilityDefinitions.$inferSelect;
@@ -205,3 +289,5 @@ export type ProjectAgentRow = typeof projectAgents.$inferSelect;
 export type ScanRunRow = typeof scanRuns.$inferSelect;
 export type HarnessScanRow = typeof harnessScans.$inferSelect;
 export type DiscoveredResourceRow = typeof discoveredResources.$inferSelect;
+export type ResourceAnalysisRow = typeof resourceAnalyses.$inferSelect;
+export type ResourceCapabilityRow = typeof resourceCapabilities.$inferSelect;

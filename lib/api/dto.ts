@@ -172,3 +172,88 @@ export interface RunScanResultDTO {
   harnesses: HarnessScanSummaryDTO[];
   resources: DiscoveredResourceDTO[];
 }
+
+/* ---------------- Resource Intelligence（Phase 2） ---------------- */
+
+export interface ResourceAnalysisDTO {
+  id: string;
+  resourceId: string;
+  status: string;
+  strategy: string;
+  analyzerVersion: string;
+  createdAt: string;
+  analyzedAt: string | null;
+  inputFingerprint: string;
+  resourceMtime: string | null;
+  isCurrent: boolean;
+  errorCode: string | null;
+  errorMessage: string | null;
+  summary: string | null;
+}
+
+export interface ResourceCapabilityDTO {
+  id: string;
+  analysisId: string;
+  resourceId: string;
+  capability: string;
+  category: string;
+  keywords: string[];
+  confidence: number;
+  evidenceRef: string;
+  evidenceSnippet: string;
+  inputContext: Record<string, unknown>;
+  executionHint: string | null;
+}
+
+export interface ResourceInsightDTO {
+  resource: DiscoveredResourceDTO;
+  currentAnalysis: ResourceAnalysisDTO | null;
+  capabilities: ResourceCapabilityDTO[];
+  history: ResourceAnalysisDTO[];
+}
+
+export interface AnalysisStatusSummaryDTO {
+  totalResources: number;
+  analyzed: number;
+  pending: number;
+  failed: number;
+  expired: number;
+  capabilityCount: number;
+  lastRunAt: string | null;
+  analyzerVersion: string;
+}
+
+export interface AnalysisRunResultDTO {
+  processed: number;
+  skipped: number;
+  analyzed: number;
+  failed: number;
+}
+
+export interface CapabilityIndexEntryDTO {
+  category: string;
+  count: number;
+  items: {
+    resourceId: string;
+    resourceName: string;
+    harnessId: string;
+    capability: string;
+    confidence: number;
+    evidenceRef: string;
+  }[];
+}
+
+export interface TaskMatchResultDTO {
+  task: string;
+  matches: {
+    resourceId: string;
+    resourceName: string;
+    harnessId: string;
+    type: string;
+    capability: string;
+    category: string;
+    confidence: number;
+    evidenceRef: string;
+    score: number;
+  }[];
+}

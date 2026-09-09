@@ -1,6 +1,7 @@
 import {
   Blocks,
   Bot,
+  BrainCircuit,
   FolderKanban,
   LayoutDashboard,
   Radar,
@@ -64,6 +65,12 @@ export const navGroups: NavGroup[] = [
         href: "/resources",
         icon: Radar,
         description: "发现并索引本机 AI Harness 资源",
+      },
+      {
+        title: "Resource Capabilities",
+        href: "/resources/capabilities",
+        icon: BrainCircuit,
+        description: "从真实资源归纳的能力索引与任务匹配",
       },
     ],
   },

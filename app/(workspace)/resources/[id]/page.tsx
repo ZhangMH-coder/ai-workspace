@@ -1,13 +1,15 @@
 "use client";
 
 /**
- * 资源详情页（V1 MVP）：真实来源溯源（Harness → 本地路径 → 原始文件）。
+ * 资源详情页：真实来源溯源 + 能力分析（Phase 2）。
  */
 import { useEffect } from "react";
 import { useParams } from "next/navigation";
 
 import { EmptyDiscovery } from "@/components/resources/empty-discovery";
+import { InsightPanel } from "@/components/resources/analysis/insight-panel";
 import { ResourceDetail } from "@/components/resources/resource-detail";
+import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useWorkspaceStore } from "@/stores/workspace";
 
@@ -39,5 +41,11 @@ export default function ResourceDetailPage() {
   }
 
   if (!detail) return null;
-  return <ResourceDetail resource={detail} />;
+  return (
+    <div className="flex flex-col gap-4">
+      <ResourceDetail resource={detail} />
+      <Separator className="bg-white/[0.06]" />
+      <InsightPanel resourceId={detail.id} />
+    </div>
+  );
 }

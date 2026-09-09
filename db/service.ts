@@ -20,17 +20,34 @@ import { createRuntime, createProviderRegistry } from "@/lib/runtime/runtime";
 import { mockProvider } from "@/lib/runtime/mock-provider";
 import { runDiscoveryScan } from "@/lib/discovery/scanner";
 import { ADAPTERS } from "@/lib/discovery/registry";
+import { computeInputFingerprint, computeMetaHash } from "@/lib/analysis/fingerprint";
+import { readDocument } from "@/lib/analysis/reader";
+import { CURRENT_ANALYZER_VERSION, getAnalyzer } from "@/lib/analysis/registry";
+import type { AnalysisInput } from "@/lib/analysis/types";
+import { randomUUID as uuid } from "node:crypto";
 import type {
+  AnalysisRunResult,
+  AnalysisStatus,
+  AnalysisStatusSummary,
+  AnalysisStrategy,
+  CapabilityCategory,
+  CapabilityIndexEntry,
   DiscoveredResource,
   DiscoveryOverview,
   HarnessScanSummary,
+  ResourceAnalysis,
+  ResourceCapability,
+  ResourceInsight,
   RunScanResult,
   ScanRun,
   ScanStatus,
+  TaskMatchResult,
 } from "@/lib/types";
 import type {
   DiscoveredResourceRow,
   HarnessScanRow,
+  ResourceAnalysisRow,
+  ResourceCapabilityRow,
   ScanRunRow,
 } from "./schema";
 
@@ -481,4 +498,274 @@ export function getDiscoveredResource(id: string): DiscoveredResource {
   const row = repo.getDiscoveredResource(id);
   if (!row) throw new ServiceError("NOT_FOUND", "资源不存在");
   return resourceToDomain(row);
+}
+
+/* ---------------- Resource Intelligence（Phase 2：能力分析 / 能力索引） ---------------- */
+
+function analysisToDomain(row: ResourceAnalysisRow): ResourceAnalysis {
+  return {
+    id: row.id,
+    resourceId: row.resourceId,
+    status: row.status as AnalysisStatus,
+    strategy: row.strategy as AnalysisStrategy,
+    analyzerVersion: row.analyzerVersion,
+    createdAt: row.createdAt,
+    analyzedAt: row.analyzedAt,
+    inputFingerprint: row.inputFingerprint,
+    resourceMtime: row.resourceMtime,
+    isCurrent: row.isCurrent,
+    errorCode: row.errorCode,
+    errorMessage: row.errorMessage,
+    summary: row.summary,
+  };
+}
+
+function capabilityToDomain(row: ResourceCapabilityRow): ResourceCapability {
+  return {
+    id: row.id,
+    analysisId: row.analysisId,
+    resourceId: row.resourceId,
+    capability: row.capability,
+    category: row.category as CapabilityCategory,
+    keywords: JSON.parse(row.keywords) as string[],
+    confidence: row.confidence,
+    evidenceRef: row.evidenceRef,
+    evidenceSnippet: row.evidenceSnippet,
+    inputContext: JSON.parse(row.inputContext) as Record<string, unknown>,
+    executionHint: row.executionHint,
+  };
+}
+
+/**
+ * 增量分析：指纹相同跳过，仅处理 新增 / 变化 / 失败（或 force）资源。
+ * 历史保留：同键（resourceId+fingerprint+version）更新不新增；新指纹生成新记录，
+ * 旧记录保留为历史（isCurrent=false）。
+ */
+export function runIncrementalAnalysis(opts?: {
+  force?: boolean;
+  resourceIds?: string[];
+}): AnalysisRunResult {
+  const version = CURRENT_ANALYZER_VERSION;
+  const analyzer = getAnalyzer();
+  const resources = opts?.resourceIds?.length
+    ? opts.resourceIds
+        .map((id) => repo.getDiscoveredResource(id))
+        .filter((r): r is DiscoveredResourceRow => r !== null)
+    : repo.listAllDiscoveredResources();
+  const result: AnalysisRunResult = { processed: 0, skipped: 0, analyzed: 0, failed: 0 };
+  const now = new Date().toISOString();
+
+  for (const row of resources) {
+    const metadata = (() => {
+      try {
+        return JSON.parse(row.metadata) as Record<string, unknown>;
+      } catch {
+        return {} as Record<string, unknown>;
+      }
+    })();
+    const fp = computeInputFingerprint({
+      sourcePath: row.sourcePath,
+      lastModified: row.lastModified,
+      metaHash: computeMetaHash(metadata),
+    });
+    const existing = repo.getAnalysisByFingerprint(row.id, fp, version);
+    if (!opts?.force && existing?.status === "analyzed") {
+      result.skipped += 1;
+      continue;
+    }
+
+    result.processed += 1;
+    const resource = resourceToDomain(row);
+    try {
+      const doc = readDocument({
+        type: row.type as DiscoveredResource["type"],
+        sourcePath: row.sourcePath,
+        metadata,
+      });
+      const input: AnalysisInput = { resource, document: doc };
+      const outcome = analyzer.analyze(input);
+      if (outcome.status === "failed") {
+        throw new Error(outcome.errorMessage ?? "ANALYSIS_FAILED");
+      }
+      const analysisId = existing?.id ?? uuid();
+      repo.upsertResourceAnalysis({
+        id: analysisId,
+        resourceId: row.id,
+        status: "analyzed",
+        strategy: analyzer.strategy,
+        analyzerVersion: version,
+        createdAt: existing?.createdAt ?? now,
+        analyzedAt: now,
+        inputFingerprint: fp,
+        resourceMtime: row.lastModified,
+        isCurrent: true,
+        errorCode: null,
+        errorMessage: null,
+        summary: outcome.summary,
+      });
+      // 替换该分析的能力标签（同键更新时旧标签仍存在，先删）
+      repo.deleteCapabilitiesByAnalysis(analysisId);
+      for (const c of outcome.capabilities) {
+        repo.insertResourceCapability({
+          id: uuid(),
+          analysisId,
+          resourceId: row.id,
+          capability: c.capability,
+          category: c.category,
+          keywords: JSON.stringify(c.keywords),
+          confidence: c.confidence,
+          evidenceRef: c.evidenceRef,
+          evidenceSnippet: c.evidenceSnippet,
+          inputContext: JSON.stringify({
+            headings: doc.headings.slice(0, 5),
+            references: doc.references.slice(0, 10),
+            fileSize: doc.fileSize,
+            mainFile: doc.filePath,
+          }),
+          executionHint: c.executionHint ?? null,
+        });
+      }
+      repo.markOtherAnalysesNotCurrent(row.id, analysisId);
+      result.analyzed += 1;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      const otherCurrent = repo.getCurrentAnalysis(row.id);
+      const code = msg.includes("DOCUMENT_NOT_FOUND")
+        ? "DOCUMENT_NOT_FOUND"
+        : msg.includes("DOCUMENT_UNREADABLE")
+          ? "DOCUMENT_UNREADABLE"
+          : "ANALYSIS_FAILED";
+      // 同指纹覆盖为 failed：旧标签一并失效（该输入当前已无法解析，不应残留旧规则产物）
+      if (existing) repo.deleteCapabilitiesByAnalysis(existing.id);
+      repo.upsertResourceAnalysis({
+        id: existing?.id ?? uuid(),
+        resourceId: row.id,
+        status: "failed",
+        strategy: analyzer.strategy,
+        analyzerVersion: version,
+        createdAt: existing?.createdAt ?? now,
+        analyzedAt: null,
+        inputFingerprint: fp,
+        resourceMtime: row.lastModified,
+        // 保持旧有效分析可用；无任何 current 时 failed 作为当前状态展示
+        isCurrent: existing?.isCurrent ?? (otherCurrent ? false : true),
+        errorCode: code,
+        errorMessage: msg,
+        summary: null,
+      });
+      result.failed += 1;
+    }
+  }
+  return result;
+}
+
+/** 分析状态概览 */
+export function getAnalysisStatus(): AnalysisStatusSummary {
+  const total = repo.countDiscoveredResources();
+  const byStatus = repo.countAnalysisStatus();
+  const { caps } = repo.countAnalysisMeta();
+  return {
+    totalResources: total,
+    analyzed: byStatus["analyzed"] ?? 0,
+    pending: byStatus["pending"] ?? 0,
+    failed: byStatus["failed"] ?? 0,
+    expired: byStatus["expired"] ?? 0,
+    capabilityCount: caps,
+    lastRunAt: repo.getLastAnalysisAt(),
+    analyzerVersion: CURRENT_ANALYZER_VERSION,
+  };
+}
+
+/** 资源洞察（详情页：事实 + 当前分析 + 能力标签 + 历史） */
+export function getResourceInsight(resourceId: string): ResourceInsight {
+  const row = repo.getDiscoveredResource(resourceId);
+  if (!row) throw new ServiceError("NOT_FOUND", "资源不存在");
+  const current = repo.getCurrentAnalysis(resourceId);
+  const capabilities = current
+    ? repo.listCurrentCapabilitiesByResource(resourceId).map(capabilityToDomain)
+    : [];
+  const history = repo
+    .listAnalysesByResource(resourceId)
+    .filter((a) => !(current && a.id === current.id))
+    .map(analysisToDomain);
+  return {
+    resource: resourceToDomain(row),
+    currentAnalysis: current ? analysisToDomain(current) : null,
+    capabilities,
+    history,
+  };
+}
+
+/** 能力索引（按类别分组，来自当前有效分析） */
+export function listCapabilityIndex(): CapabilityIndexEntry[] {
+  const rows = repo.listAllCurrentCapabilities();
+  const map = new Map<CapabilityCategory, CapabilityIndexEntry>();
+  for (const { cap, resource } of rows) {
+    const cat = cap.category as CapabilityCategory;
+    if (!map.has(cat)) map.set(cat, { category: cat, count: 0, items: [] });
+    const entry = map.get(cat)!;
+    entry.count += 1;
+    entry.items.push({
+      resourceId: resource.id,
+      resourceName: resource.name,
+      harnessId: resource.harnessId,
+      capability: cap.capability,
+      confidence: cap.confidence,
+      evidenceRef: cap.evidenceRef,
+    });
+  }
+  return [...map.values()]
+    .sort((a, b) => b.count - a.count)
+    .map((e) => ({ ...e, items: e.items.slice(0, 60) }));
+}
+
+/** 任务分词：英文词 + 中文 2-gram / 3-gram（中文无空格，整句无法直接匹配） */
+function tokenizeTask(task: string): string[] {
+  const s = task.toLowerCase().trim();
+  const tokens = new Set<string>();
+  for (const t of s.split(/[^a-z0-9]+/)) {
+    if (t.length >= 2) tokens.add(t);
+  }
+  const han = s.replace(/[^a-z0-9\u4e00-\u9fff]+/g, "");
+  for (let i = 0; i < han.length - 1; i += 1) tokens.add(han.slice(i, i + 2));
+  for (let i = 0; i < han.length - 2; i += 1) tokens.add(han.slice(i, i + 3));
+  return [...tokens];
+}
+
+/** 任务 → 资源匹配（派生打分，不落库） */
+export function matchResourcesForTask(task: string, limit = 10): TaskMatchResult {
+  const tokens = tokenizeTask(task);
+  const rows = repo.listAllCurrentCapabilities();
+  const matches: TaskMatchResult["matches"] = [];
+  for (const { cap, resource } of rows) {
+    const hay = [
+      cap.capability,
+      cap.keywords,
+      cap.evidenceSnippet,
+      resource.name,
+      resource.description,
+    ]
+      .join(" ")
+      .toLowerCase();
+    const hits = tokens.filter((t) => t.length >= 2 && hay.includes(t)).length;
+    // 反向匹配：资源关键词出现在任务文本中
+    const kwHits = (JSON.parse(cap.keywords) as string[]).filter(
+      (k) => k.length >= 2 && task.toLowerCase().includes(k)
+    ).length;
+    if (hits === 0 && kwHits === 0) continue;
+    const score = Math.min(1, (Math.min(hits + kwHits, 5) / 5) * 0.65 + cap.confidence * 0.35);
+    matches.push({
+      resourceId: resource.id,
+      resourceName: resource.name,
+      harnessId: resource.harnessId,
+      type: resource.type as DiscoveredResource["type"],
+      capability: cap.capability,
+      category: cap.category as CapabilityCategory,
+      confidence: cap.confidence,
+      evidenceRef: cap.evidenceRef,
+      score: Math.round(score * 100) / 100,
+    });
+  }
+  matches.sort((a, b) => b.score - a.score);
+  return { task, matches: matches.slice(0, limit) };
 }

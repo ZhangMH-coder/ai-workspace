@@ -7,30 +7,48 @@ import type {
   Agent,
   AgentCapability,
   AgentRun,
+  AnalysisRunResult,
+  AnalysisStatus,
+  AnalysisStatusSummary,
+  AnalysisStrategy,
+  CapabilityCategory,
   CapabilityDefinition,
+  CapabilityIndexEntry,
   DiscoveredResource,
   DiscoveryOverview,
   HarnessScanSummary,
   Project,
   ProjectAgent,
+  ResourceAnalysis,
+  ResourceCapability,
+  ResourceInsight,
+  ResourceType,
   RunScanResult,
   RunsStats,
   ScanRun,
+  TaskMatchResult,
 } from "@/lib/types";
 import { normalizeRunStatus } from "@/lib/types";
 import type {
   AgentCapabilityDTO,
   AgentDTO,
   AgentRunDTO,
+  AnalysisRunResultDTO,
+  AnalysisStatusSummaryDTO,
   CapabilityDefinitionDTO,
+  CapabilityIndexEntryDTO,
   DiscoveredResourceDTO,
   DiscoveryOverviewDTO,
   HarnessScanSummaryDTO,
   ProjectAgentDTO,
   ProjectDTO,
+  ResourceAnalysisDTO,
+  ResourceCapabilityDTO,
+  ResourceInsightDTO,
   RunsStatsDTO,
   RunScanResultDTO,
   ScanRunDTO,
+  TaskMatchResultDTO,
 } from "./dto";
 
 export function toAgent(d: AgentDTO): Agent {
@@ -203,5 +221,97 @@ export function toRunScanResult(d: RunScanResultDTO): RunScanResult {
     scanRun: d.scanRun ? toScanRun(d.scanRun) : null,
     harnesses: (d.harnesses ?? []).map(toHarnessScanSummary),
     resources: (d.resources ?? []).map(toDiscoveredResource),
+  };
+}
+
+/* ---------------- Resource Intelligence（Phase 2） ---------------- */
+
+export function toResourceAnalysis(d: ResourceAnalysisDTO): ResourceAnalysis {
+  return {
+    id: d.id,
+    resourceId: d.resourceId,
+    status: d.status as AnalysisStatus,
+    strategy: d.strategy as AnalysisStrategy,
+    analyzerVersion: d.analyzerVersion,
+    createdAt: d.createdAt,
+    analyzedAt: d.analyzedAt,
+    inputFingerprint: d.inputFingerprint,
+    resourceMtime: d.resourceMtime,
+    isCurrent: d.isCurrent,
+    errorCode: d.errorCode,
+    errorMessage: d.errorMessage,
+    summary: d.summary,
+  };
+}
+
+export function toResourceCapability(d: ResourceCapabilityDTO): ResourceCapability {
+  return {
+    id: d.id,
+    analysisId: d.analysisId,
+    resourceId: d.resourceId,
+    capability: d.capability,
+    category: d.category as CapabilityCategory,
+    keywords: d.keywords ?? [],
+    confidence: d.confidence,
+    evidenceRef: d.evidenceRef,
+    evidenceSnippet: d.evidenceSnippet,
+    inputContext: d.inputContext ?? {},
+    executionHint: d.executionHint ?? null,
+  };
+}
+
+export function toResourceInsight(d: ResourceInsightDTO): ResourceInsight {
+  return {
+    resource: toDiscoveredResource(d.resource),
+    currentAnalysis: d.currentAnalysis ? toResourceAnalysis(d.currentAnalysis) : null,
+    capabilities: (d.capabilities ?? []).map(toResourceCapability),
+    history: (d.history ?? []).map(toResourceAnalysis),
+  };
+}
+
+export function toAnalysisStatusSummary(d: AnalysisStatusSummaryDTO): AnalysisStatusSummary {
+  return {
+    totalResources: d.totalResources,
+    analyzed: d.analyzed,
+    pending: d.pending,
+    failed: d.failed,
+    expired: d.expired,
+    capabilityCount: d.capabilityCount,
+    lastRunAt: d.lastRunAt,
+    analyzerVersion: d.analyzerVersion,
+  };
+}
+
+export function toAnalysisRunResult(d: AnalysisRunResultDTO): AnalysisRunResult {
+  return {
+    processed: d.processed,
+    skipped: d.skipped,
+    analyzed: d.analyzed,
+    failed: d.failed,
+  };
+}
+
+export function toCapabilityIndex(d: CapabilityIndexEntryDTO[]): CapabilityIndexEntry[] {
+  return (d ?? []).map((e) => ({
+    category: e.category as CapabilityCategory,
+    count: e.count,
+    items: e.items ?? [],
+  }));
+}
+
+export function toTaskMatchResult(d: TaskMatchResultDTO): TaskMatchResult {
+  return {
+    task: d.task,
+    matches: (d.matches ?? []).map((x) => ({
+      resourceId: x.resourceId,
+      resourceName: x.resourceName,
+      harnessId: x.harnessId,
+      type: x.type as ResourceType,
+      capability: x.capability,
+      category: x.category as CapabilityCategory,
+      confidence: x.confidence,
+      evidenceRef: x.evidenceRef,
+      score: x.score,
+    })),
   };
 }

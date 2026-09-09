@@ -76,6 +76,20 @@ import type {
   UpdateCapabilityInput,
 } from "@/lib/types";
 import type { ResourceListQuery } from "@/lib/api/resource-discovery";
+import type {
+  AnalysisRunResult,
+  AnalysisStatusSummary,
+  CapabilityIndexEntry,
+  ResourceInsight,
+  TaskMatchResult,
+} from "@/lib/types";
+import {
+  fetchAnalysisStatus as fetchAnalysisStatusService,
+  fetchCapabilityIndex as fetchCapabilityIndexService,
+  fetchResourceInsight as fetchResourceInsightService,
+  matchResourcesForTask as matchResourcesForTaskService,
+  runAnalysis as runAnalysisService,
+} from "@/lib/services/resource-analysis";
 
 /** 空统计（组件对未加载/无数据时的防御默认值） */
 export const EMPTY_RUNS_STATS: RunsStats = {
@@ -181,6 +195,23 @@ interface WorkspaceState {
   runResourceScan: () => Promise<void>;
   fetchDiscoveredResources: (q?: ResourceListQuery) => Promise<void>;
   fetchResourceDetail: (id: string) => Promise<void>;
+
+  /** Resource Intelligence：分析状态 / 能力索引 / 洞察 / 任务匹配（SQLite 事实源，非持久化） */
+  analysis: {
+    status: AnalysisStatusSummary | null;
+    capabilityIndex: CapabilityIndexEntry[];
+    insight: ResourceInsight | null;
+    matchResult: TaskMatchResult | null;
+    lastRun: AnalysisRunResult | null;
+    running: boolean;
+    loading: boolean;
+    error: string | null;
+  };
+  fetchAnalysisStatus: () => Promise<void>;
+  runAnalysis: (opts?: { force?: boolean; resourceIds?: string[] }) => Promise<void>;
+  fetchResourceInsight: (id: string) => Promise<void>;
+  fetchCapabilityIndex: () => Promise<void>;
+  matchResourcesForTask: (task: string) => Promise<void>;
 }
 
 export const useWorkspaceStore = create<WorkspaceState>()(
@@ -207,6 +238,16 @@ export const useWorkspaceStore = create<WorkspaceState>()(
         error: null,
       },
 
+      analysis: {
+        status: null,
+        capabilityIndex: [],
+        insight: null,
+        matchResult: null,
+        lastRun: null,
+        running: false,
+        loading: false,
+        error: null,
+      },
       fetchDiscoveryOverview: async () => {
         set((s) => ({ discovery: { ...s.discovery, loading: true, error: null } }));
         try {
@@ -269,6 +310,71 @@ export const useWorkspaceStore = create<WorkspaceState>()(
         } catch (e) {
           set((s) => ({
             discovery: { ...s.discovery, loading: false, error: (e as Error).message },
+          }));
+        }
+      },
+
+
+      fetchAnalysisStatus: async () => {
+        set((s) => ({ analysis: { ...s.analysis, loading: true, error: null } }));
+        try {
+          const status = await fetchAnalysisStatusService();
+          set((s) => ({ analysis: { ...s.analysis, status, loading: false } }));
+        } catch (e) {
+          set((s) => ({
+            analysis: { ...s.analysis, loading: false, error: (e as Error).message },
+          }));
+        }
+      },
+
+      runAnalysis: async (opts) => {
+        set((s) => ({ analysis: { ...s.analysis, running: true, error: null } }));
+        try {
+          const lastRun = await runAnalysisService(opts);
+          const status = await fetchAnalysisStatusService();
+          const capabilityIndex = await fetchCapabilityIndexService();
+          set((s) => ({
+            analysis: { ...s.analysis, lastRun, status, capabilityIndex, running: false },
+          }));
+        } catch (e) {
+          set((s) => ({
+            analysis: { ...s.analysis, running: false, error: (e as Error).message },
+          }));
+        }
+      },
+
+      fetchResourceInsight: async (id) => {
+        set((s) => ({ analysis: { ...s.analysis, loading: true, error: null } }));
+        try {
+          const insight = await fetchResourceInsightService(id);
+          set((s) => ({ analysis: { ...s.analysis, insight, loading: false } }));
+        } catch (e) {
+          set((s) => ({
+            analysis: { ...s.analysis, loading: false, error: (e as Error).message },
+          }));
+        }
+      },
+
+      fetchCapabilityIndex: async () => {
+        set((s) => ({ analysis: { ...s.analysis, loading: true, error: null } }));
+        try {
+          const capabilityIndex = await fetchCapabilityIndexService();
+          set((s) => ({ analysis: { ...s.analysis, capabilityIndex, loading: false } }));
+        } catch (e) {
+          set((s) => ({
+            analysis: { ...s.analysis, loading: false, error: (e as Error).message },
+          }));
+        }
+      },
+
+      matchResourcesForTask: async (task) => {
+        set((s) => ({ analysis: { ...s.analysis, loading: true, error: null } }));
+        try {
+          const matchResult = await matchResourcesForTaskService(task);
+          set((s) => ({ analysis: { ...s.analysis, matchResult, loading: false } }));
+        } catch (e) {
+          set((s) => ({
+            analysis: { ...s.analysis, loading: false, error: (e as Error).message },
           }));
         }
       },

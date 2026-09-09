@@ -25,14 +25,66 @@
 | 2026-09-08 | v1.3 | **P4-3 统计端点化收尾** | Dashboard/Project/Agent 运行统计正式改由 `GET /api/v1/runs/stats?from&to` 服务端 SQL 聚合获取，**彻底结束前端 pageSize=1000 全量拉取 + 内存聚合**；Repository `runsStats` totals 扩展 avgDurationMs/lastRunAt、stats 端点新增 `?agent=` 单 Agent 过滤；前端服务层重构（`lib/services/runs.ts` 双模式入口 + `http/runs.ts` + `mock/runs.ts` SQLite 同构内存聚合 + `mock/state.ts` Mock 内存数据层）；Store 重构（recentRuns/agentRunsById/projectRunsById + StatsCache{global/previous/byProject/byAgent}，删全部统计 selectors，保留唯一窗口实现 windowBoundsForRange）；四个页面组件改用 stats 缓存（对外 UI 行为不变）；明细分页走 `/runs?pageSize&sort` 与 `/agents/:id/runs`（200/10/8），**无任何 pageSize=1000**；**seed 天级锚修复**（Date.now()→今天 0 点，db:reset 统计稳定可复现，Mock/Real 数字完全对齐）；lint/tsc/build 全绿；Real 生产回归（指标 88/90.9%/1.7M、项目 36/47/17、Agent 26/18/30/12/6 全部同源；attach/detach 实时刷新且硬刷新 SQLite 落库恢复；7d 切换 + 硬刷新持久化；localStorage 仅 timeRange；API 冒烟 from/to 边界/空数据/单日/跨月/错误契约全过；控制台 0 错误）；Mock 独立构建验证与 Real 完全一致 | ✅ 已完成并通过 P4-4 审批 |
 | 2026-09-08 | v1.4 | **P4-4 交付增强 & V1 Release Candidate** | Docker 化（多阶段 Dockerfile + docker-compose + .dockerignore；SQLite 持久化卷 `./data:/app/data`；容器入口 `db:init && start`，重启数据保留）；README 完整化（环境/安装/开发/Real-Mock/初始化/构建/生产/Docker/数据位置/功能边界）；CI 最小质量门禁（GitHub Actions：npm ci → lint → tsc → db:init+db:check（DATABASE_URL=./data/ci.db 隔离）→ build；本地 `npm run ci` 等价）；新增 `db/init.ts` 从零初始化脚本（migrate + 空库 seed，幂等）；tsx 移至 dependencies（容器运行时 db 脚本）；从零初始化验证（删库 → init 5/18/49/3/6/92 → check → 二次 init seed 跳过 → build → 启动 → 访问）；稳定性回归（Real 生产全页面 + 写操作 attach/detach 落库 + Mock 独立构建与 Real 数字一致 88/90.9%/1.7M）；lint/tsc/build 全绿；seed 天级时间锚保持；P4-3 基线数字不变 | ✅ 已完成并通过 P5-1 审批 |
 | 2026-09-08 | v1.5 | **P5-1 AI Runtime 架构与契约设计（纯设计，当前阶段）** | 交付 `docs/P5-1-AI-Runtime-Architecture-Contract.md`：目标架构 Agent→Runtime→Model/Prompt/Context/Capability/Execution→Run；Runtime 编排层（lib/runtime/*）位于 Service 与 Provider 之间；RuntimeRequest/ModelConfig/ExecutionContext/RuntimeResult/RuntimeEvent/RuntimeError/TokenUsage 域模型；Run 状态机五态（queued/running/succeeded/failed/cancelled）+ 合法转换 + 存量 success→succeeded 迁移策略 + 统计分母显式定义；Capability 两层只读消费（Definition 资产 + AgentCapability 装配 → ExecutionContext，四类职责与注入顺序）；统一 RuntimeProvider 接口（Adapter 注册表，禁止 Service 硬编码）；Streaming Event 契约（delta/tool_call/tool_result/finish/error + SSE 细则，P5-2 不实现）；错误分层（API/Runtime/Provider/Tool/Timeout-Cancel → Run 落库 error_code）；Token/Cost 模型（input/output/total 落库、cost 扩展位不落库）；持久化边界（Run 落库、事件流仅内存、完整 output 不持久化）；Mock→Real 双模式替换路径（P5-2 仅 MockProvider + 编排层）；P5-2 最小实施计划（10 项，明确不做清单）；风险与边界 | ✅ 已完成，待审批进入 P5-2 |
+| 2026-09-09 | v1.6 | **Phase 2 — Resource Intelligence MVP（能力索引）** | 145 个真实资源（128 可解析）从「被展示」升级为「能力索引」：新表 `resource_analysis`（保留历史：analyzerVersion/createdAt/isCurrent/inputFingerprint，唯一键 resourceId+inputFingerprint+analyzerVersion 防同版本重复）+ `resource_capability`（每条标签必须 evidenceRef+evidenceSnippet 可追溯）；`lib/analysis/*` 分析层（DocumentReader 只读白名单解析 + fingerprint 增量机制 + HeuristicAnalyzer heuristic-v1 唯一实际分析器 + LLMAnalyzer 仅契约桩不注册）；API 5 端点（run/status/resources/[id]/capabilities/match）；前端能力索引页 `/resources/capabilities`（状态卡 + 增量分析 + 任务→资源匹配 + 类别分组）+ 资源详情能力区块（InsightPanel）+ 导航「Resource Capabilities」；Mock 模式真实空态不伪造；**修数据一致性**：同指纹重跑失败时旧标签一并失效（failed 资源不再残留旧能力标签）；最终态 145 / 128 analyzed / 17 failed / 487 标签（全部可追溯）；lint 0/0、tsc、db:check、build（Real+Mock）、增量/幂等/追溯/只读/Mock 空态验证全过 | ✅ 已完成，待审批 |
 
 ## 当前阶段
 
-**P5-1 AI Runtime 架构与契约设计（纯设计）**（已完成；**不自动进入下一阶段**，待审批）
+**Phase 2 — Resource Intelligence MVP（能力索引）**（已完成；**不自动进入下一阶段**，待审批）
 
 ---
 
-## 二、已完成内容（P4-4 交付增强实施）
+## 一、已完成内容（Phase 2 — Resource Intelligence MVP 实施）
+
+### 1. 领域模型（用户三项修正全落地）
+
+- `resource_analysis` 表保留**历史分析记录**（一次资源可多次分析）：analyzerVersion / createdAt / analyzedAt / inputFingerprint / resourceMtime / isCurrent / errorCode / errorMessage / summary；唯一约束 `uq_analysis_resource_fp_version(resourceId,inputFingerprint,analyzerVersion)`——同一版本 + 同一输入指纹不重复生成；isCurrent 标记当前有效分析。
+- `resource_capability` 表：capability / category / keywords(JSON) / confidence / **evidenceRef + evidenceSnippet（可回溯真实文件，硬性要求）** / inputContext(JSON) / executionHint；唯一约束 `uq_capability_analysis_cap(analysisId,capability)`。
+- **取消「能力标签 ≥150」硬指标**；不拆分不制造，标签一律带证据。
+- HeuristicAnalyzer 为唯一实际分析器；LLMAnalyzer 仅接口契约（调用返回 PROVIDER_NOT_AVAILABLE，不注册）。
+
+### 2. 分析层（lib/analysis/）
+
+- `types.ts`：AnalysisProvider 接口（id/strategy/analyze → AnalysisOutcome）。
+- `fingerprint.ts`：computeInputFingerprint = sha1(sourcePath|lastModified|metaHash)；computeMetaHash。
+- `reader.ts`：DocumentReader 只读解析——`TEXT_EXTENSIONS` 白名单（.md/.markdown/.txt/.json/.toml/.yaml/.yml），非白名单返回 DOCUMENT_NOT_FOUND（对应 17 个 failed 的真实状态：.py 无契约等）；正文上限 32KB、预览 2KB、提取 headings/references/frontmatter；纯读取不落盘。
+- `heuristic.ts`：heuristic-v1 确定性规则——description 主能力（conf=0.72，证据 SKILL.md#description）+ headings 补充（conf=0.5，证据 #heading）+ 类型兜底（conf=0.3）；过滤折叠符、否定/边界类 heading（不适用/注意/禁止/回退…）、非语义文本。
+- `registry.ts`：ANALYZERS=[heuristicAnalyzer]、CURRENT_ANALYZER_VERSION="heuristic-v1"。
+
+### 3. 增量分析与历史语义（db/service.ts runIncrementalAnalysis）
+
+- 指纹相同且已 analyzed 且非 force → skipped；新增 / 变化 / failed / force → 重跑。
+- 成功：upsert 分析记录 + 先删旧标签再重插 + markOtherAnalysesNotCurrent（历史保留 isCurrent=false）。
+- 失败：记录 failed 并保持旧 current 分析可用（新指纹失败不覆盖旧结果）；**同指纹覆盖失败时旧标签一并失效**（数据一致性修复，杜绝 failed 残留旧能力标签）。
+- getAnalysisStatus / getResourceInsight / listCapabilityIndex / matchResourcesForTask（派生打分不落库）。
+
+### 4. API 契约（5 端点）
+
+- `POST /api/v1/resource-analysis/run`（body {force?, resourceIds?}）→ AnalysisRunResult
+- `GET /api/v1/resource-analysis/status` → AnalysisStatusSummary
+- `GET /api/v1/resource-analysis/resources/[id]` → ResourceInsight（params Promise 模式）
+- `GET /api/v1/resource-capabilities` → 按类别分组能力索引
+- `GET /api/v1/resource-capabilities/match?task=` → 任务→资源匹配
+- DTO / mappers 追加（lib/api/dto.ts + mappers.ts）；Mock service 真实空态（status 全 0 / insight 抛 ApiError NOT_FOUND / 不伪造）。
+
+### 5. 前端（Store + UI）
+
+- `stores/workspace.ts`：analysis 区块（status/capabilityIndex/insight/matchResult/lastRun/running/loading/error）+ 5 actions；persist partialize 不变（仅 timeRange，领域数据不入 localStorage）。
+- `/resources/capabilities`：状态卡（总资源/已分析/失败/能力标签/版本）+ 增量分析按钮 + 任务→资源匹配 + 类别分组索引。
+- 资源详情页：`components/resources/analysis/insight-panel.tsx` 能力区块（状态徽章/总述/能力标签卡含证据与执行提示/历史/未分析时「分析此资源」按钮）。
+- 导航：本地资源组新增「Resource Capabilities」。
+
+### 6. 验证结果（全部通过）
+
+- lint 0 error 0 warning；tsc --noEmit 0 错误；db:check schema 一致；build Real + Mock（NEXT_PUBLIC_USE_MOCK=1）均通过。
+- **最终态**：145 资源 / 128 analyzed / 17 failed / 0 expired / **487 能力标签（全部 evidenceRef+evidenceSnippet 可追溯）**。
+- 幂等：第二次非 force 跑 processed=17（仅 failed 重试）、skipped=128、analyzed=0（成功资源零重复）。
+- 增量：touch 一个 SKILL.md mtime → 重扫 → 增量分析 processed=22（仅变化资源）、skipped=123，非全量重跑。
+- 一致性：failed-with-caps=0（修复后无 failed 残留标签）。
+- 只读：实现全程仅 fs.readFileSync；mtime touch 测试后已恢复原值。
+- Mock：客户端 chunk 确认 mock service 内联（NEXT_PUBLIC_USE_MOCK=1 build），API 端点始终连 SQLite（设计如此）。
+- API 冒烟：status / capabilities / match（中文任务匹配 doubao-ecommerce-proposal 等）/ insight（含 evidence 追溯）/ run 幂等全过；页面 /resources、/resources/capabilities、/resources/[id] 全部 200。
+
+## 二、已完成内容（P4-4 交付增强实施 · 历史）
 
 ### 1. Docker 化（P4-4 核心）
 - [x] `Dockerfile` 多阶段构建（deps 全量 → build → runner）：better-sqlite3 prebuilt 优先、g++/python3 编译兜底；构建期 `mkdir data` 保证不依赖本地已有数据库；runner 仅 `npm ci --omit=dev`（tsx 已在 dependencies，容器内 db:init/db:migrate/db:check 可用）
@@ -284,12 +336,27 @@
 | 旧 localStorage 脏数据 | 低 | persist v5 migrate 明确丢弃领域字段；db:reset 一键重建 |
 | better-sqlite3 原生模块在部分平台构建失败 | 低 | 已构建通过（Windows/Node 22）；node:sqlite/libsql 兜底 |
 
+
+
+### Phase 2（Resource Intelligence）遗留
+
+- 17 个 failed 资源为真实状态（.py 无统一契约、Claude Temp 临时目录无 CLAUDE.md、插件无 manifest），每次增量 run 会重试 failed（属预期「重试失败」语义，未加失败冷却，避免 failed 永不重试）。
+- 扫描快照与文件系统 mtime 差异：增量判定基于扫描记录的 lastModified（需先重扫才感知文件变化），设计如此（扫描=幂等 upsert 索引）。
+- 浏览器自动化空间本阶段暂不可用（browser_use_space_disabled_or_unavailable），生产交互验证降级为 HTTP 页面 200 + 端点冒烟 + 产物级检查；非应用问题。
+
 ## 十、下一步计划
 
 1. **等待审批**：验收《P5-1 AI Runtime Architecture & Contract》（纯设计：Runtime 编排层 / 状态机 / Capability 映射 / Provider 接口 / Streaming 契约 / 错误与成本模型 / Mock→Real 路径）。
 2. 执行任何内容前：先出方案 → 审批 → 实现 → 验证 → 更新本文件 → 汇报。
 3. **P5-1 收尾**：Git 提交（本次执行）已完成。
 4. **P5-2（已完成）**：按 §十三 实施最小闭环——Runtime 接口 + CapabilityLoader + MockProvider + Run 状态机（migration：success→succeeded + 新列）+ `runAgent` 改经 Runtime + UI 徽章扩展 + 全量回归；**不接真实 LLM / 不实现 Streaming / Tool / Memory**。
+
+
+
+### Phase 2 下一步（待审批）
+
+1. **等待审批**：验收本阶段《Phase 2 Resource Intelligence MVP 交付汇报》。
+2. 可选后续方向（未获批准前不实施）：能力索引的 LLMAnalyzer 真实接入（本阶段仅为契约桩）；资源执行 / MCP / 编辑删除 / 远程部署；failed 重试冷却与增量性能优化；更多文档类型解析。
 
 ## 十一、待审批事项
 

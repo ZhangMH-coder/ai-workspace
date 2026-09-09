@@ -22,6 +22,13 @@
       "when": 1788882787123,
       "tag": "0002_majestic_aqueduct",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1788964053704,
+      "tag": "0003_faithful_crusher_hogan",
+      "breakpoints": true
     }
   ]
 }

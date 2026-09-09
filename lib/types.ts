@@ -357,3 +357,125 @@ export interface RunScanResult {
   harnesses: HarnessScanSummary[];
   resources: DiscoveredResource[];
 }
+
+/* ---------------- Resource Intelligence（Phase 2：能力分析 / 能力索引） ---------------- */
+
+/** 分析生命周期：pending 待分析 / analyzed 已分析 / failed 失败可重试 / expired 原文件变化后过期 */
+export type AnalysisStatus = "pending" | "analyzed" | "failed" | "expired";
+/** 分析策略：heuristic 确定性规则（MVP 唯一实现）/ llm 契约桩（未来） */
+export type AnalysisStrategy = "heuristic" | "llm";
+
+export type CapabilityCategory =
+  | "text_summary"
+  | "web_research"
+  | "code_gen"
+  | "data_analysis"
+  | "automation"
+  | "content_creation"
+  | "dev_tool"
+  | "other";
+
+export const CAPABILITY_CATEGORY_OPTIONS: { value: CapabilityCategory; label: string }[] = [
+  { value: "text_summary", label: "文本摘要" },
+  { value: "web_research", label: "网络研究" },
+  { value: "code_gen", label: "代码生成" },
+  { value: "data_analysis", label: "数据分析" },
+  { value: "automation", label: "自动化" },
+  { value: "content_creation", label: "内容创作" },
+  { value: "dev_tool", label: "开发工具" },
+  { value: "other", label: "其他" },
+];
+
+export function capabilityCategoryLabel(category: string): string {
+  return CAPABILITY_CATEGORY_OPTIONS.find((o) => o.value === category)?.label ?? category;
+}
+
+/** 一次资源分析记录（保留历史：同一资源可对应多次；isCurrent 标记当前有效） */
+export interface ResourceAnalysis {
+  id: string;
+  resourceId: string;
+  status: AnalysisStatus;
+  strategy: AnalysisStrategy;
+  analyzerVersion: string;
+  createdAt: string;
+  analyzedAt: string | null;
+  inputFingerprint: string;
+  resourceMtime: string | null;
+  isCurrent: boolean;
+  errorCode: string | null;
+  errorMessage: string | null;
+  summary: string | null;
+}
+
+/** 能力标签（AI 归纳结果，必须可追溯到真实文件证据） */
+export interface ResourceCapability {
+  id: string;
+  analysisId: string;
+  resourceId: string;
+  capability: string;
+  category: CapabilityCategory;
+  keywords: string[];
+  confidence: number;
+  evidenceRef: string;
+  evidenceSnippet: string;
+  inputContext: Record<string, unknown>;
+  executionHint: string | null;
+}
+
+/** 资源洞察（详情页：资源事实 + 当前分析 + 能力标签 + 历史记录） */
+export interface ResourceInsight {
+  resource: DiscoveredResource;
+  currentAnalysis: ResourceAnalysis | null;
+  capabilities: ResourceCapability[];
+  history: ResourceAnalysis[];
+}
+
+/** 分析状态概览 */
+export interface AnalysisStatusSummary {
+  totalResources: number;
+  analyzed: number;
+  pending: number;
+  failed: number;
+  expired: number;
+  capabilityCount: number;
+  lastRunAt: string | null;
+  analyzerVersion: string;
+}
+
+/** 一次增量分析运行结果 */
+export interface AnalysisRunResult {
+  processed: number;
+  skipped: number;
+  analyzed: number;
+  failed: number;
+}
+
+/** 能力索引视图分组条目 */
+export interface CapabilityIndexEntry {
+  category: CapabilityCategory;
+  count: number;
+  items: {
+    resourceId: string;
+    resourceName: string;
+    harnessId: string;
+    capability: string;
+    confidence: number;
+    evidenceRef: string;
+  }[];
+}
+
+/** 任务 → 资源匹配结果（派生，不落库） */
+export interface TaskMatchResult {
+  task: string;
+  matches: {
+    resourceId: string;
+    resourceName: string;
+    harnessId: string;
+    type: ResourceType;
+    capability: string;
+    category: CapabilityCategory;
+    confidence: number;
+    evidenceRef: string;
+    score: number;
+  }[];
+}

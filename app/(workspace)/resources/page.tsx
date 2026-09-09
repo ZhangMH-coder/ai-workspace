@@ -7,7 +7,8 @@
  * 支持重新扫描（只读、幂等）；未扫描 / 未发现 / Mock 模式展示真实空态。
  */
 import { useEffect } from "react";
-import { RotateCcw, ScanSearch } from "lucide-react";
+import Link from "next/link";
+import { BrainCircuit, RotateCcw, ScanSearch } from "lucide-react";
 import { toast } from "sonner";
 
 import { EmptyDiscovery } from "@/components/resources/empty-discovery";
@@ -56,14 +57,24 @@ export default function ResourcesPage() {
         title="Local Resources"
         description="只读发现本机真实存在的 AI Harness / Skill / Agent 资源并建立统一索引（无演示数据）"
         actions={
-          <Button onClick={handleScan} disabled={scanning} className="h-8 gap-1.5 text-[12px]">
-            {scanning ? (
-              <RotateCcw className="size-3.5 animate-spin" />
-            ) : (
-              <ScanSearch className="size-3.5" />
-            )}
-            {scanning ? "扫描中…" : scanRun ? "重新扫描" : "扫描本机资源"}
-          </Button>
+          <div className="flex items-center gap-2">
+            <Link href="/resources/capabilities">
+              <Button
+                variant="outline"
+                className="h-8 gap-1.5 border-white/10 text-[12px] text-ink-2"
+              >
+                <BrainCircuit className="size-3.5" /> 能力索引
+              </Button>
+            </Link>
+            <Button onClick={handleScan} disabled={scanning} className="h-8 gap-1.5 text-[12px]">
+              {scanning ? (
+                <RotateCcw className="size-3.5 animate-spin" />
+              ) : (
+                <ScanSearch className="size-3.5" />
+              )}
+              {scanning ? "扫描中…" : scanRun ? "重新扫描" : "扫描本机资源"}
+            </Button>
+          </div>
         }
       />
 

@@ -7,7 +7,7 @@
  * Adapter 边界：本层只依赖 drizzle-orm（better-sqlite3 driver 在 db.ts 隔离）；
  * 未来切 node:sqlite / libsql 时本层代码零改动。
  */
-import { and, asc, count, desc, eq, gte, inArray, like, lt, or, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, gte, inArray, like, lt, ne, or, sql } from "drizzle-orm";
 import { db } from "./db";
 import {
   agentCapabilities,
@@ -18,6 +18,8 @@ import {
   harnessScans,
   projectAgents,
   projects,
+  resourceAnalyses,
+  resourceCapabilities,
   scanRuns,
 } from "./schema";
 
@@ -543,4 +545,155 @@ export function listDistinctHarnessResources() {
     .from(discoveredResources)
     .groupBy(discoveredResources.harnessId)
     .all();
+}
+
+/* ---------------- Resource Intelligence（Phase 2） ----------------
+ * 分析记录（历史保留）与能力标签 CRUD。
+ * 唯一键：resourceId + inputFingerprint + analyzerVersion —— 同一输入同版本不重复生成。
+ */
+
+/** upsert 分析记录（同键更新：重试 / 状态迁移；createdAt 保留创建时间） */
+export function upsertResourceAnalysis(row: typeof resourceAnalyses.$inferInsert) {
+  return db
+    .insert(resourceAnalyses)
+    .values(row)
+    .onConflictDoUpdate({
+      target: [resourceAnalyses.resourceId, resourceAnalyses.inputFingerprint, resourceAnalyses.analyzerVersion],
+      set: {
+        status: row.status,
+        strategy: row.strategy,
+        analyzedAt: row.analyzedAt,
+        resourceMtime: row.resourceMtime,
+        isCurrent: row.isCurrent,
+        errorCode: row.errorCode,
+        errorMessage: row.errorMessage,
+        summary: row.summary,
+      },
+    })
+    .returning()
+    .get();
+}
+
+/** 按资源查分析记录（新 → 旧） */
+export function listAnalysesByResource(resourceId: string) {
+  return db
+    .select()
+    .from(resourceAnalyses)
+    .where(eq(resourceAnalyses.resourceId, resourceId))
+    .orderBy(desc(resourceAnalyses.createdAt))
+    .all();
+}
+
+/** 当前有效分析（isCurrent=true） */
+export function getCurrentAnalysis(resourceId: string) {
+  return (
+    db
+      .select()
+      .from(resourceAnalyses)
+      .where(and(eq(resourceAnalyses.resourceId, resourceId), eq(resourceAnalyses.isCurrent, true)))
+      .get() ?? null
+  );
+}
+
+/** 将资源除 keepId 外的所有分析记录置为非当前 */
+export function markOtherAnalysesNotCurrent(resourceId: string, keepId: string) {
+  db.update(resourceAnalyses)
+    .set({ isCurrent: false })
+    .where(and(eq(resourceAnalyses.resourceId, resourceId), ne(resourceAnalyses.id, keepId)))
+    .run();
+}
+
+/** 查询同键记录（判断是否已分析过该输入） */
+export function getAnalysisByFingerprint(resourceId: string, fingerprint: string, version: string) {
+  return (
+    db
+      .select()
+      .from(resourceAnalyses)
+      .where(
+        and(
+          eq(resourceAnalyses.resourceId, resourceId),
+          eq(resourceAnalyses.inputFingerprint, fingerprint),
+          eq(resourceAnalyses.analyzerVersion, version)
+        )
+      )
+      .get() ?? null
+  );
+}
+
+/** 删除某次分析的全部能力标签（重分析时替换） */
+export function deleteCapabilitiesByAnalysis(analysisId: string) {
+  db.delete(resourceCapabilities).where(eq(resourceCapabilities.analysisId, analysisId)).run();
+}
+
+/** 插入一条能力标签 */
+export function insertResourceCapability(row: typeof resourceCapabilities.$inferInsert) {
+  return db.insert(resourceCapabilities).values(row).run();
+}
+
+/** 某资源的当前能力标签（join 当前分析） */
+export function listCurrentCapabilitiesByResource(resourceId: string) {
+  return db
+    .select({ cap: resourceCapabilities })
+    .from(resourceCapabilities)
+    .innerJoin(resourceAnalyses, eq(resourceCapabilities.analysisId, resourceAnalyses.id))
+    .where(and(eq(resourceCapabilities.resourceId, resourceId), eq(resourceAnalyses.isCurrent, true)))
+    .all()
+    .map((r) => r.cap);
+}
+
+/** 全量当前能力标签（能力索引 / 任务匹配用；MVP 规模可接受） */
+export function listAllCurrentCapabilities() {
+  return db
+    .select({ cap: resourceCapabilities, resource: discoveredResources })
+    .from(resourceCapabilities)
+    .innerJoin(resourceAnalyses, eq(resourceCapabilities.analysisId, resourceAnalyses.id))
+    .innerJoin(discoveredResources, eq(resourceCapabilities.resourceId, discoveredResources.id))
+    .where(eq(resourceAnalyses.isCurrent, true))
+    .all();
+}
+
+/** 分析状态统计（当前有效记录按状态分组） */
+export function countAnalysisStatus() {
+  const rows = db
+    .select({ status: resourceAnalyses.status, n: count() })
+    .from(resourceAnalyses)
+    .where(eq(resourceAnalyses.isCurrent, true))
+    .groupBy(resourceAnalyses.status)
+    .all();
+  const out: Record<string, number> = {};
+  for (const r of rows) out[r.status] = r.n;
+  return out;
+}
+
+/** 当前有效分析总数 / 能力标签总数 */
+export function countAnalysisMeta() {
+  const analyses = db
+    .select({ n: count() })
+    .from(resourceAnalyses)
+    .where(eq(resourceAnalyses.isCurrent, true))
+    .get()?.n ?? 0;
+  const caps = db
+    .select({ n: count() })
+    .from(resourceCapabilities)
+    .innerJoin(resourceAnalyses, eq(resourceCapabilities.analysisId, resourceAnalyses.id))
+    .where(eq(resourceAnalyses.isCurrent, true))
+    .get()?.n ?? 0;
+  return { analyses, caps };
+}
+
+/** 最近一次分析完成时间 */
+export function getLastAnalysisAt() {
+  return (
+    db
+      .select({ at: resourceAnalyses.analyzedAt })
+      .from(resourceAnalyses)
+      .orderBy(desc(resourceAnalyses.analyzedAt))
+      .limit(1)
+      .get()?.at ?? null
+  );
+}
+
+/** 全部资源（增量分析遍历用；避免 pageSize=1000 反模式） */
+export function listAllDiscoveredResources() {
+  return db.select().from(discoveredResources).all();
 }

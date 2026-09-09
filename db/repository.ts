@@ -20,7 +20,10 @@ import {
   projects,
   resourceAnalyses,
   resourceCapabilities,
+  resourceRecommendations,
   scanRuns,
+  taskAnalyses,
+  taskRequirements,
 } from "./schema";
 
 /* ---------------- 通用分页 ---------------- */
@@ -696,4 +699,128 @@ export function getLastAnalysisAt() {
 /** 全部资源（增量分析遍历用；避免 pageSize=1000 反模式） */
 export function listAllDiscoveredResources() {
   return db.select().from(discoveredResources).all();
+}
+
+/* ---------------- Task Intelligence ---------------- */
+
+/** 按 (task, fingerprint, version) 查同键记录（幂等判定） */
+export function getTaskAnalysisByFingerprint(
+  task: string,
+  fingerprint: string,
+  version: string
+) {
+  return (
+    db
+      .select()
+      .from(taskAnalyses)
+      .where(
+        and(
+          eq(taskAnalyses.task, task),
+          eq(taskAnalyses.inputFingerprint, fingerprint),
+          eq(taskAnalyses.analyzerVersion, version)
+        )
+      )
+      .get() ?? null
+  );
+}
+
+/** 写入/更新任务分析（同键记录更新，保留历史语义由 isCurrent 管理） */
+export function upsertTaskAnalysis(row: typeof taskAnalyses.$inferInsert) {
+  return db
+    .insert(taskAnalyses)
+    .values(row)
+    .onConflictDoUpdate({
+      target: [taskAnalyses.task, taskAnalyses.inputFingerprint, taskAnalyses.analyzerVersion],
+      set: {
+        status: row.status,
+        taskType: row.taskType,
+        analyzedAt: row.analyzedAt,
+        isCurrent: row.isCurrent,
+        errorCode: row.errorCode,
+        errorMessage: row.errorMessage,
+        summary: row.summary,
+      },
+    })
+    .returning()
+    .get();
+}
+
+/** 将同任务除 keepId 外的分析记录置为非当前 */
+export function markOtherTaskAnalysesNotCurrent(task: string, keepId: string) {
+  db.update(taskAnalyses)
+    .set({ isCurrent: false })
+    .where(and(eq(taskAnalyses.task, task), ne(taskAnalyses.id, keepId)))
+    .run();
+}
+
+/** 删除某次分析的全部需求（重分析时替换） */
+export function deleteTaskRequirementsByAnalysis(analysisId: string) {
+  db.delete(taskRequirements)
+    .where(eq(taskRequirements.taskAnalysisId, analysisId))
+    .run();
+}
+
+/** 插入一条能力需求（推断产物） */
+export function insertTaskRequirement(row: typeof taskRequirements.$inferInsert) {
+  return db.insert(taskRequirements).values(row).run();
+}
+
+/** 删除某次分析的全部推荐（重分析时替换） */
+export function deleteTaskRecommendationsByAnalysis(analysisId: string) {
+  db.delete(resourceRecommendations)
+    .where(eq(resourceRecommendations.taskAnalysisId, analysisId))
+    .run();
+}
+
+/** 插入一条资源推荐（只引用 resource_capability.id，追溯快照为真实来源字段） */
+export function insertTaskRecommendation(row: typeof resourceRecommendations.$inferInsert) {
+  return db.insert(resourceRecommendations).values(row).run();
+}
+
+/** 查任务分析记录 */
+export function getTaskAnalysisById(id: string) {
+  return db.select().from(taskAnalyses).where(eq(taskAnalyses.id, id)).get() ?? null;
+}
+
+/** 查询任务分析完整结果（analysis + requirements + 推荐 join 能力与资源） */
+export function getTaskAnalysisResult(id: string) {
+  const analysis = getTaskAnalysisById(id);
+  if (!analysis) return null;
+  const requirements = db
+    .select()
+    .from(taskRequirements)
+    .where(eq(taskRequirements.taskAnalysisId, id))
+    .orderBy(asc(taskRequirements.sortOrder))
+    .all();
+  const recommendations = db
+    .select({
+      reco: resourceRecommendations,
+      cap: resourceCapabilities,
+      resource: discoveredResources,
+      requirement: taskRequirements,
+    })
+    .from(resourceRecommendations)
+    .innerJoin(
+      resourceCapabilities,
+      eq(resourceRecommendations.resourceCapabilityId, resourceCapabilities.id)
+    )
+    .innerJoin(discoveredResources, eq(resourceRecommendations.resourceId, discoveredResources.id))
+    .innerJoin(
+      taskRequirements,
+      eq(resourceRecommendations.taskRequirementId, taskRequirements.id)
+    )
+    .where(eq(resourceRecommendations.taskAnalysisId, id))
+    .orderBy(asc(resourceRecommendations.rank))
+    .all();
+  return { analysis, requirements, recommendations };
+}
+
+/** 任务分析历史列表（新 → 旧） */
+export function listTaskAnalyses(limit = 20) {
+  return db
+    .select()
+    .from(taskAnalyses)
+    .orderBy(desc(taskAnalyses.createdAt))
+    .limit(limit)
+    .all();
 }

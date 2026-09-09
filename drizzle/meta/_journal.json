@@ -29,6 +29,13 @@
       "when": 1788964053704,
       "tag": "0003_faithful_crusher_hogan",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1788968170545,
+      "tag": "0004_bitter_micromacro",
+      "breakpoints": true
     }
   ]
 }

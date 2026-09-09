@@ -31,3 +31,9 @@ export function computeInputFingerprint(input: {
 export function computeMetaHash(metadata: Record<string, unknown>): string {
   return sha1(JSON.stringify(metadata ?? {}));
 }
+
+/** 任务文本指纹：归一化（trim / 折叠空白 / 小写）后 sha1，用于任务分析幂等判定 */
+export function computeTaskFingerprint(task: string): string {
+  const normalized = task.trim().replace(/\s+/g, " ").toLowerCase();
+  return sha1(normalized);
+}

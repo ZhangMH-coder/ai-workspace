@@ -26,10 +26,11 @@
 | 2026-09-08 | v1.4 | **P4-4 交付增强 & V1 Release Candidate** | Docker 化（多阶段 Dockerfile + docker-compose + .dockerignore；SQLite 持久化卷 `./data:/app/data`；容器入口 `db:init && start`，重启数据保留）；README 完整化（环境/安装/开发/Real-Mock/初始化/构建/生产/Docker/数据位置/功能边界）；CI 最小质量门禁（GitHub Actions：npm ci → lint → tsc → db:init+db:check（DATABASE_URL=./data/ci.db 隔离）→ build；本地 `npm run ci` 等价）；新增 `db/init.ts` 从零初始化脚本（migrate + 空库 seed，幂等）；tsx 移至 dependencies（容器运行时 db 脚本）；从零初始化验证（删库 → init 5/18/49/3/6/92 → check → 二次 init seed 跳过 → build → 启动 → 访问）；稳定性回归（Real 生产全页面 + 写操作 attach/detach 落库 + Mock 独立构建与 Real 数字一致 88/90.9%/1.7M）；lint/tsc/build 全绿；seed 天级时间锚保持；P4-3 基线数字不变 | ✅ 已完成并通过 P5-1 审批 |
 | 2026-09-08 | v1.5 | **P5-1 AI Runtime 架构与契约设计（纯设计，当前阶段）** | 交付 `docs/P5-1-AI-Runtime-Architecture-Contract.md`：目标架构 Agent→Runtime→Model/Prompt/Context/Capability/Execution→Run；Runtime 编排层（lib/runtime/*）位于 Service 与 Provider 之间；RuntimeRequest/ModelConfig/ExecutionContext/RuntimeResult/RuntimeEvent/RuntimeError/TokenUsage 域模型；Run 状态机五态（queued/running/succeeded/failed/cancelled）+ 合法转换 + 存量 success→succeeded 迁移策略 + 统计分母显式定义；Capability 两层只读消费（Definition 资产 + AgentCapability 装配 → ExecutionContext，四类职责与注入顺序）；统一 RuntimeProvider 接口（Adapter 注册表，禁止 Service 硬编码）；Streaming Event 契约（delta/tool_call/tool_result/finish/error + SSE 细则，P5-2 不实现）；错误分层（API/Runtime/Provider/Tool/Timeout-Cancel → Run 落库 error_code）；Token/Cost 模型（input/output/total 落库、cost 扩展位不落库）；持久化边界（Run 落库、事件流仅内存、完整 output 不持久化）；Mock→Real 双模式替换路径（P5-2 仅 MockProvider + 编排层）；P5-2 最小实施计划（10 项，明确不做清单）；风险与边界 | ✅ 已完成，待审批进入 P5-2 |
 | 2026-09-09 | v1.6 | **Phase 2 — Resource Intelligence MVP（能力索引）** | 145 个真实资源（128 可解析）从「被展示」升级为「能力索引」：新表 `resource_analysis`（保留历史：analyzerVersion/createdAt/isCurrent/inputFingerprint，唯一键 resourceId+inputFingerprint+analyzerVersion 防同版本重复）+ `resource_capability`（每条标签必须 evidenceRef+evidenceSnippet 可追溯）；`lib/analysis/*` 分析层（DocumentReader 只读白名单解析 + fingerprint 增量机制 + HeuristicAnalyzer heuristic-v1 唯一实际分析器 + LLMAnalyzer 仅契约桩不注册）；API 5 端点（run/status/resources/[id]/capabilities/match）；前端能力索引页 `/resources/capabilities`（状态卡 + 增量分析 + 任务→资源匹配 + 类别分组）+ 资源详情能力区块（InsightPanel）+ 导航「Resource Capabilities」；Mock 模式真实空态不伪造；**修数据一致性**：同指纹重跑失败时旧标签一并失效（failed 资源不再残留旧能力标签）；最终态 145 / 128 analyzed / 17 failed / 487 标签（全部可追溯）；lint 0/0、tsc、db:check、build（Real+Mock）、增量/幂等/追溯/只读/Mock 空态验证全过 | ✅ 已完成，待审批 |
+| 2026-09-09 | v1.7 | **Phase 3 — Task Intelligence MVP（任务理解与能力编排）** | 把「资源能力索引」升级为「任务理解层」：六组件流水线 Task → TaskParser（通用领域词典类型识别）→ TaskDecomposer（类型模板 + 附加意图拆解）→ RequirementExtractor（能力需求，isInferred 固定 true）→ CapabilityRetriever（复用现有打分公式 + 真实用户任务反向匹配 + other 类型仅反向信号）→ Reranker（跨需求合并/同资源去重/证据质量分级/最低推荐分 0.5 如实过滤）→ Assembler（RecommendationPlan，仅「选什么」不执行，lib/runtime 契约零改动）；新表 `task_analysis`（历史 + fingerprint + isCurrent，唯一键 task+inputFingerprint+analyzerVersion）+ `task_requirement`（isInferred）+ `resource_recommendation`（只引用 resource_capability.id，evidenceRef/sourcePath 真实来源快照，追溯链完整）；migration 0004；API `POST /api/v1/task-intelligence/analyze`（幂等复用）+ GET analyses/[id] + GET analyses；DTO/mappers/client + Mock 真实空态双模式；Store taskIntelligence 区块 + `/task-intelligence` 页面（输入 → 拆解/需求（推断徽标）→ 推荐卡片（score/理由/证据行）+ 历史列表）+ 导航「Task Intelligence」；**修检索噪声**：中文 2-gram 停用词、模板词反向匹配虚高（kwHits 改基于真实用户任务）、other 类型关闭正向匹配；验收场景「写一篇小红书文案」8 条 #1=1、「数据周报并整理成表格」8 条 #1=0.94（含数据整理子任务）、「今天天气怎么样」如实 0 推荐空态；lint 0/0、tsc、db:check、build（Real+Mock）、API 冒烟（样例/幂等/空态/追溯/事实推断分离）、145/128/487 零回归 | ✅ 已完成，待审批 |
 
 ## 当前阶段
 
-**Phase 2 — Resource Intelligence MVP（能力索引）**（已完成；**不自动进入下一阶段**，待审批）
+**Phase 3 — Task Intelligence MVP（任务理解与能力编排）**（已完成；**不自动进入下一阶段**，待审批）
 
 ---
 
@@ -576,8 +577,72 @@ Resource Discovery MVP —— 实现完成、全量验证通过、待审批（�
 
 等待审批。后续可选方向（均未获批准前不实施）：资源执行 / 编辑 / 删除 / 同步 / 远程部署 / MCP 调用 / 真实 AI 集成；更多 Harness Adapter（.continue、.aider、Gemini CLI 等）；临时会话目录过滤优化。
 
+---
 
+## 一、已完成内容（Phase 3 — Task Intelligence MVP 实施）
 
+### 1. 领域模型（三张新表，migration 0004 已应用）
 
+- `task_analysis`：task / status(analyzed|failed) / strategy(heuristic|llm) / analyzerVersion("task-heuristic-v1") / taskType（推断）/ inputFingerprint / isCurrent / errorCode / errorMessage / summary / createdAt / analyzedAt；唯一约束 `uq_task_analysis_fp_version(task,input_fingerprint,analyzer_version)`——同版本同输入不重复生成；历史保留（isCurrent 标记当前，markOtherTaskAnalysesNotCurrent）。
+- `task_requirement`：taskAnalysisId(FK cascade) / requirementText / category / keywords(JSON) / weight / derivedFrom / **isInferred（固定 true，显式标记推断）** / sortOrder；唯一 `uq_task_req_analysis_text`。
+- `resource_recommendation`：taskAnalysisId + taskRequirementId(FK) + **resourceCapabilityId（只引用不复制能力文本）** + resourceId + score + reason（推断）/ evidenceRef + sourcePath（真实来源快照）/ rank / source；唯一 `uq_reco_analysis_cap`。
 
+### 2. 分析层（lib/task-intelligence/，纯计算、不触碰 Runtime）
 
+- `parser.ts`：parseTaskType —— 7 类领域词典（内容创作/文本摘要/网络研究/数据分析/代码生成/自动化/开发工具）+ other 兜底；取信号最多类型；**不针对测试词硬编码**。
+- `decomposer.ts`：类型模板子任务 + 附加意图检测（"表格/数据/整理成"→数据整理、"配图/图片"→视觉素材、"翻译/英文"→翻译）；other 类型关键词为空（只依赖真实用户反向信号）。
+- `extractor.ts`：子任务 → CapabilityRequirement（isInferred=true）。
+- `retriever.ts`：tokenizeTask（英文词 + 中文 2/3-gram + **停用词过滤**）；BaseScore 复用现有公式 `(min(hits+kw,5)/5)*0.65 + confidence*0.35`；**kwHits 反向匹配基于真实用户任务原文**（修模板词虚高）；类别加成 +0.08（other 除外）；other 类型仅 kwHits 路径。
+- `reranker.ts`：跨需求合并（同 capability 保留最高分+理由合并）、同资源多标签去重、证据质量分级（description>heading>其他）、**MIN_RECOMMENDATION_SCORE=0.5 低置信如实过滤**；reason 由真实匹配信号生成。
+- `assembler.ts`：流水线编排，输出 RecommendationPlan（analysisId 复用语义由 service 注入）。
+
+### 3. Service / Repository（db/）
+
+- `analyzeTask(task)`：fingerprint 幂等（同键已 analyzed → 复用已有记录，reused=true，不重复落库）；能力源空 → failed 记录（NO_CAPABILITIES）+ ServiceError NOT_FOUND；分析异常 → failed 记录（ANALYSIS_FAILED）+ 抛错；成功 → upsert analysis + markOtherNotCurrent + 替换需求/推荐（全部写操作走 Repository）。
+- `getTaskAnalysis(id)` / `listTaskAnalyses(limit)`：详情 join capability+resource+requirement 组装领域 Plan；列表新→旧。
+
+### 4. API 契约（3 端点 + DTO/Mock 双模式）
+
+- `POST /api/v1/task-intelligence/analyze` { task } → Plan + reused；`GET /api/v1/task-intelligence/analyses?limit` → 历史列表；`GET /api/v1/task-intelligence/analyses/[id]` → 详情（404 契约）。
+- `lib/api/task-intelligence.ts`：DTO（独立于 Domain）+ mappers + client（ApiError 按 code 分支）。
+- `lib/services/mock/task-intelligence.ts`：**真实空态**（analyze 抛 ApiError、列表空数组，不伪造分析结果）；`lib/services/task-intelligence.ts` 双模式入口。
+
+### 5. Store / 前端
+
+- `stores/workspace.ts`：taskIntelligence 区块（current/history/analyzing/loading/error/reused）+ analyzeTask / fetchTaskAnalysisHistory actions；**persist partialize 仍仅 timeRange**（领域数据不入 localStorage，migrate v5 语义未动）。
+- `/task-intelligence` 页面 + `components/task-intelligence/task-intelligence-view.tsx`：任务输入（含示例按钮）、结果区（任务类型徽标 + summary + 拆解需求列表（isInferred 徽标）+ 推荐卡片（rank/资源链接→/resources/[id]/类型·harness/类别/score 条/能力文本/推断理由/证据行 sourcePath+evidenceRef+置信度+关联需求））、空态（低相关如实显示）、历史列表；导航「本地资源」组新增「Task Intelligence」（Workflow 图标）。
+
+### 6. 检索质量修复（验证过程中发现的真实问题）
+
+- 中文 2-gram 高频停用词过滤（怎么/什么/一个/可以/进行/使用/用于/帮助/需要…）——消除宽匹配噪声。
+- **模板词反向匹配虚高**：kwHits 原本用自造需求文本做反向匹配，导致"任务/处理/帮助"等模板词虚高命中 → 改为基于真实用户任务原文。
+- **other 类型关闭正向匹配**：未识别任务只依赖用户真实词的 kwHits，杜绝 3-gram 残留噪声（如「今天天气怎么样」从误报 6 条降到如实 0 条）。
+
+## 验证结果
+
+- **lint**：0 error / 0 warning。
+- **tsc --noEmit**：通过。
+- **db:check**：通过（migration 0004 已应用且 schema 一致）。
+- **build**：Real + Mock 双模式构建全绿（Mock 需 `NEXT_PUBLIC_USE_MOCK=1` 重新构建，既有双模式语义）。
+- **API 冒烟（Real 生产）**：
+  - 「写一篇小红书文案」→ content_creation，2 需求，8 推荐，#1 doubao-ecommerce-proposal score=1.00；
+  - 「帮我做一份数据周报并整理成表格」→ data_analysis，3 需求（含数据整理），8 推荐，#1 lark-base score=0.94；
+  - 「今天天气怎么样」→ other，**0 推荐如实空态**；
+  - 幂等：同任务二次 POST 同 analysisId + reused=true（跨进程 SQLite 持久化验证）；
+  - 追溯：推荐 → resourceCapabilityId → sourcePath（真实 SKILL.md 路径）+ evidenceRef（SKILL.md#description）；
+  - 事实/推断分离：requirements.isInferred=true 落库，推荐 reason 为推断文本、score 为确定性算法输出；
+  - 详情/列表端点 200 正常。
+- **页面 HTTP**：/task-intelligence、/dashboard、/resources/capabilities、/agents、/projects 全部 200。
+- **零回归**：145 资源 / 128 analyzed / 17 failed / 487 能力标签基线未变；Harness 文件零修改（本阶段无任何文件写操作）。
+- **Mock 模式**：前端 Mock 真实空态（analyze 抛 ApiError、列表空），API 端点连 SQLite（既有双模式架构，与 P4 验收一致）。
+- **限制**：浏览器自动化空间不可用（browser_use_space_disabled_or_unavailable），生产交互验证降级为 HTTP 200 + API 冒烟 + 产物级检查（与上一阶段一致的既定降级）。
+
+## 遗留问题
+
+- Heuristic 任务理解属确定性规则，复杂自然语言（长句多意图、歧义指代）拆解粒度有限——LLM 理解器（task-llm-v1）预留为同一接口的替换实现，本阶段不接。
+- other 类型任务依赖用户显式词反向匹配，若用户任务含生僻领域词可能 0 推荐（如实空态，属设计行为）。
+- 浏览器控制台 chrome-extension 注入错误（非应用错误，既有记录）。
+
+## 下一步计划
+
+等待审批。后续可选方向（均未获批准前不实施）：Agent 覆盖度推荐（需求命中能力 → 按 AgentCapability 装配推荐 Agent）；CapabilityDefinition 人工提炼（ResourceCapability → Definition 的 provenance 确认 UI）；真实 LLM 任务理解（task-llm-v1）；编排执行层（RecommendationPlan → Runtime 前置映射）。

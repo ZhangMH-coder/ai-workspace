@@ -90,6 +90,12 @@ import {
   matchResourcesForTask as matchResourcesForTaskService,
   runAnalysis as runAnalysisService,
 } from "@/lib/services/resource-analysis";
+import {
+  analyzeTask as analyzeTaskService,
+  fetchTaskAnalyses as fetchTaskAnalysesService,
+} from "@/lib/services/task-intelligence";
+import type { RecommendationPlan } from "@/lib/task-intelligence";
+import type { TaskAnalysisListItemDTO } from "@/lib/api/task-intelligence";
 
 /** 空统计（组件对未加载/无数据时的防御默认值） */
 export const EMPTY_RUNS_STATS: RunsStats = {
@@ -212,6 +218,18 @@ interface WorkspaceState {
   fetchResourceInsight: (id: string) => Promise<void>;
   fetchCapabilityIndex: () => Promise<void>;
   matchResourcesForTask: (task: string) => Promise<void>;
+  /** 任务智能（Phase 3）：任务 → 子任务 → 能力需求 → 推荐方案 */
+  taskIntelligence: {
+    current: RecommendationPlan | null;
+    history: TaskAnalysisListItemDTO[];
+    analyzing: boolean;
+    loading: boolean;
+    error: string | null;
+    /** 幂等复用标记 */
+    reused: boolean;
+  };
+  analyzeTask: (task: string) => Promise<RecommendationPlan>;
+  fetchTaskAnalysisHistory: () => Promise<void>;
 }
 
 export const useWorkspaceStore = create<WorkspaceState>()(
@@ -247,6 +265,14 @@ export const useWorkspaceStore = create<WorkspaceState>()(
         running: false,
         loading: false,
         error: null,
+      },
+      taskIntelligence: {
+        current: null,
+        history: [],
+        analyzing: false,
+        loading: false,
+        error: null,
+        reused: false,
       },
       fetchDiscoveryOverview: async () => {
         set((s) => ({ discovery: { ...s.discovery, loading: true, error: null } }));
@@ -375,6 +401,46 @@ export const useWorkspaceStore = create<WorkspaceState>()(
         } catch (e) {
           set((s) => ({
             analysis: { ...s.analysis, loading: false, error: (e as Error).message },
+          }));
+        }
+      },
+
+      analyzeTask: async (task: string) => {
+        set((s) => ({ taskIntelligence: { ...s.taskIntelligence, analyzing: true, error: null } }));
+        try {
+          const result = await analyzeTaskService(task);
+          set((s) => ({
+            taskIntelligence: {
+              ...s.taskIntelligence,
+              current: result.plan,
+              analyzing: false,
+              reused: result.reused,
+            },
+          }));
+          return result.plan;
+        } catch (e) {
+          set((s) => ({
+            taskIntelligence: {
+              ...s.taskIntelligence,
+              analyzing: false,
+              error: (e as Error).message,
+            },
+          }));
+          throw e;
+        }
+      },
+      fetchTaskAnalysisHistory: async () => {
+        set((s) => ({ taskIntelligence: { ...s.taskIntelligence, loading: true, error: null } }));
+        try {
+          const history = await fetchTaskAnalysesService();
+          set((s) => ({ taskIntelligence: { ...s.taskIntelligence, history, loading: false } }));
+        } catch (e) {
+          set((s) => ({
+            taskIntelligence: {
+              ...s.taskIntelligence,
+              loading: false,
+              error: (e as Error).message,
+            },
           }));
         }
       },

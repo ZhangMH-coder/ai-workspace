@@ -280,6 +280,116 @@ export const resourceCapabilities = sqliteTable(
   ]
 );
 
+/* ---------- Task Intelligence（Phase 3） ----------
+ *
+ * 原则：
+ * - task_analysis 保留历史（一次任务可多次分析）：isCurrent 标记当前有效；
+ *   唯一约束 (task, input_fingerprint, analyzer_version) 防止同一版本+同一输入重复生成
+ * - task_requirement 是「推断」产物：isInferred 显式标记（任务类型/子任务/需求表述均属推断）
+ * - resource_recommendation 只引用 resource_capability.id，不复制能力文本；
+ *   evidence_ref / source_path 为真实来源快照，保证追溯链 Recommendation → capability.id → evidenceRef → sourcePath
+ * - Task Intelligence 只负责「选什么」，不产生任何执行语义
+ */
+
+export const taskAnalyses = sqliteTable(
+  "task_analysis",
+  {
+    id: text("id").primaryKey(),
+    /** 原始任务文本 */
+    task: text("task").notNull(),
+    /** analyzed | failed */
+    status: text("status").notNull(),
+    /** heuristic | llm */
+    strategy: text("strategy").notNull(),
+    /** 分析器版本，如 "task-heuristic-v1" */
+    analyzerVersion: text("analyzer_version").notNull(),
+    /** 推断：任务类型（content_creation 等） */
+    taskType: text("task_type"),
+    createdAt: text("created_at").notNull(),
+    analyzedAt: text("analyzed_at"),
+    /** sha1(归一化任务文本)：幂等判定 */
+    inputFingerprint: text("input_fingerprint").notNull(),
+    /** 当前有效分析标记 */
+    isCurrent: integer("is_current", { mode: "boolean" }).notNull().default(false),
+    errorCode: text("error_code"),
+    errorMessage: text("error_message"),
+    /** 人类可读总述（推断） */
+    summary: text("summary"),
+  },
+  (t) => [
+    uniqueIndex("uq_task_analysis_fp_version").on(
+      t.task,
+      t.inputFingerprint,
+      t.analyzerVersion
+    ),
+    index("idx_task_analysis_status").on(t.status),
+    index("idx_task_analysis_created").on(t.createdAt),
+  ]
+);
+
+export const taskRequirements = sqliteTable(
+  "task_requirement",
+  {
+    id: text("id").primaryKey(),
+    taskAnalysisId: text("task_analysis_id")
+      .notNull()
+      .references(() => taskAnalyses.id, { onDelete: "cascade" }),
+    /** 推断：能力需求描述 */
+    requirementText: text("requirement_text").notNull(),
+    /** 推断：需求归类（CapabilityCategory） */
+    category: text("category").notNull(),
+    /** JSON: 匹配用关键词（推断） */
+    keywords: text("keywords").notNull().default("[]"),
+    /** 需求权重 0-1（推断） */
+    weight: real("weight").notNull().default(1),
+    /** 来源子任务（推断） */
+    derivedFrom: text("derived_from"),
+    /** 显式标记：需求属 AI 推断 */
+    isInferred: integer("is_inferred", { mode: "boolean" }).notNull().default(true),
+    sortOrder: integer("sort_order").notNull().default(0),
+  },
+  (t) => [
+    uniqueIndex("uq_task_req_analysis_text").on(t.taskAnalysisId, t.requirementText),
+    index("idx_task_req_analysis").on(t.taskAnalysisId),
+  ]
+);
+
+export const resourceRecommendations = sqliteTable(
+  "resource_recommendation",
+  {
+    id: text("id").primaryKey(),
+    taskAnalysisId: text("task_analysis_id")
+      .notNull()
+      .references(() => taskAnalyses.id, { onDelete: "cascade" }),
+    taskRequirementId: text("task_requirement_id")
+      .notNull()
+      .references(() => taskRequirements.id, { onDelete: "cascade" }),
+    /** 只引用 ResourceCapability.id，不复制能力文本 */
+    resourceCapabilityId: text("resource_capability_id")
+      .notNull()
+      .references(() => resourceCapabilities.id, { onDelete: "cascade" }),
+    /** 资源引用（非复制） */
+    resourceId: text("resource_id")
+      .notNull()
+      .references(() => discoveredResources.id, { onDelete: "cascade" }),
+    /** 匹配分 0-1（事实：确定性算法输出） */
+    score: real("score").notNull().default(0),
+    /** 推断：推荐理由（基于真实匹配信号生成） */
+    reason: text("reason"),
+    /** 真实来源快照（追溯链，非能力数据复制） */
+    evidenceRef: text("evidence_ref").notNull(),
+    sourcePath: text("source_path").notNull(),
+    rank: integer("rank").notNull().default(0),
+    /** heuristic | llm（本阶段仅 heuristic） */
+    source: text("source").notNull().default("heuristic"),
+  },
+  (t) => [
+    uniqueIndex("uq_reco_analysis_cap").on(t.taskAnalysisId, t.resourceCapabilityId),
+    index("idx_reco_analysis").on(t.taskAnalysisId),
+    index("idx_reco_capability").on(t.resourceCapabilityId),
+  ]
+);
+
 export type AgentRow = typeof agents.$inferSelect;
 export type AgentRunRow = typeof agentRuns.$inferSelect;
 export type CapabilityDefinitionRow = typeof capabilityDefinitions.$inferSelect;
@@ -291,3 +401,6 @@ export type HarnessScanRow = typeof harnessScans.$inferSelect;
 export type DiscoveredResourceRow = typeof discoveredResources.$inferSelect;
 export type ResourceAnalysisRow = typeof resourceAnalyses.$inferSelect;
 export type ResourceCapabilityRow = typeof resourceCapabilities.$inferSelect;
+export type TaskAnalysisRow = typeof taskAnalyses.$inferSelect;
+export type TaskRequirementRow = typeof taskRequirements.$inferSelect;
+export type ResourceRecommendationRow = typeof resourceRecommendations.$inferSelect;

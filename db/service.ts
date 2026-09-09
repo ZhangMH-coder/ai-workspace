@@ -24,6 +24,13 @@ import { computeInputFingerprint, computeMetaHash } from "@/lib/analysis/fingerp
 import { readDocument } from "@/lib/analysis/reader";
 import { CURRENT_ANALYZER_VERSION, getAnalyzer } from "@/lib/analysis/registry";
 import type { AnalysisInput } from "@/lib/analysis/types";
+import { computeTaskFingerprint } from "@/lib/analysis/fingerprint";
+import {
+  analyzeTask as analyzeTaskCore,
+  TASK_ANALYZER_VERSION,
+  type RecommendationPlan,
+  type RetrievableCapability,
+} from "@/lib/task-intelligence";
 import { randomUUID as uuid } from "node:crypto";
 import type {
   AnalysisRunResult,
@@ -768,4 +775,202 @@ export function matchResourcesForTask(task: string, limit = 10): TaskMatchResult
   }
   matches.sort((a, b) => b.score - a.score);
   return { task, matches: matches.slice(0, limit) };
+}
+
+/* ---------------- Task Intelligence（Phase 3） ---------------- */
+
+export interface AnalyzeTaskResult {
+  plan: RecommendationPlan;
+  /** true = 幂等复用已有分析记录（未重复落库） */
+  reused: boolean;
+}
+
+function buildRetrievableCapabilities(): RetrievableCapability[] {
+  const rows = repo.listAllCurrentCapabilities();
+  return rows.map(({ cap, resource }) => ({
+    resourceCapabilityId: cap.id,
+    resourceId: resource.id,
+    resourceName: resource.name,
+    harnessId: resource.harnessId,
+    type: resource.type as DiscoveredResource["type"],
+    capability: cap.capability,
+    category: cap.category as CapabilityCategory,
+    keywords: JSON.parse(cap.keywords) as string[],
+    confidence: cap.confidence,
+    evidenceRef: cap.evidenceRef,
+    evidenceSnippet: cap.evidenceSnippet,
+    sourcePath: resource.sourcePath,
+  }));
+}
+
+/** repository 行 → 领域 RecommendationPlan（含真实来源快照） */
+function taskResultToPlan(
+  r: NonNullable<ReturnType<typeof repo.getTaskAnalysisResult>>
+): RecommendationPlan {
+  const { analysis, requirements, recommendations } = r;
+  return {
+    analysisId: analysis.id,
+    task: analysis.task,
+    taskType: (analysis.taskType as RecommendationPlan["taskType"]) ?? "other",
+    summary: analysis.summary ?? "",
+    requirements: requirements.map((req) => ({
+      requirementText: req.requirementText,
+      category: req.category as CapabilityCategory,
+      keywords: JSON.parse(req.keywords) as string[],
+      weight: req.weight,
+      derivedFrom: req.derivedFrom ?? req.requirementText,
+      isInferred: true,
+    })),
+    recommendations: recommendations.map(({ reco, cap, resource, requirement }) => ({
+      resourceCapabilityId: reco.resourceCapabilityId,
+      resourceId: reco.resourceId,
+      resourceName: resource.name,
+      harnessId: resource.harnessId,
+      type: resource.type as DiscoveredResource["type"],
+      capability: cap.capability,
+      category: cap.category as CapabilityCategory,
+      confidence: cap.confidence,
+      evidenceRef: reco.evidenceRef,
+      evidenceSnippet: cap.evidenceSnippet,
+      sourcePath: reco.sourcePath,
+      score: reco.score,
+      reason: reco.reason ?? "",
+      requirementText: requirement.requirementText,
+      rank: reco.rank,
+    })),
+    strategy: "heuristic",
+    analyzerVersion: analysis.analyzerVersion,
+  };
+}
+
+/**
+ * 任务分析（唯一写入口）：
+ * - fingerprint 幂等：同 (task, fingerprint, version) 已成功 → 复用已有记录，不重复落库
+ * - 历史语义：isCurrent 标记当前有效，旧记录保留
+ * - 事实/推断分离：需求 isInferred=true；推荐引 resource_capability.id + 真实来源快照
+ */
+export function analyzeTask(task: string): AnalyzeTaskResult {
+  const trimmed = task.trim();
+  if (!trimmed) {
+    throw new ServiceError("VALIDATION_ERROR", "任务文本不能为空");
+  }
+  const fingerprint = computeTaskFingerprint(trimmed);
+  const version = TASK_ANALYZER_VERSION;
+
+  const existing = repo.getTaskAnalysisByFingerprint(trimmed, fingerprint, version);
+  if (existing?.status === "analyzed") {
+    const cached = repo.getTaskAnalysisResult(existing.id);
+    if (cached) return { plan: taskResultToPlan(cached), reused: true };
+  }
+
+  const capabilities = buildRetrievableCapabilities();
+  if (capabilities.length === 0) {
+    const id = existing?.id ?? uuid();
+    const now = new Date().toISOString();
+    repo.upsertTaskAnalysis({
+      id,
+      task: trimmed,
+      status: "failed",
+      strategy: "heuristic",
+      analyzerVersion: version,
+      createdAt: existing?.createdAt ?? now,
+      analyzedAt: now,
+      inputFingerprint: fingerprint,
+      isCurrent: true,
+      errorCode: "NO_CAPABILITIES",
+      errorMessage: "当前没有可用的能力标签，无法执行任务分析",
+    });
+    repo.markOtherTaskAnalysesNotCurrent(trimmed, id);
+    throw new ServiceError("NOT_FOUND", "当前没有可用的能力标签，无法执行任务分析");
+  }
+
+  const analysisId = existing?.id ?? uuid();
+  const now = new Date().toISOString();
+
+  let plan: RecommendationPlan;
+  try {
+    // 纯计算（lib/task-intelligence），不触碰 Runtime
+    plan = analyzeTaskCore({ task: trimmed, capabilities }, analysisId);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    repo.upsertTaskAnalysis({
+      id: analysisId,
+      task: trimmed,
+      status: "failed",
+      strategy: "heuristic",
+      analyzerVersion: version,
+      createdAt: existing?.createdAt ?? now,
+      analyzedAt: now,
+      inputFingerprint: fingerprint,
+      isCurrent: true,
+      errorCode: "ANALYSIS_FAILED",
+      errorMessage: msg,
+    });
+    repo.markOtherTaskAnalysesNotCurrent(trimmed, analysisId);
+    throw new Error(msg);
+  }
+
+  // 落库（先写 analysis，再替换需求与推荐；同键记录走 upsert 更新）
+  repo.upsertTaskAnalysis({
+    id: analysisId,
+    task: trimmed,
+    status: "analyzed",
+    strategy: "heuristic",
+    analyzerVersion: version,
+    taskType: plan.taskType,
+    createdAt: existing?.createdAt ?? now,
+    analyzedAt: now,
+    inputFingerprint: fingerprint,
+    isCurrent: true,
+    summary: plan.summary,
+  });
+  repo.markOtherTaskAnalysesNotCurrent(trimmed, analysisId);
+  repo.deleteTaskRequirementsByAnalysis(analysisId);
+  repo.deleteTaskRecommendationsByAnalysis(analysisId);
+
+  const reqIds: string[] = [];
+  plan.requirements.forEach((r, i) => {
+    const rid = uuid();
+    reqIds.push(rid);
+    repo.insertTaskRequirement({
+      id: rid,
+      taskAnalysisId: analysisId,
+      requirementText: r.requirementText,
+      category: r.category,
+      keywords: JSON.stringify(r.keywords),
+      weight: r.weight,
+      derivedFrom: r.derivedFrom,
+      isInferred: r.isInferred,
+      sortOrder: i,
+    });
+  });
+  plan.recommendations.forEach((rec) => {
+    const idx = plan.requirements.findIndex((r) => r.requirementText === rec.requirementText);
+    repo.insertTaskRecommendation({
+      id: uuid(),
+      taskAnalysisId: analysisId,
+      taskRequirementId: reqIds[idx >= 0 ? idx : 0],
+      resourceCapabilityId: rec.resourceCapabilityId,
+      resourceId: rec.resourceId,
+      score: rec.score,
+      reason: rec.reason,
+      evidenceRef: rec.evidenceRef,
+      sourcePath: rec.sourcePath,
+      rank: rec.rank,
+      source: "heuristic",
+    });
+  });
+
+  return { plan: { ...plan, analysisId }, reused: false };
+}
+
+/** 查询单次任务分析（含需求与推荐） */
+export function getTaskAnalysis(id: string): RecommendationPlan | null {
+  const r = repo.getTaskAnalysisResult(id);
+  return r ? taskResultToPlan(r) : null;
+}
+
+/** 任务分析历史（新 → 旧） */
+export function listTaskAnalyses(limit = 20) {
+  return repo.listTaskAnalyses(limit);
 }

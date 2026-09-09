@@ -6,6 +6,7 @@ import {
   LayoutDashboard,
   Radar,
   Settings,
+  Workflow,
   type LucideIcon,
 } from "lucide-react";
 
@@ -71,6 +72,12 @@ export const navGroups: NavGroup[] = [
         href: "/resources/capabilities",
         icon: BrainCircuit,
         description: "从真实资源归纳的能力索引与任务匹配",
+      },
+      {
+        title: "Task Intelligence",
+        href: "/task-intelligence",
+        icon: Workflow,
+        description: "任务理解与能力编排：拆解、检索与推荐",
       },
     ],
   },

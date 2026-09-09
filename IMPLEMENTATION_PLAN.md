@@ -27,10 +27,11 @@
 | 2026-09-08 | v1.5 | **P5-1 AI Runtime 架构与契约设计（纯设计，当前阶段）** | 交付 `docs/P5-1-AI-Runtime-Architecture-Contract.md`：目标架构 Agent→Runtime→Model/Prompt/Context/Capability/Execution→Run；Runtime 编排层（lib/runtime/*）位于 Service 与 Provider 之间；RuntimeRequest/ModelConfig/ExecutionContext/RuntimeResult/RuntimeEvent/RuntimeError/TokenUsage 域模型；Run 状态机五态（queued/running/succeeded/failed/cancelled）+ 合法转换 + 存量 success→succeeded 迁移策略 + 统计分母显式定义；Capability 两层只读消费（Definition 资产 + AgentCapability 装配 → ExecutionContext，四类职责与注入顺序）；统一 RuntimeProvider 接口（Adapter 注册表，禁止 Service 硬编码）；Streaming Event 契约（delta/tool_call/tool_result/finish/error + SSE 细则，P5-2 不实现）；错误分层（API/Runtime/Provider/Tool/Timeout-Cancel → Run 落库 error_code）；Token/Cost 模型（input/output/total 落库、cost 扩展位不落库）；持久化边界（Run 落库、事件流仅内存、完整 output 不持久化）；Mock→Real 双模式替换路径（P5-2 仅 MockProvider + 编排层）；P5-2 最小实施计划（10 项，明确不做清单）；风险与边界 | ✅ 已完成，待审批进入 P5-2 |
 | 2026-09-09 | v1.6 | **Phase 2 — Resource Intelligence MVP（能力索引）** | 145 个真实资源（128 可解析）从「被展示」升级为「能力索引」：新表 `resource_analysis`（保留历史：analyzerVersion/createdAt/isCurrent/inputFingerprint，唯一键 resourceId+inputFingerprint+analyzerVersion 防同版本重复）+ `resource_capability`（每条标签必须 evidenceRef+evidenceSnippet 可追溯）；`lib/analysis/*` 分析层（DocumentReader 只读白名单解析 + fingerprint 增量机制 + HeuristicAnalyzer heuristic-v1 唯一实际分析器 + LLMAnalyzer 仅契约桩不注册）；API 5 端点（run/status/resources/[id]/capabilities/match）；前端能力索引页 `/resources/capabilities`（状态卡 + 增量分析 + 任务→资源匹配 + 类别分组）+ 资源详情能力区块（InsightPanel）+ 导航「Resource Capabilities」；Mock 模式真实空态不伪造；**修数据一致性**：同指纹重跑失败时旧标签一并失效（failed 资源不再残留旧能力标签）；最终态 145 / 128 analyzed / 17 failed / 487 标签（全部可追溯）；lint 0/0、tsc、db:check、build（Real+Mock）、增量/幂等/追溯/只读/Mock 空态验证全过 | ✅ 已完成，待审批 |
 | 2026-09-09 | v1.7 | **Phase 3 — Task Intelligence MVP（任务理解与能力编排）** | 把「资源能力索引」升级为「任务理解层」：六组件流水线 Task → TaskParser（通用领域词典类型识别）→ TaskDecomposer（类型模板 + 附加意图拆解）→ RequirementExtractor（能力需求，isInferred 固定 true）→ CapabilityRetriever（复用现有打分公式 + 真实用户任务反向匹配 + other 类型仅反向信号）→ Reranker（跨需求合并/同资源去重/证据质量分级/最低推荐分 0.5 如实过滤）→ Assembler（RecommendationPlan，仅「选什么」不执行，lib/runtime 契约零改动）；新表 `task_analysis`（历史 + fingerprint + isCurrent，唯一键 task+inputFingerprint+analyzerVersion）+ `task_requirement`（isInferred）+ `resource_recommendation`（只引用 resource_capability.id，evidenceRef/sourcePath 真实来源快照，追溯链完整）；migration 0004；API `POST /api/v1/task-intelligence/analyze`（幂等复用）+ GET analyses/[id] + GET analyses；DTO/mappers/client + Mock 真实空态双模式；Store taskIntelligence 区块 + `/task-intelligence` 页面（输入 → 拆解/需求（推断徽标）→ 推荐卡片（score/理由/证据行）+ 历史列表）+ 导航「Task Intelligence」；**修检索噪声**：中文 2-gram 停用词、模板词反向匹配虚高（kwHits 改基于真实用户任务）、other 类型关闭正向匹配；验收场景「写一篇小红书文案」8 条 #1=1、「数据周报并整理成表格」8 条 #1=0.94（含数据整理子任务）、「今天天气怎么样」如实 0 推荐空态；lint 0/0、tsc、db:check、build（Real+Mock）、API 冒烟（样例/幂等/空态/追溯/事实推断分离）、145/128/487 零回归 | ✅ 已完成，待审批 |
+| 2026-09-10 | v1.8 | **Phase 4 — Capability Planning MVP（任务计划：排序/依赖/校验/回退）** | 把扁平推荐升级为「可验证任务计划」：七组件流水线 RecommendationPlan → PlanNormalizer（按需求重建 Retriever 候选集，恢复被 Reranker 丢弃的次优候选）→ StepOrderer（类别先验稳定拓扑排序，无先验保持并列）→ DependencyInferer（类别先验 + 文本信号，边仅当 from<to 构造性 DAG，无证据不强行建边）→ PrimarySelector（主选 + 回退链 ≤3，真实 score）→ PlanValidator（确定性：环/悬空→invalid，unmet/重复/低置信→partial）→ TaskPlan；新表 `task_plan`（valid/partial/invalid/failed + validation JSON 快照，一分析一当前计划）+ `plan_step`（primary FK resource_capability 只引用 + alternatives JSON + 推断 outputDescription/expectedInput + isInferred）+ `plan_dependency`（from/to FK + type + 推断 reason）；migration 0005；PlannerProvider 与 AnalysisProvider 同模式（planner-heuristic-v1 唯一实现 + planner-llm-v1 契约桩不注册）；API `POST /api/v1/task-intelligence/plan`（幂等）+ GET plans/[id] + GET analyses/[id]/plan（404=未生成）；DTO/mappers/client + Mock 真实空态双模式；Store plan 区块 + 任务分析页「任务计划」区块（状态徽标/校验 issues/依赖链/步骤流/回退链折叠）；验收：validator 四类问题矩阵全过、「写一篇小红书文案」2 步骤 0 依赖（并列不强行）+ 3 条真实回退候选、「数据周报并整理成表格」3 步骤 3 条 data_flow（文本信号）+ lark-base 重复如实 warning、幂等同 id、追溯 primary→capId→evidenceRef→sourcePath 完整、推断/事实字段分离落库、145/128/487 + 3 analyses 零回归、**lib/runtime 契约零改动（git diff 证明）**、Harness 零修改、lint 0/0/tsc/db:check/build（Real+Mock）/API/页面全过 | ✅ 已完成，待审批 |
 
 ## 当前阶段
 
-**Phase 3 — Task Intelligence MVP（任务理解与能力编排）**（已完成；**不自动进入下一阶段**，待审批）
+**Phase 4 — Capability Planning MVP（任务计划：排序/依赖/校验/回退）**（已完成；**不自动进入下一阶段**，待审批）
 
 ---
 
@@ -646,3 +647,71 @@ Resource Discovery MVP —— 实现完成、全量验证通过、待审批（�
 ## 下一步计划
 
 等待审批。后续可选方向（均未获批准前不实施）：Agent 覆盖度推荐（需求命中能力 → 按 AgentCapability 装配推荐 Agent）；CapabilityDefinition 人工提炼（ResourceCapability → Definition 的 provenance 确认 UI）；真实 LLM 任务理解（task-llm-v1）；编排执行层（RecommendationPlan → Runtime 前置映射）。
+
+---
+
+## 一、已完成内容（Phase 4 — Capability Planning MVP 实施）
+
+### 1. 领域模型（三张新表，migration 0005 已应用）
+
+- `task_plan`：id / taskAnalysisId(FK cascade) / status(valid|partial|invalid|failed) / plannerStrategy / plannerVersion("planner-heuristic-v1") / createdAt / validation(JSON 快照) / errorCode / errorMessage；唯一键 `uq_plan_analysis`（一分析一当前计划，重算走 upsert）。
+- `plan_step`：id / planId(FK cascade) / stepIndex / taskRequirementId(FK) / requirementText / category / **primaryCapabilityId(FK resource_capability，只引用不复制正文；unmet 为 null)** / primaryResourceId(FK) / score（retriever 原分）/ alternatives(JSON，真实次优候选 ≤3) / outputDescription(推断) / expectedInput(推断) / satisfaction(satisfied|unmet) / **isInferred(推断标记)** / sortOrder；唯一 `uq_plan_step_plan_index(planId,stepIndex)`。
+- `plan_dependency`：id / planId / fromStepId / toStepId(FK plan_step) / type(data_flow|constraint) / reason(推断) / isInferred；唯一性由应用层保证（同 from-to 不重复建边）。
+
+### 2. 分析层（lib/task-planning/，纯计算；不 import lib/runtime/*）
+
+- `normalizer.ts`：每个 requirement 重新调用 Retriever（确定性，输入与 Phase 3 分析一致）→ 恢复 ≥0.5 的全部候选（修复 Reranker 丢弃次优候选问题）；候选零制造。
+- `orderer.ts`：类别先验偏序（web_research 先于 data_analysis/content_creation 等）+ 稳定拓扑排序；无先验关系的步骤保持并列。
+- `dependency-inferer.ts`：类别先验边（to 的前置含 from 类别）+ 文本信号边（下游需求关键词命中上游输出声明词）；**边仅当 from<to**（构造性 DAG）；反向/弱信号一律丢弃——"无证据时无依赖优于错误依赖"。
+- `primary-selector.ts`：主选 = 候选最高分；alternatives = 次优 ≤3（真实 score）；无候选 → satisfaction=unmet 如实降级；outputDescription/expectedInput 按类别确定性模板生成（推断）。
+- `validator.ts`：确定性——circular_dependency（Kahn 拓扑）/ dangling_input（边端点越界）→ error → invalid；unmet_capability / duplicate_capability / low_confidence（<0.6）→ warning → partial；无 issue → valid。**合法性判定不依赖 LLM**。
+- `index.ts`：planTask 编排 + PlannerProvider（planner-heuristic-v1 唯一注册；planner-llm-v1 契约桩 PROVIDER_NOT_AVAILABLE）+ PLANNERS 注册表 + getPlanner（对齐 AnalysisProvider 模式）。
+
+### 3. Service / Repository（db/）
+
+- `createPlanFromAnalysis(analysisId)`：analysis 不存在 → NOT_FOUND；未 analyzed → VALIDATION_ERROR；幂等（已存在非 failed 计划 → 复用 + reused=true）；Planner 失败 → failed 计划落库（errorCode/errorMessage）+ 抛错；成功 → upsert plan + 替换 steps/deps（requirementText → taskRequirementId 同源映射，未命中防御性中止）；全部写操作走 Repository。
+- `getPlan(id)` / `getPlanByAnalysis(analysisId)`：join 主选能力/资源（leftJoin，unmet 为 null）+ 依赖 from/to stepIndex（plan_step 别名 join）。
+
+### 4. API 契约（3 端点 + DTO/Mock 双模式）
+
+- `POST /api/v1/task-intelligence/plan` { analysisId } → TaskPlan + reused（幂等）；`GET /api/v1/task-intelligence/plans/[id]` → 详情（404 契约）；`GET /api/v1/task-intelligence/analyses/[id]/plan` → 该分析当前计划（未生成 404，前端据此显示「生成计划」入口）。
+- `lib/api/task-intelligence.ts`：PlanStepDTO / PlanDependencyDTO / PlanIssueDTO / TaskPlanDTO + mappers（DTO → Domain）+ client（createTaskPlan / fetchTaskPlan / fetchPlanByAnalysis）。
+- `lib/services/mock/task-intelligence.ts`：**真实空态**（createTaskPlanMock 抛 ApiError、fetchPlan 404）；双模式入口同构。
+
+### 5. Store / 前端
+
+- `stores/workspace.ts`：taskIntelligence 区块扩展 plan / planLoading / planError / planReused + createTaskPlan / fetchPlanByAnalysis actions（404 → null 空态不报错）；persist partialize 仍仅 timeRange（领域数据不入 localStorage）。
+- `components/task-intelligence/plan-section.tsx`：任务计划区块——状态徽标（valid/partial/invalid/failed 语义色）+ 校验 issues 列表（error=danger / warning=amber）+ 依赖链（步骤 a → b · data_flow，title=推断理由）+ 步骤流（序号/需求/类别/满足状态/主选资源链接→/resources/[id]/score/置信/推断输出与输入/来源+证据行/回退链折叠）+ 未生成空态（生成按钮）+ 无依赖提示（并列不强行）。
+- 挂载：task-intelligence-view.tsx 结果区追加 `<PlanSection analysisId={plan.analysisId} />`。
+
+## 验证结果
+
+- **lint**：0 error / 0 warning。
+- **tsc --noEmit**：通过。
+- **db:check**：通过（migration 0005 已应用且 schema 一致）。
+- **build**：Real + Mock 双模式构建全绿（Mock 需 NEXT_PUBLIC_USE_MOCK=1 重构建，既有双模式语义）。
+- **validator 校验矩阵（纯函数单测）**：
+  - 环（1→0 与 0→1 双向边）→ **invalid / circular_dependency**；
+  - 悬空（to=5 越界）→ **invalid / dangling_input**；
+  - 无候选步骤 → **partial / unmet_capability**；
+  - 同 capability 双主选 → **partial / duplicate_capability**；
+  - 正常边 → **valid / 0 issue**。
+- **真实 DB 服务冒烟**：
+  - 「写一篇小红书文案」→ 2 步骤（content_creation 并列，0 依赖不强行）+ partial（duplicate + low_confidence 如实 warning）+ 步骤 0 主选 doubao-ecommerce-proposal score=0.98 + **3 条真实回退候选** + 推断输出/输入落库；
+  - 「帮我做一份数据周报并整理成表格」→ 3 步骤（准备数据 lark-base 0.90 → 计算指标 doubao-creative-design 0.85 → 整理表格 lark-base 0.90）+ **3 条 data_flow 依赖（文本信号：统计/数据/表格）** + lark-base 重复主选如实 warning；DAG 无环。
+  - 幂等：同 analysisId 二次生成同 planId + reused=true（跨进程 SQLite 验证）。
+- **API 冒烟（Real 生产）**：POST plan（status=partial 返回）/ 幂等（sameId+reused）/ GET plans/[id]（steps+primary+alternatives+isInferred 完整）/ GET analyses/[id]/plan（同源）/ 404 语义（plans/not-exist → 404、analyses/not-exist/plan → 404）。
+- **页面 HTTP**：/task-intelligence、/dashboard、/resources/capabilities、/agents、/projects 全部 200。
+- **零回归**：145 资源 / 128 analyzed / 17 failed / 487 能力标签 / 3 条任务分析基线未变；**lib/runtime 契约零改动（git diff --stat lib/runtime 为空）**；Harness 文件零修改（git status 无 harness 路径）。
+- **Mock 模式**：前端真实空态（createTaskPlan 抛 ApiError、fetchPlan 404 由前端转为空态），API 端点连 SQLite（既有双模式架构）。
+- **限制**：浏览器自动化空间不可用（既有降级：HTTP 200 + API 冒烟 + 产物级检查）。
+
+## 遗留问题
+
+- Heuristic 依赖推导与步骤排序基于类别模板与文本信号，复杂任务（跨域多步骤、隐含数据流）可能并列化或依赖不足——planner-llm-v1 预留为同一接口的替换实现（输出仍须过确定性 validatePlan 才能落库），本阶段不接。
+- duplicate_capability 为 warning 语义（同能力可被多步骤共享）；未来如需严格去重可在 Planner 内做共享消解，不在本阶段范围。
+- 浏览器控制台 chrome-extension 注入错误（非应用错误，既有记录）。
+
+## 下一步计划
+
+等待审批。后续可选方向（均未获批准前不实施）：Plan 编辑/重排 UI；Plan → Agent 执行批次桥接（Runtime 消费 TaskPlan 的前置映射契约）；ResourceCapability → CapabilityDefinition 人工提炼；真实 LLM 任务理解/计划生成；Agent 覆盖度推荐。

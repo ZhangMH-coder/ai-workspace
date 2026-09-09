@@ -32,6 +32,8 @@ import {
   type RetrievableCapability,
 } from "@/lib/task-intelligence";
 import { randomUUID as uuid } from "node:crypto";
+import { heuristicPlanner, PLANNER_VERSION } from "@/lib/task-planning";
+import type { PlanCandidate, PlanValidation, TaskPlan } from "@/lib/task-planning";
 import type {
   AnalysisRunResult,
   AnalysisStatus,
@@ -973,4 +975,192 @@ export function getTaskAnalysis(id: string): RecommendationPlan | null {
 /** 任务分析历史（新 → 旧） */
 export function listTaskAnalyses(limit = 20) {
   return repo.listTaskAnalyses(limit);
+}
+
+/* ---------------- Task Planning（Phase 4） ---------------- */
+
+export interface CreatePlanResult {
+  plan: TaskPlan;
+  /** true = 幂等复用已有计划（未重复生成） */
+  reused: boolean;
+}
+
+/** repository 行 → 领域 TaskPlan（含真实来源 join；事实/推断字段分离） */
+function planResultToTaskPlan(
+  r: NonNullable<ReturnType<typeof repo.getPlanResult>>
+): TaskPlan {
+  const { plan, steps, dependencies } = r;
+  return {
+    id: plan.id,
+    analysisId: plan.taskAnalysisId,
+    status: plan.status as TaskPlan["status"],
+    plannerStrategy: plan.plannerStrategy as TaskPlan["plannerStrategy"],
+    plannerVersion: plan.plannerVersion,
+    createdAt: plan.createdAt,
+    validation: JSON.parse(plan.validation) as PlanValidation,
+    steps: steps.map(({ step, cap, resource }) => ({
+      id: step.id,
+      stepIndex: step.stepIndex,
+      requirementId: step.taskRequirementId,
+      requirementText: step.requirementText,
+      category: step.category as TaskPlan["steps"][number]["category"],
+      primary:
+        cap && resource && step.primaryCapabilityId && step.primaryResourceId && step.score !== null
+          ? {
+              resourceCapabilityId: step.primaryCapabilityId,
+              resourceId: step.primaryResourceId,
+              resourceName: resource.name,
+              harnessId: resource.harnessId,
+              type: resource.type as PlanCandidate["type"],
+              capability: cap.capability,
+              category: cap.category as PlanCandidate["category"],
+              confidence: cap.confidence,
+              evidenceRef: cap.evidenceRef,
+              evidenceSnippet: cap.evidenceSnippet,
+              sourcePath: resource.sourcePath,
+              score: step.score,
+            }
+          : null,
+      alternatives: JSON.parse(step.alternatives) as PlanCandidate[],
+      outputDescription: step.outputDescription,
+      expectedInput: step.expectedInput,
+      satisfaction: step.satisfaction as TaskPlan["steps"][number]["satisfaction"],
+      isInferred: step.isInferred === true,
+    })),
+    dependencies: dependencies.map(({ dep, fromIdx, toIdx }) => ({
+      id: dep.id,
+      fromStepIndex: fromIdx,
+      toStepIndex: toIdx,
+      type: dep.type as TaskPlan["dependencies"][number]["type"],
+      reason: dep.reason,
+      isInferred: dep.isInferred === true,
+    })),
+  };
+}
+
+/**
+ * 从已有任务分析生成任务计划（唯一写入口）：
+ * - 幂等：同 analysisId 已存在计划（非 failed）→ 复用已有记录，不重复生成；
+ * - 依赖推导只建证据充分的边（类别先验 / 文本信号），其余步骤保持并列；
+ * - 计划只引用真实 ResourceCapability；推断字段（output/expected/reason）isInferred=true；
+ * - Planner 计算失败 → failed 计划落库 + ServiceError（失败状态真实可查）。
+ */
+export function createPlanFromAnalysis(analysisId: string): CreatePlanResult {
+  const analysis = repo.getTaskAnalysisById(analysisId);
+  if (!analysis) {
+    throw new ServiceError("NOT_FOUND", "任务分析不存在，无法生成任务计划");
+  }
+  if (analysis.status !== "analyzed") {
+    throw new ServiceError("VALIDATION_ERROR", "该任务分析未完成，无法生成任务计划");
+  }
+
+  const existing = repo.getPlanByAnalysis(analysisId);
+  if (existing && existing.status !== "failed") {
+    const cached = repo.getPlanResult(existing.id);
+    if (cached) return { plan: planResultToTaskPlan(cached), reused: true };
+  }
+
+  const result = repo.getTaskAnalysisResult(analysisId);
+  if (!result) {
+    throw new ServiceError("NOT_FOUND", "任务分析详情缺失，无法生成任务计划");
+  }
+  const plan = taskResultToPlan(result);
+  const capabilities = buildRetrievableCapabilities();
+
+  const planId = existing?.id ?? uuid();
+  const now = new Date().toISOString();
+
+  const outcome = heuristicPlanner.plan({ plan, capabilities });
+  if (outcome.status === "failed" || !outcome.draft) {
+    repo.upsertTaskPlan({
+      id: planId,
+      taskAnalysisId: analysisId,
+      status: "failed",
+      plannerStrategy: "heuristic",
+      plannerVersion: PLANNER_VERSION,
+      createdAt: now,
+      validation: JSON.stringify({ status: "invalid", issues: [] }),
+      errorCode: outcome.errorCode ?? "PLANNING_FAILED",
+      errorMessage: outcome.errorMessage ?? "任务计划生成失败",
+    });
+    throw new Error(outcome.errorMessage ?? "任务计划生成失败");
+  }
+
+  const draft = outcome.draft;
+  // requirementText → 落库 requirement id（与 Phase 3 同源映射；文本唯一约束保证）
+  const reqIdByText = new Map(
+    result.requirements.map((req) => [req.requirementText, req.id])
+  );
+
+  repo.upsertTaskPlan({
+    id: planId,
+    taskAnalysisId: analysisId,
+    status: draft.status,
+    plannerStrategy: "heuristic",
+    plannerVersion: PLANNER_VERSION,
+    createdAt: now,
+    validation: JSON.stringify(draft.validation),
+  });
+  repo.deletePlanStepsByPlan(planId);
+  repo.deletePlanDependenciesByPlan(planId);
+
+  const stepIdByIndex = new Map<number, string>();
+  draft.steps.forEach((s, i) => {
+    const stepId = uuid();
+    stepIdByIndex.set(i, stepId);
+    const requirementId = reqIdByText.get(s.requirement.requirementText);
+    if (!requirementId) {
+      throw new Error(`需求「${s.requirement.requirementText}」未匹配到落库记录，任务计划生成中止`);
+    }
+    repo.insertPlanStep({
+      id: stepId,
+      planId,
+      stepIndex: s.stepIndex,
+      taskRequirementId: requirementId,
+      requirementText: s.requirement.requirementText,
+      category: s.requirement.category,
+      primaryCapabilityId: s.primary?.resourceCapabilityId ?? null,
+      primaryResourceId: s.primary?.resourceId ?? null,
+      score: s.primary?.score ?? null,
+      alternatives: JSON.stringify(s.alternatives),
+      outputDescription: s.outputDescription,
+      expectedInput: s.expectedInput,
+      satisfaction: s.satisfaction,
+      isInferred: true,
+      sortOrder: s.stepIndex,
+    });
+  });
+  draft.dependencies.forEach((d) => {
+    const fromId = stepIdByIndex.get(d.fromStepIndex);
+    const toId = stepIdByIndex.get(d.toStepIndex);
+    if (!fromId || !toId) return; // validator 已兜底；此处防御性跳过
+    repo.insertPlanDependency({
+      id: uuid(),
+      planId,
+      fromStepId: fromId,
+      toStepId: toId,
+      type: d.type,
+      reason: d.reason,
+      isInferred: true,
+    });
+  });
+
+  const saved = repo.getPlanResult(planId);
+  if (!saved) {
+    throw new Error("任务计划写入后读取失败");
+  }
+  return { plan: planResultToTaskPlan(saved), reused: false };
+}
+
+/** 查询单个任务计划（完整步骤 + 依赖） */
+export function getPlan(id: string): TaskPlan | null {
+  const r = repo.getPlanResult(id);
+  return r ? planResultToTaskPlan(r) : null;
+}
+
+/** 按分析查询其当前计划（未生成时返回 null） */
+export function getPlanByAnalysis(analysisId: string): TaskPlan | null {
+  const p = repo.getPlanByAnalysis(analysisId);
+  if (!p) return null;
+  return getPlan(p.id);
 }

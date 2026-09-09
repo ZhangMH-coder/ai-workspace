@@ -19,6 +19,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useWorkspaceStore } from "@/stores/workspace";
 import { taskTypeLabel, type Recommendation, type RecommendationPlan } from "@/lib/task-intelligence";
 import { capabilityCategoryLabel } from "@/lib/types";
+import { PlanSection } from "./plan-section";
 
 const SAMPLE_TASKS = ["写一篇小红书文案", "帮我做一份数据周报并整理成表格", "总结一下这份会议纪要"];
 
@@ -150,6 +151,9 @@ function PlanResult({ plan }: { plan: RecommendationPlan }) {
           )}
         </CardContent>
       </Card>
+
+      {/* 任务计划（Phase 4）：有序步骤 + 依赖 + 校验 */}
+      <PlanSection analysisId={plan.analysisId} />
     </div>
   );
 }

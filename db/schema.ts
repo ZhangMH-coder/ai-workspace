@@ -390,6 +390,102 @@ export const resourceRecommendations = sqliteTable(
   ]
 );
 
+export const taskPlans = sqliteTable(
+  "task_plan",
+  {
+    id: text("id").primaryKey(),
+    taskAnalysisId: text("task_analysis_id")
+      .notNull()
+      .references(() => taskAnalyses.id, { onDelete: "cascade" }),
+    /** valid | partial | invalid | failed */
+    status: text("status").notNull(),
+    /** heuristic | llm */
+    plannerStrategy: text("planner_strategy").notNull(),
+    /** 规划器版本，如 "planner-heuristic-v1" */
+    plannerVersion: text("planner_version").notNull(),
+    createdAt: text("created_at").notNull(),
+    /** JSON：校验结果快照（确定性算法输出） */
+    validation: text("validation").notNull(),
+    errorCode: text("error_code"),
+    errorMessage: text("error_message"),
+  },
+  (t) => [
+    // 一分析一当前计划；重算时历史保留（分析重算 → 新 plan）
+    uniqueIndex("uq_plan_analysis").on(t.taskAnalysisId),
+    index("idx_plan_status").on(t.status),
+  ]
+);
+
+export const planSteps = sqliteTable(
+  "plan_step",
+  {
+    id: text("id").primaryKey(),
+    planId: text("plan_id")
+      .notNull()
+      .references(() => taskPlans.id, { onDelete: "cascade" }),
+    /** 拓扑排序后的执行序（0 起） */
+    stepIndex: integer("step_index").notNull(),
+    taskRequirementId: text("task_requirement_id")
+      .notNull()
+      .references(() => taskRequirements.id, { onDelete: "cascade" }),
+    requirementText: text("requirement_text").notNull(),
+    category: text("category").notNull(),
+    /** 事实：主选能力（FK resource_capability，只引用不复制；unmet 时为 null） */
+    primaryCapabilityId: text("primary_capability_id").references(
+      () => resourceCapabilities.id,
+      { onDelete: "cascade" }
+    ),
+    primaryResourceId: text("primary_resource_id").references(
+      () => discoveredResources.id,
+      { onDelete: "cascade" }
+    ),
+    /** 事实：主选得分（retriever 原分） */
+    score: real("score"),
+    /** JSON：回退链（备选能力；来自 Retriever 真实候选集） */
+    alternatives: text("alternatives").notNull().default("[]"),
+    /** 推断：本步输出声明 */
+    outputDescription: text("output_description").notNull(),
+    /** 推断：本步期望输入 */
+    expectedInput: text("expected_input"),
+    /** 派生：satisfied | unmet */
+    satisfaction: text("satisfaction").notNull(),
+    /** 显式标记：步序 / 输出输入声明属规划器推断 */
+    isInferred: integer("is_inferred", { mode: "boolean" }).notNull().default(true),
+    sortOrder: integer("sort_order").notNull(),
+  },
+  (t) => [
+    uniqueIndex("uq_plan_step_plan_index").on(t.planId, t.stepIndex),
+    index("idx_plan_step_plan").on(t.planId),
+    index("idx_plan_step_requirement").on(t.taskRequirementId),
+  ]
+);
+
+export const planDependencies = sqliteTable(
+  "plan_dependency",
+  {
+    id: text("id").primaryKey(),
+    planId: text("plan_id")
+      .notNull()
+      .references(() => taskPlans.id, { onDelete: "cascade" }),
+    fromStepId: text("from_step_id")
+      .notNull()
+      .references(() => planSteps.id, { onDelete: "cascade" }),
+    toStepId: text("to_step_id")
+      .notNull()
+      .references(() => planSteps.id, { onDelete: "cascade" }),
+    /** data_flow | constraint */
+    type: text("type").notNull(),
+    /** 推断：依赖理由（基于类别模板或文本信号生成） */
+    reason: text("reason").notNull(),
+    isInferred: integer("is_inferred", { mode: "boolean" }).notNull().default(true),
+  },
+  (t) => [
+    index("idx_plan_dep_plan").on(t.planId),
+    index("idx_plan_dep_from").on(t.fromStepId),
+    index("idx_plan_dep_to").on(t.toStepId),
+  ]
+);
+
 export type AgentRow = typeof agents.$inferSelect;
 export type AgentRunRow = typeof agentRuns.$inferSelect;
 export type CapabilityDefinitionRow = typeof capabilityDefinitions.$inferSelect;
@@ -404,3 +500,6 @@ export type ResourceCapabilityRow = typeof resourceCapabilities.$inferSelect;
 export type TaskAnalysisRow = typeof taskAnalyses.$inferSelect;
 export type TaskRequirementRow = typeof taskRequirements.$inferSelect;
 export type ResourceRecommendationRow = typeof resourceRecommendations.$inferSelect;
+export type TaskPlanRow = typeof taskPlans.$inferSelect;
+export type PlanStepRow = typeof planSteps.$inferSelect;
+export type PlanDependencyRow = typeof planDependencies.$inferSelect;

@@ -6,6 +6,12 @@
  */
 import { http } from "./client";
 import type {
+  PlanCandidate,
+  PlanIssue,
+  PlanValidation,
+  TaskPlan,
+} from "@/lib/task-planning";
+import type {
   Recommendation,
   RecommendationPlan,
   TaskTypeId,
@@ -134,4 +140,117 @@ export async function fetchTaskAnalysis(id: string): Promise<RecommendationPlan>
     `/api/v1/task-intelligence/analyses/${encodeURIComponent(id)}`
   );
   return toPlan(dto);
+}
+
+/* ---------------- Task Planning（Phase 4） DTO / Mappers / Client ---------------- */
+
+export interface PlanStepDTO {
+  id: string;
+  stepIndex: number;
+  requirementId: string;
+  requirementText: string;
+  category: string;
+  primary: PlanCandidate | null;
+  alternatives: PlanCandidate[];
+  outputDescription: string;
+  expectedInput: string | null;
+  satisfaction: string;
+  isInferred: boolean;
+}
+
+export interface PlanDependencyDTO {
+  id: string;
+  fromStepIndex: number;
+  toStepIndex: number;
+  type: string;
+  reason: string;
+  isInferred: boolean;
+}
+
+export interface PlanIssueDTO {
+  level: string;
+  code: string;
+  stepIndex?: number;
+  message: string;
+}
+
+export interface TaskPlanDTO {
+  id: string;
+  analysisId: string;
+  status: string;
+  plannerStrategy: string;
+  plannerVersion: string;
+  createdAt: string;
+  validation: { status: string; issues: PlanIssueDTO[] };
+  steps: PlanStepDTO[];
+  dependencies: PlanDependencyDTO[];
+  /** 从 plan 响应附带：幂等复用标记 */
+  reused?: boolean;
+}
+
+function toPlanIssue(d: PlanIssueDTO): PlanIssue {
+  return { level: d.level as PlanIssue["level"], code: d.code as PlanIssue["code"], stepIndex: d.stepIndex, message: d.message };
+}
+
+function toTaskPlan(d: TaskPlanDTO): TaskPlan {
+  return {
+    id: d.id,
+    analysisId: d.analysisId,
+    status: d.status as TaskPlan["status"],
+    plannerStrategy: d.plannerStrategy as TaskPlan["plannerStrategy"],
+    plannerVersion: d.plannerVersion,
+    createdAt: d.createdAt,
+    validation: {
+      status: d.validation.status as PlanValidation["status"],
+      issues: (d.validation.issues ?? []).map(toPlanIssue),
+    },
+    steps: (d.steps ?? []).map((s) => ({
+      id: s.id,
+      stepIndex: s.stepIndex,
+      requirementId: s.requirementId,
+      requirementText: s.requirementText,
+      category: s.category as TaskPlan["steps"][number]["category"],
+      primary: s.primary,
+      alternatives: s.alternatives ?? [],
+      outputDescription: s.outputDescription,
+      expectedInput: s.expectedInput,
+      satisfaction: s.satisfaction as TaskPlan["steps"][number]["satisfaction"],
+      isInferred: s.isInferred,
+    })),
+    dependencies: (d.dependencies ?? []).map((dep) => ({
+      id: dep.id,
+      fromStepIndex: dep.fromStepIndex,
+      toStepIndex: dep.toStepIndex,
+      type: dep.type as TaskPlan["dependencies"][number]["type"],
+      reason: dep.reason,
+      isInferred: dep.isInferred,
+    })),
+  };
+}
+
+export interface CreatePlanResultDTO {
+  plan: TaskPlan;
+  reused: boolean;
+}
+
+/** 生成任务计划（幂等：同 analysisId 复用已有计划） */
+export async function createTaskPlan(analysisId: string): Promise<CreatePlanResultDTO> {
+  const dto = await http.post<TaskPlanDTO>("/api/v1/task-intelligence/plan", { analysisId });
+  return { plan: toTaskPlan(dto), reused: Boolean(dto.reused) };
+}
+
+/** 按 id 查询任务计划 */
+export async function fetchTaskPlan(id: string): Promise<TaskPlan> {
+  const dto = await http.get<TaskPlanDTO>(
+    `/api/v1/task-intelligence/plans/${encodeURIComponent(id)}`
+  );
+  return toTaskPlan(dto);
+}
+
+/** 按分析查询其当前计划（未生成时抛 404，由调用方转为空态） */
+export async function fetchPlanByAnalysis(analysisId: string): Promise<TaskPlan> {
+  const dto = await http.get<TaskPlanDTO>(
+    `/api/v1/task-intelligence/analyses/${encodeURIComponent(analysisId)}/plan`
+  );
+  return toTaskPlan(dto);
 }

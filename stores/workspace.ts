@@ -92,10 +92,13 @@ import {
 } from "@/lib/services/resource-analysis";
 import {
   analyzeTask as analyzeTaskService,
+  createTaskPlan as createTaskPlanService,
+  fetchPlanByAnalysis as fetchPlanByAnalysisService,
   fetchTaskAnalyses as fetchTaskAnalysesService,
 } from "@/lib/services/task-intelligence";
 import type { RecommendationPlan } from "@/lib/task-intelligence";
 import type { TaskAnalysisListItemDTO } from "@/lib/api/task-intelligence";
+import type { TaskPlan } from "@/lib/task-planning";
 
 /** 空统计（组件对未加载/无数据时的防御默认值） */
 export const EMPTY_RUNS_STATS: RunsStats = {
@@ -227,9 +230,16 @@ interface WorkspaceState {
     error: string | null;
     /** 幂等复用标记 */
     reused: boolean;
+    /** 任务计划（Phase 4）：有序步骤 + 依赖 + 校验（只组织能力，不执行） */
+    plan: TaskPlan | null;
+    planLoading: boolean;
+    planError: string | null;
+    planReused: boolean;
   };
   analyzeTask: (task: string) => Promise<RecommendationPlan>;
   fetchTaskAnalysisHistory: () => Promise<void>;
+  createTaskPlan: (analysisId: string) => Promise<TaskPlan>;
+  fetchPlanByAnalysis: (analysisId: string) => Promise<TaskPlan | null>;
 }
 
 export const useWorkspaceStore = create<WorkspaceState>()(
@@ -273,6 +283,10 @@ export const useWorkspaceStore = create<WorkspaceState>()(
         loading: false,
         error: null,
         reused: false,
+        plan: null,
+        planLoading: false,
+        planError: null,
+        planReused: false,
       },
       fetchDiscoveryOverview: async () => {
         set((s) => ({ discovery: { ...s.discovery, loading: true, error: null } }));
@@ -442,6 +456,58 @@ export const useWorkspaceStore = create<WorkspaceState>()(
               error: (e as Error).message,
             },
           }));
+        }
+      },
+
+      createTaskPlan: async (analysisId: string) => {
+        set((s) => ({
+          taskIntelligence: { ...s.taskIntelligence, planLoading: true, planError: null },
+        }));
+        try {
+          const result = await createTaskPlanService(analysisId);
+          set((s) => ({
+            taskIntelligence: {
+              ...s.taskIntelligence,
+              plan: result.plan,
+              planLoading: false,
+              planReused: result.reused,
+            },
+          }));
+          return result.plan;
+        } catch (e) {
+          set((s) => ({
+            taskIntelligence: {
+              ...s.taskIntelligence,
+              planLoading: false,
+              planError: (e as Error).message,
+            },
+          }));
+          throw e;
+        }
+      },
+      fetchPlanByAnalysis: async (analysisId: string) => {
+        set((s) => ({
+          taskIntelligence: { ...s.taskIntelligence, planLoading: true, planError: null },
+        }));
+        try {
+          const plan = await fetchPlanByAnalysisService(analysisId);
+          set((s) => ({ taskIntelligence: { ...s.taskIntelligence, plan, planLoading: false } }));
+          return plan;
+        } catch (e) {
+          const err = e as { code?: string };
+          // 404 = 未生成计划 → 空态（不报错）；其余错误如实展示
+          if (err.code === "NOT_FOUND") {
+            set((s) => ({ taskIntelligence: { ...s.taskIntelligence, planLoading: false } }));
+            return null;
+          }
+          set((s) => ({
+            taskIntelligence: {
+              ...s.taskIntelligence,
+              planLoading: false,
+              planError: (e as Error).message,
+            },
+          }));
+          return null;
         }
       },
 

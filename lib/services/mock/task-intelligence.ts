@@ -20,3 +20,18 @@ export async function fetchTaskAnalysesMock(): Promise<TaskAnalysisListItemDTO[]
 export async function fetchTaskAnalysisMock(): Promise<never> {
   throw new ApiError(404, { code: "NOT_FOUND", message: "Mock 模式无任务分析记录" });
 }
+
+/** Mock 模式不伪造计划：生成一律抛 ApiError（真实空态） */
+export async function createTaskPlanMock(): Promise<never> {
+  throw new ApiError(400, {
+    code: "NOT_FOUND",
+    message: "Mock 模式无真实任务分析，无法生成任务计划",
+  });
+}
+
+/** Mock 模式无计划记录：404（前端按 code 分支显示空态） */
+export async function fetchTaskPlanMock(): Promise<never> {
+  throw new ApiError(404, { code: "NOT_FOUND", message: "Mock 模式无任务计划记录" });
+}
+
+export const fetchPlanByAnalysisMock = fetchTaskPlanMock;

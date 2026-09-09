@@ -8,6 +8,7 @@
  * 未来切 node:sqlite / libsql 时本层代码零改动。
  */
 import { and, asc, count, desc, eq, gte, inArray, like, lt, ne, or, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/sqlite-core";
 import { db } from "./db";
 import {
   agentCapabilities,
@@ -23,7 +24,10 @@ import {
   resourceRecommendations,
   scanRuns,
   taskAnalyses,
+  taskPlans,
   taskRequirements,
+  planDependencies,
+  planSteps,
 } from "./schema";
 
 /* ---------------- 通用分页 ---------------- */
@@ -823,4 +827,98 @@ export function listTaskAnalyses(limit = 20) {
     .orderBy(desc(taskAnalyses.createdAt))
     .limit(limit)
     .all();
+}
+
+/* ---------------- Task Planning（Phase 4） ---------------- */
+
+/** 查某分析的计划（幂等判定：一分析一当前计划） */
+export function getPlanByAnalysis(analysisId: string) {
+  return (
+    db
+      .select()
+      .from(taskPlans)
+      .where(eq(taskPlans.taskAnalysisId, analysisId))
+      .get() ?? null
+  );
+}
+
+/** 查计划记录 */
+export function getPlanById(id: string) {
+  return db.select().from(taskPlans).where(eq(taskPlans.id, id)).get() ?? null;
+}
+
+/** 写入计划（唯一键 analysisId：重算走 upsert，历史保留由旧 plan 行语义保证） */
+export function upsertTaskPlan(row: typeof taskPlans.$inferInsert) {
+  return db
+    .insert(taskPlans)
+    .values(row)
+    .onConflictDoUpdate({
+      target: taskPlans.taskAnalysisId,
+      set: {
+        status: row.status,
+        plannerStrategy: row.plannerStrategy,
+        plannerVersion: row.plannerVersion,
+        createdAt: row.createdAt,
+        validation: row.validation,
+        errorCode: row.errorCode,
+        errorMessage: row.errorMessage,
+      },
+    })
+    .returning()
+    .get();
+}
+
+/** 删除某计划全部步骤（重算时替换） */
+export function deletePlanStepsByPlan(planId: string) {
+  db.delete(planSteps).where(eq(planSteps.planId, planId)).run();
+}
+
+/** 插入一条计划步骤 */
+export function insertPlanStep(row: typeof planSteps.$inferInsert) {
+  return db.insert(planSteps).values(row).run();
+}
+
+/** 删除某计划全部依赖（重算时替换） */
+export function deletePlanDependenciesByPlan(planId: string) {
+  db.delete(planDependencies).where(eq(planDependencies.planId, planId)).run();
+}
+
+/** 插入一条计划依赖 */
+export function insertPlanDependency(row: typeof planDependencies.$inferInsert) {
+  return db.insert(planDependencies).values(row).run();
+}
+
+/** 依赖查询用的 plan_step 别名（join 取 from/to 的 stepIndex） */
+const fromSteps = alias(planSteps, "from_step");
+const toSteps = alias(planSteps, "to_step");
+
+/** 查询计划完整结果（plan + steps（join 主选能力/资源，unmet 时为 null）+ dependencies） */
+export function getPlanResult(id: string) {
+  const plan = getPlanById(id);
+  if (!plan) return null;
+  const steps = db
+    .select({
+      step: planSteps,
+      cap: resourceCapabilities,
+      resource: discoveredResources,
+    })
+    .from(planSteps)
+    .leftJoin(resourceCapabilities, eq(planSteps.primaryCapabilityId, resourceCapabilities.id))
+    .leftJoin(discoveredResources, eq(planSteps.primaryResourceId, discoveredResources.id))
+    .where(eq(planSteps.planId, id))
+    .orderBy(asc(planSteps.sortOrder))
+    .all();
+  const dependencies = db
+    .select({
+      dep: planDependencies,
+      fromIdx: fromSteps.stepIndex,
+      toIdx: toSteps.stepIndex,
+    })
+    .from(planDependencies)
+    .innerJoin(fromSteps, eq(planDependencies.fromStepId, fromSteps.id))
+    .innerJoin(toSteps, eq(planDependencies.toStepId, toSteps.id))
+    .where(eq(planDependencies.planId, id))
+    .orderBy(asc(planDependencies.type))
+    .all();
+  return { plan, steps, dependencies };
 }

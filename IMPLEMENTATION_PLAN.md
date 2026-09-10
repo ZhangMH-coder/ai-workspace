@@ -870,3 +870,19 @@ Resource Discovery MVP —— 实现完成、全量验证通过、待审批（�
 ### 当前状态
 - 阶段完成；未越界
 - Git：待提交
+
+---
+
+## S1.9 文档归档与仓库清理交付记录（2026-09-10）
+
+### 已完成
+1. **归档历史设计文档**：docs/P5-1-AI-Runtime-Architecture-Contract.md 与 docs/ROADMAP-Real-Resources.md 移入 docs/archive/（git mv，保留历史）；新增 docs/README.md 说明归档语义（不再作为现行设计依据，进度以 IMPLEMENTATION_PLAN.md 为准）。
+2. **清理运行产物**：删除 start-real.log / start-showcase.log / start-showcase-err.log 与 tsconfig.tsbuildinfo（编译缓存，已 gitignore）。
+
+### 验证结果
+- 文档结构：docs/ 仅 README.md + archive/ 两份历史文档，根目录无过期设计文档
+- Git：归档移动为 rename，历史保留
+- 项目功能不受影响（纯文档清理）
+
+### 当前状态
+- 阶段完成；未越界；Git：待提交

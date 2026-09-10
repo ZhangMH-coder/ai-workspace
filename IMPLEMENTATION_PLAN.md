@@ -824,3 +824,28 @@ Resource Discovery MVP —— 实现完成、全量验证通过、待审批（�
 ### 当前状态
 - 阶段完成；未越界（仅 Adapter 收敛 + 索引清理 + 页面去重 + 文档）
 - Git：待提交
+
+---
+
+## S1.7 详情页专用展示交付记录（2026-09-10）
+
+### 已完成
+1. **Adapter 元数据扩展**（lib/discovery/adapters/hermes.ts）：
+   - scanProfiles：SOUL.md 全文写入 metadata.content（限 32KB，本地只读）
+   - scanMainConfig：模型名列表写入 metadata.models（16 个真实模型名），不再只有计数
+2. **详情页专用展示**（components/resources/resource-detail.tsx）：
+   - HermesConfigDetail：默认模型 / Provider / Base URL 三格 + 可用模型列表（chips）
+   - SoulProfileDetail：SOUL.md 人设全文（max-h 滚动 pre 块，标注"本地只读"）
+
+### 验证结果
+- lint 0/0、tsc 0、build 通过
+- 数据：work 人设 content=5090 chars、newprofile 人设 content=513 chars、主配置 models=16 个
+- 浏览器实渲染：配置详情页显示 deepseek-v4-flash-0731 / tokenrhythm / seed-2.1-pro / kimi-k2.5 / qwen3.8-max 等全部模型；人设详情页显示 SOUL 全文（含"机器视觉工作成长教练""康耐视 Cognex VisionPro"等真实内容）+ "本地只读"标注
+- 幂等：重扫 270 不变；原始文件零修改
+
+### 遗留问题
+- SOUL.md 全文仅存本地库（data/ 已 gitignore），开源发布安全；若未来做公开演示截图需注意可见性
+
+### 当前状态
+- 阶段完成；未越界
+- Git：待提交

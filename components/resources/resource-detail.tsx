@@ -53,6 +53,16 @@ export function ResourceDetail({ resource }: { resource: DiscoveredResource }) {
         </div>
       ) : null}
 
+      {/* Hermes 配置专用展示：模型 / Provider / 可用模型列表 */}
+      {resource.type === "rule" && typeof resource.metadata?.defaultModel === "string" ? (
+        <HermesConfigDetail metadata={resource.metadata} />
+      ) : null}
+
+      {/* 人设专用展示：SOUL.md 全文（本地只读） */}
+      {resource.type === "prompt" && typeof resource.metadata?.content === "string" ? (
+        <SoulProfileDetail metadata={resource.metadata} />
+      ) : null}
+
       {/* 溯源卡 */}
       <div className="flex flex-col gap-3 rounded-xl border border-white/10 bg-white/[0.03] p-4">
         <p className="text-[11px] font-medium uppercase tracking-wide text-ink-3">来源溯源</p>
@@ -133,6 +143,88 @@ function TraceRow({
       >
         {value}
       </span>
+    </div>
+  );
+}
+
+/** Hermes 配置专用展示：默认模型 / Provider / 可用模型列表 */
+function HermesConfigDetail({ metadata }: { metadata: Record<string, unknown> }) {
+  const defaultModel = typeof metadata.defaultModel === "string" ? metadata.defaultModel : null;
+  const provider = typeof metadata.provider === "string" ? metadata.provider : null;
+  const baseUrl = typeof metadata.baseUrl === "string" ? metadata.baseUrl : null;
+  const models = Array.isArray(metadata.models)
+    ? (metadata.models as string[]).filter((m) => typeof m === "string")
+    : [];
+  return (
+    <div className="flex flex-col gap-3 rounded-xl border border-white/10 bg-white/[0.03] p-4">
+      <p className="text-[11px] font-medium uppercase tracking-wide text-ink-3">
+        Hermes 运行配置（来自 config.yaml）
+      </p>
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+        {defaultModel ? (
+          <ConfigCell label="默认模型" value={defaultModel} mono />
+        ) : null}
+        {provider ? <ConfigCell label="Provider" value={provider} /> : null}
+        {baseUrl ? <ConfigCell label="Base URL" value={baseUrl} mono small /> : null}
+      </div>
+      {models.length > 0 ? (
+        <div className="flex flex-col gap-1.5">
+          <p className="text-[11px] text-ink-3">可用模型（{models.length}）</p>
+          <div className="flex flex-wrap gap-1.5">
+            {models.map((m) => (
+              <span
+                key={m}
+                className="rounded-md border border-white/[0.08] bg-white/[0.03] px-2 py-1 font-mono text-[11px] text-ink-2"
+              >
+                {m}
+              </span>
+            ))}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function ConfigCell({
+  label,
+  value,
+  mono,
+  small,
+}: {
+  label: string;
+  value: string;
+  mono?: boolean;
+  small?: boolean;
+}) {
+  return (
+    <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-2.5">
+      <p className="text-[10px] uppercase tracking-wide text-ink-3">{label}</p>
+      <p
+        className={`mt-0.5 break-all text-[12.5px] text-ink ${mono ? "font-mono text-[11.5px]" : ""} ${small ? "text-[11px]" : ""}`}
+      >
+        {value}
+      </p>
+    </div>
+  );
+}
+
+/** 人设专用展示：SOUL.md 全文（本地只读索引） */
+function SoulProfileDetail({ metadata }: { metadata: Record<string, unknown> }) {
+  const content = typeof metadata.content === "string" ? metadata.content : null;
+  const profile = typeof metadata.profile === "string" ? metadata.profile : null;
+  if (!content) return null;
+  return (
+    <div className="flex flex-col gap-2 rounded-xl border border-white/10 bg-white/[0.03] p-4">
+      <div className="flex items-center justify-between">
+        <p className="text-[11px] font-medium uppercase tracking-wide text-ink-3">
+          SOUL.md 人设全文{profile ? ` · ${profile}` : ""}
+        </p>
+        <span className="text-[10px] text-ink-3">本地只读 · 未修改原始文件</span>
+      </div>
+      <pre className="max-h-[420px] overflow-y-auto whitespace-pre-wrap break-words rounded-lg border border-white/[0.06] bg-black/30 p-3 font-sans text-[12px] leading-relaxed text-ink-2">
+        {content}
+      </pre>
     </div>
   );
 }

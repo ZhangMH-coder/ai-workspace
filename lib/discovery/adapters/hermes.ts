@@ -165,6 +165,7 @@ function scanProfiles(hermesHome: string, localAppData: string): DiscoveredRaw[]
         harness: "Hermes",
         profile: profileName,
         usage: firstPara ?? null,
+        content: readHead(soulMd, 32_000) ?? null, // 人设全文（本地展示，仅存本地库）
       },
       lastModified: lastModified(soulMd),
     });
@@ -185,7 +186,9 @@ function scanMainConfig(hermesHome: string): DiscoveredRaw[] {
   const defaultModel = pick(/default:\s*([^\s#]+)/);
   const provider = pick(/provider:\s*([^\s#]+)/);
   const baseUrl = pick(/base_url:\s*([^\s#]+)/);
-  const modelCount = (text.match(/^ {6}[a-zA-Z0-9_.-]+:\s*\{\}/gm) ?? []).length;
+  const modelMatch = text.match(/^ {6}[a-zA-Z0-9_.-]+:\s*\{\}/gm) ?? [];
+  const models = modelMatch.map((m) => m.trim().replace(/:.*$/, ""));
+  const modelCount = models.length;
   const summary = [
     defaultModel ? `默认模型 ${defaultModel}` : null,
     provider ? `Provider ${provider}` : null,
@@ -206,6 +209,7 @@ function scanMainConfig(hermesHome: string): DiscoveredRaw[] {
       provider,
       baseUrl,
       modelCount,
+      models,
       usage: summary ? `Hermes 运行时读取的全局配置：${summary}。` : null,
     },
     lastModified: lastModified(cfg),

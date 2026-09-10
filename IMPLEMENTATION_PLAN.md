@@ -762,3 +762,39 @@ Resource Discovery MVP —— 实现完成、全量验证通过、待审批（�
 ### 遗留问题
 - claude Harness 下仍有 2 条指向 hermes 的历史路径残留（Desktop/hermes/dashboard 等，目录已不存在），如实标记未解析，待后续清理
 - 资源列表页暂未做「按类别分组展示」（Hermes 有 27 个类别），后续阶段可按类别浏览
+
+---
+
+## S1.5 展示化首页交付记录（2026-09-10）
+
+### 阶段目标
+用户方向定稿：把 AI Workspace 做成「酷炫的本机 AI 资源展示平台」，展示 Hermes 真实技能 / 规则 / 人设。零演示数据。
+
+### 已完成
+1. **Hermes Adapter 扩展**（lib/discovery/adapters/hermes.ts）：
+   - 新增 scanProfiles：扫 AppData/Local/hermes/profiles/*/SOUL.md → type=prompt「人设」资源（真实发现 work + newprofile 两条）
+   - 新增 scanMainConfig：读 .hermes/config.yaml → type=rule「Hermes 主配置」资源（默认模型 / Provider / base_url / 模型数；不读密钥）
+   - 资源总数 282→285，Hermes 137→140（135 技能 + 2 插件 + 2 人设 + 1 配置）
+2. **展示首页重写**（app/(workspace)/dashboard/page.tsx + components/dashboard/showcase/ 4 个新组件）：
+   - HeroStats：285 已发现 / 267 可解析 / 7 Harness / 140 Hermes 技能（真实数字）
+   - TypeCards：技能 258 / 人设 2 / 规则 20 / 插件 4 分类卡（点击进 /resources?type=xx）
+   - HermesSpotlight：运行配置卡（默认模型 deepseek-v4-flash-0731、Provider custom:tokenrhythm、16 个可用模型）+ 人设卡（work 机器视觉教练 / newprofile Hermes Agent，各带真实首段）
+   - SkillGallery：精选 8 个 Hermes 真实技能卡（名称 / 类别 badge / 一行用法），framer-motion 入场动画
+   - 「重新扫描」按钮：调 runResourceScan 后刷新全部数据
+3. **数据源**：首页直接走 lib/services/resource-discovery（overview + 3 组资源查询），不污染 workspace store
+
+### 验证结果
+- lint 0/0、tsc 0、build（Real）通过
+- API：overview total=285 parseable=267 hermes=140；prompt=2（work 人设 / newprofile 人设）；hermes rule=1（Hermes 主配置）
+- 幂等：连续扫描 total=285 不变
+- 只读：135 个 SKILL.md 仍在；config.yaml / SOUL.md SHA-1 已记录，全程未写入
+- 页面：/dashboard 生产模式 HTTP 200，浏览器渲染确认四块全部显示真实数据
+
+### 遗留问题
+- claude Harness 2 条历史路径残留（已如实标记未解析）
+- Dashboard 顶部标题仍显示「Dashboard」（PageHeader），与展示定位不完全匹配，待后续微调
+- README 仍为旧版描述，未同步「真实资源展示」方向（待开源整理时统一更新）
+
+### 当前状态
+- 阶段完成；未越界（仅 Hermes Adapter 追加扫描 + 首页展示，未动 Runtime / 其它核心模块）
+- Git：待提交（dashboard/page.tsx、hermes.ts、showcase/ 4 组件）

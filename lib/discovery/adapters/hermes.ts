@@ -140,6 +140,79 @@ function scanPluginsRoot(pluginsRoot: string): DiscoveredRaw[] {
   return out;
 }
 
+/**
+ * 人设（Profile / SOUL.md）：Hermes 以 profile 目录承载人格设定，
+ * 每个 profile 目录下若有 SOUL.md 即视为一条「人设」资源（type=prompt）。
+ * 位置：APPDATA/../Local/hermes/profiles/<name>/SOUL.md（用户实际使用的 profile）
+ */
+function scanProfiles(hermesHome: string, localAppData: string): DiscoveredRaw[] {
+  const out: DiscoveredRaw[] = [];
+  const profilesRoot = p(localAppData, "hermes", "profiles");
+  if (!isDirectory(profilesRoot)) return out;
+  for (const profileName of listAllSubdirs(profilesRoot)) {
+    const soulMd = p(profilesRoot, profileName, "SOUL.md");
+    if (!exists(soulMd)) continue; // profile 无 SOUL.md，非人设资源
+    const head = readHead(soulMd);
+    const firstPara = extractUsage(head, 160);
+    out.push({
+      type: "prompt",
+      name: `${profileName} 人设`,
+      description: firstPara ?? `Hermes Profile「${profileName}」的 SOUL.md 人设定义`,
+      sourcePath: soulMd,
+      status: "enabled",
+      parseable: true,
+      metadata: {
+        harness: "Hermes",
+        profile: profileName,
+        usage: firstPara ?? null,
+      },
+      lastModified: lastModified(soulMd),
+    });
+  }
+  return out;
+}
+
+/** 主配置（config.yaml）：Hermes 全局规则（模型 / Provider / 推理设置），不读取密钥 */
+function scanMainConfig(hermesHome: string): DiscoveredRaw[] {
+  const out: DiscoveredRaw[] = [];
+  const cfg = p(hermesHome, "config.yaml");
+  if (!exists(cfg)) return [];
+  const text = readHead(cfg, 4096) ?? "";
+  const pick = (re: RegExp): string | null => {
+    const m = re.exec(text);
+    return m?.[1]?.trim() || null;
+  };
+  const defaultModel = pick(/default:\s*([^\s#]+)/);
+  const provider = pick(/provider:\s*([^\s#]+)/);
+  const baseUrl = pick(/base_url:\s*([^\s#]+)/);
+  const modelCount = (text.match(/^ {6}[a-zA-Z0-9_.-]+:\s*\{\}/gm) ?? []).length;
+  const summary = [
+    defaultModel ? `默认模型 ${defaultModel}` : null,
+    provider ? `Provider ${provider}` : null,
+    modelCount > 0 ? `${modelCount} 个可用模型` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  out.push({
+    type: "rule",
+    name: "Hermes 主配置",
+    description: summary ? `Hermes 全局配置：${summary}` : "Hermes 全局配置（config.yaml）",
+    sourcePath: cfg,
+    status: "enabled",
+    parseable: true,
+    metadata: {
+      harness: "Hermes",
+      defaultModel,
+      provider,
+      baseUrl,
+      modelCount,
+      usage: summary ? `Hermes 运行时读取的全局配置：${summary}。` : null,
+    },
+    lastModified: lastModified(cfg),
+  });
+  return out;
+}
+
 export const hermesAdapter: HarnessAdapter = {
   id: "hermes",
   name: "Hermes",
@@ -151,9 +224,13 @@ export const hermesAdapter: HarnessAdapter = {
     return exists(root) && isDirectory(root) ? [{ root, label: "Hermes" }] : [];
   },
   scan(root) {
+    const home = root.root;
+    const local = process.env.LOCALAPPDATA ?? "";
     const out: DiscoveredRaw[] = [];
-    out.push(...scanSkillsRoot(p(root.root, "skills")));
-    out.push(...scanPluginsRoot(p(root.root, "plugins")));
+    out.push(...scanSkillsRoot(p(home, "skills")));
+    out.push(...scanPluginsRoot(p(home, "plugins")));
+    out.push(...scanProfiles(home, local));
+    out.push(...scanMainConfig(home));
     return out;
   },
 };

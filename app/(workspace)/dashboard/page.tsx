@@ -1,193 +1,140 @@
 "use client";
 
-import Link from "next/link";
-import { CalendarDays, Gauge, Plus, Timer, Zap, Activity } from "lucide-react";
+/**
+ * Dashboard — AI Workspace 展示首页（真实本机 AI 资源）
+ *
+ * 展示：真实资源统计 → 资源类型分类 → Hermes 配置与人设 → 精选技能画廊。
+ * 全部数据来自本机只读扫描结果（SQLite），零演示数据。
+ */
+import { useEffect, useMemo, useState } from "react";
+import { motion } from "framer-motion";
+import { RefreshCw } from "lucide-react";
 
-import {
-  ActivityList,
-  ActivityListSkeleton,
-} from "@/components/dashboard/activity-list";
-import { ProjectsOverview } from "@/components/dashboard/projects-overview";
-import {
-  MetricCard,
-  MetricCardSkeleton,
-} from "@/components/dashboard/metric-card";
-import { QuickActions } from "@/components/dashboard/quick-actions";
-import { TrendChart } from "@/components/charts/trend-chart";
+import { HeroStats } from "@/components/dashboard/showcase/hero-stats";
+import { HermesSpotlight } from "@/components/dashboard/showcase/hermes-spotlight";
+import { SkillGallery } from "@/components/dashboard/showcase/skill-gallery";
+import { TypeCards } from "@/components/dashboard/showcase/type-cards";
 import { PageHeader } from "@/components/shared/page-header";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Badge } from "@/components/ui/badge";
-import { formatNumber, formatPercent, formatTokens } from "@/lib/format";
-import { useWorkspaceStore, EMPTY_RUNS_STATS } from "@/stores/workspace";
-import { TIME_RANGE_OPTIONS, timeRangeLabel } from "@/lib/types";
-import { useEffect } from "react";
+import { Skeleton } from "@/components/ui/skeleton";
+import { fetchDiscoveredResources, fetchDiscoveryOverview, runResourceScan } from "@/lib/services/resource-discovery";
+import type { DiscoveredResource, ResourceType } from "@/lib/types";
 
-function useDashboardData() {
-  const hydrated = useWorkspaceStore((s) => s.hydrated);
-  const agents = useWorkspaceStore((s) => s.agents);
-  const recentRuns = useWorkspaceStore((s) => s.recentRuns);
-  const stats = useWorkspaceStore((s) => s.stats);
-  const timeRange = useWorkspaceStore((s) => s.timeRange);
-  const setTimeRange = useWorkspaceStore((s) => s.setTimeRange);
-  const hydrate = useWorkspaceStore((s) => s.hydrate);
-
-  useEffect(() => {
-    void hydrate();
-  }, [hydrate]);
-
-  return { hydrated, agents, recentRuns, stats, timeRange, setTimeRange };
-}
-
-function pctDelta(current: number, previous: number): string | null {
-  if (previous === 0) return current > 0 ? "新增" : null;
-  const delta = ((current - previous) / previous) * 100;
-  return `${delta > 0 ? "+" : ""}${delta.toFixed(1)}%`;
-}
+const TYPE_CARD_DEFS: { type: ResourceType; label: string; description: string }[] = [
+  { type: "skill", label: "技能 Skills", description: "可直接调用的能力指令包，来自各 Harness 的 SKILL.md" },
+  { type: "prompt", label: "人设 / Prompt", description: "Hermes Profile 的灵魂设定（SOUL.md）与提示词资源" },
+  { type: "rule", label: "规则 Rules", description: "配置与约束：模型、Provider、项目规则文件" },
+  { type: "plugin", label: "插件 Plugins", description: "可扩展能力包，如 Hermes superpowers" },
+];
 
 export default function DashboardPage() {
-  const { hydrated, agents, recentRuns, stats, timeRange, setTimeRange } = useDashboardData();
-  // P4-3：统计来自服务端 /runs/stats 聚合（hydrate 后保证存在），不再前端全量拉取 + 内存统计
-  const global = stats?.global ?? EMPTY_RUNS_STATS;
-  const previous = stats?.previous ?? EMPTY_RUNS_STATS;
+  const [overview, setOverview] = useState<Awaited<ReturnType<typeof fetchDiscoveryOverview>> | null>(null);
+  const [profiles, setProfiles] = useState<DiscoveredResource[]>([]);
+  const [configs, setConfigs] = useState<DiscoveredResource[]>([]);
+  const [skills, setSkills] = useState<DiscoveredResource[]>([]);
+  const [scanning, setScanning] = useState(false);
 
-  const activeAgents = agents.filter((a) => a.status === "active" || a.status === "idle").length;
-  const successRate = global.totals.successRate;
-  const failedCount = global.totals.failed;
-  const tokens = global.totals.tokens;
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const [ov, pr, cf, sk] = await Promise.all([
+        fetchDiscoveryOverview(),
+        fetchDiscoveredResources({ type: "prompt", pageSize: 10 }),
+        fetchDiscoveredResources({ type: "rule", harness: "hermes", pageSize: 10 }),
+        fetchDiscoveredResources({ harness: "hermes", type: "skill", parseable: true, pageSize: 8 }),
+      ]);
+      if (cancelled) return;
+      setOverview(ov);
+      setProfiles(pr.items);
+      setConfigs(cf.items);
+      setSkills(sk.items);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
-  const runsDelta = pctDelta(global.totals.runs, previous.totals.runs);
-  const tokensDelta = pctDelta(global.totals.tokens, previous.totals.tokens);
+  const onScan = async () => {
+    setScanning(true);
+    try {
+      await runResourceScan();
+      const [ov, pr, cf, sk] = await Promise.all([
+        fetchDiscoveryOverview(),
+        fetchDiscoveredResources({ type: "prompt", pageSize: 10 }),
+        fetchDiscoveredResources({ type: "rule", harness: "hermes", pageSize: 10 }),
+        fetchDiscoveredResources({ harness: "hermes", type: "skill", parseable: true, pageSize: 8 }),
+      ]);
+      setOverview(ov);
+      setProfiles(pr.items);
+      setConfigs(cf.items);
+      setSkills(sk.items);
+    } finally {
+      setScanning(false);
+    }
+  };
+
+  const byType = useMemo(() => {
+    const m: Partial<Record<ResourceType, number>> = {};
+    if (overview?.scanRun?.byType) {
+      for (const [k, v] of Object.entries(overview.scanRun.byType)) {
+        m[k as ResourceType] = v as number;
+      }
+    }
+    return m;
+  }, [overview]);
+
+  const cards = TYPE_CARD_DEFS.map((d) => ({
+    type: d.type,
+    label: d.label,
+    count: byType[d.type] ?? 0,
+    description: d.description,
+  }));
+
+  const config = configs.find((c) => c.type === "rule") ?? configs[0] ?? null;
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-5">
       <PageHeader
-        title="概览"
-        description="你的 AI 工作区运行状态总览"
+        title="AI Workspace"
+        description="你的本机 AI 资源工作台 —— 真实发现 · 能力索引 · 一处呈现"
         actions={
-          <>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="default">
-                  <CalendarDays className="text-ink-3" />
-                  {timeRangeLabel(timeRange)}
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-44">
-                {TIME_RANGE_OPTIONS.map((option) => (
-                  <DropdownMenuItem
-                    key={option.id}
-                    onSelect={() => setTimeRange(option.id)}
-                  >
-                    {option.label}
-                    {option.id === timeRange ? " ✓" : ""}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-            <Button asChild>
-              <Link href="/agents/new">
-                <Plus />
-                新建 Agent
-              </Link>
-            </Button>
-          </>
+          <Button variant="outline" size="sm" className="h-8 gap-1.5 text-[12px]" onClick={onScan} disabled={scanning}>
+            <RefreshCw className={`size-3.5 ${scanning ? "animate-spin" : ""}`} />
+            {scanning ? "扫描中…" : "重新扫描"}
+          </Button>
         }
       />
 
-      {/* 指标卡 */}
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {!hydrated ? (
-          <>
-            <MetricCardSkeleton label="活跃 Agent" icon={Zap} />
-            <MetricCardSkeleton label="本月运行" icon={Activity} />
-            <MetricCardSkeleton label="成功率" icon={Gauge} />
-            <MetricCardSkeleton label="Tokens 用量" icon={Timer} />
-          </>
-        ) : (
-          <>
-            <MetricCard
-              label="活跃 Agent"
-              icon={Zap}
-              value={formatNumber(activeAgents)}
-              deltaLabel={`共 ${agents.length} 个 Agent`}
-            />
-            <MetricCard
-              label="本月运行"
-              icon={Activity}
-              value={formatNumber(global.totals.runs)}
-              delta={runsDelta ?? undefined}
-              deltaLabel="较上一时段"
-              tone={runsDelta?.startsWith("-") ? "danger" : "success"}
-            />
-            <MetricCard
-              label="成功率"
-              icon={Gauge}
-              value={formatPercent(successRate)}
-              delta={failedCount > 0 ? `${failedCount} 次失败` : "全部成功"}
-              deltaLabel="时间范围内"
-              tone={failedCount > 0 ? "danger" : "success"}
-            />
-            <MetricCard
-              label="Tokens 用量"
-              icon={Timer}
-              value={formatTokens(tokens)}
-              delta={tokensDelta ?? undefined}
-              deltaLabel="较上一时段"
-              tone={tokensDelta?.startsWith("-") ? "danger" : "success"}
-            />          </>
-        )}
-      </div>
+      {overview === null ? (
+        <div className="flex flex-col gap-3">
+          <Skeleton className="h-20 w-full rounded-xl bg-white/[0.04]" />
+          <Skeleton className="h-28 w-full rounded-xl bg-white/[0.04]" />
+          <Skeleton className="h-40 w-full rounded-xl bg-white/[0.04]" />
+        </div>
+      ) : (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.3 }}
+          className="flex flex-col gap-5"
+        >
+          <HeroStats
+            data={{
+              totalResources: overview.totalResources,
+              parseableCount: overview.parseableCount,
+              harnessCount: Object.keys(overview.scanRun?.byHarness ?? {}).length,
+              hermesCount: overview.scanRun?.byHarness?.hermes ?? 0,
+              lastScannedAt: overview.lastScannedAt,
+            }}
+          />
 
-      {/* 趋势图 + 最近活动 */}
-      <div className="grid gap-3 lg:grid-cols-3">
-        <Card className="rounded-xl bg-surface-1 lg:col-span-2">
-          <div className="flex items-center justify-between border-b border-border px-5 py-4">
-            <div>
-              <h3 className="text-[14px] font-semibold text-ink">运行趋势</h3>
-              <p className="mt-0.5 text-[12px] text-ink-3">各 Agent 运行量与成功率</p>
-            </div>
-            <Badge variant="outline" className="text-[11px] font-normal text-ink-3">
-              {timeRangeLabel(timeRange)}
-            </Badge>
-          </div>
-          <div className="px-4 pb-4 pt-5 sm:px-5">
-            {hydrated ? (
-              <TrendChart
-                key={timeRange}
-                data={global.daily}
-                rangeLabel={timeRangeLabel(timeRange)}
-              />
-            ) : (
-              <div className="h-[240px] animate-pulse rounded-lg bg-white/[0.04]" />
-            )}
-          </div>
-        </Card>
+          <TypeCards cards={cards} />
 
-        <Card className="rounded-xl bg-surface-1">
-          <div className="flex items-center justify-between border-b border-border px-5 py-4">
-            <h3 className="text-[14px] font-semibold text-ink">最近活动</h3>
-            <Activity className="h-4 w-4 rotate-90 text-ink-3" />
-          </div>
-          {hydrated ? (
-            <ActivityList runs={recentRuns} agents={agents} />
-          ) : (
-            <ActivityListSkeleton />
-          )}
-        </Card>
-      </div>
+          <HermesSpotlight config={config} profiles={profiles} />
 
-      {/* 项目维度摘要 */}
-      <ProjectsOverview hydrated={hydrated} />
-
-      {/* 快捷操作 */}
-      <QuickActions />
+          <SkillGallery skills={skills} />
+        </motion.div>
+      )}
     </div>
   );
 }

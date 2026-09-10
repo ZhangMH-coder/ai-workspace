@@ -168,6 +168,12 @@ export function ResourceTable() {
   );
 }
 
+function usageOf(resource: DiscoveredResource): string {
+  const usage = resource.metadata?.usage;
+  if (typeof usage === "string" && usage.trim()) return usage;
+  return resource.description || resource.framework;
+}
+
 function ResourceRow({ resource }: { resource: DiscoveredResource }) {
   return (
     <Link
@@ -176,7 +182,9 @@ function ResourceRow({ resource }: { resource: DiscoveredResource }) {
     >
       <div className="w-1/4 min-w-0">
         <p className="truncate text-[13px] font-medium text-ink">{resource.name}</p>
-        <p className="truncate text-[11px] text-ink-3">{resource.framework}</p>
+        <p className="truncate text-[11px] text-ink-3" title={usageOf(resource)}>
+          {usageOf(resource)}
+        </p>
       </div>
       <div className="w-16">
         <Badge variant="outline" className="border-white/10 text-[11px] font-normal text-ink-2">

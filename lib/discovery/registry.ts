@@ -10,10 +10,12 @@ import { codexAdapter } from "./adapters/codex";
 import { cursorAdapter } from "./adapters/cursor";
 import { cursorUserAdapter } from "./adapters/cursor-user";
 import { doubaoSkillsAdapter } from "./adapters/doubao";
+import { hermesAdapter } from "./adapters/hermes";
 import { projectAgentsAdapter } from "./adapters/project-agents";
 
 export const ADAPTERS: HarnessAdapter[] = [
   doubaoSkillsAdapter,
+  hermesAdapter,
   claudeAdapter,
   cursorAdapter,
   codexAdapter,

@@ -28,11 +28,11 @@
 | 2026-09-09 | v1.6 | **Phase 2 — Resource Intelligence MVP（能力索引）** | 145 个真实资源（128 可解析）从「被展示」升级为「能力索引」：新表 `resource_analysis`（保留历史：analyzerVersion/createdAt/isCurrent/inputFingerprint，唯一键 resourceId+inputFingerprint+analyzerVersion 防同版本重复）+ `resource_capability`（每条标签必须 evidenceRef+evidenceSnippet 可追溯）；`lib/analysis/*` 分析层（DocumentReader 只读白名单解析 + fingerprint 增量机制 + HeuristicAnalyzer heuristic-v1 唯一实际分析器 + LLMAnalyzer 仅契约桩不注册）；API 5 端点（run/status/resources/[id]/capabilities/match）；前端能力索引页 `/resources/capabilities`（状态卡 + 增量分析 + 任务→资源匹配 + 类别分组）+ 资源详情能力区块（InsightPanel）+ 导航「Resource Capabilities」；Mock 模式真实空态不伪造；**修数据一致性**：同指纹重跑失败时旧标签一并失效（failed 资源不再残留旧能力标签）；最终态 145 / 128 analyzed / 17 failed / 487 标签（全部可追溯）；lint 0/0、tsc、db:check、build（Real+Mock）、增量/幂等/追溯/只读/Mock 空态验证全过 | ✅ 已完成，待审批 |
 | 2026-09-09 | v1.7 | **Phase 3 — Task Intelligence MVP（任务理解与能力编排）** | 把「资源能力索引」升级为「任务理解层」：六组件流水线 Task → TaskParser（通用领域词典类型识别）→ TaskDecomposer（类型模板 + 附加意图拆解）→ RequirementExtractor（能力需求，isInferred 固定 true）→ CapabilityRetriever（复用现有打分公式 + 真实用户任务反向匹配 + other 类型仅反向信号）→ Reranker（跨需求合并/同资源去重/证据质量分级/最低推荐分 0.5 如实过滤）→ Assembler（RecommendationPlan，仅「选什么」不执行，lib/runtime 契约零改动）；新表 `task_analysis`（历史 + fingerprint + isCurrent，唯一键 task+inputFingerprint+analyzerVersion）+ `task_requirement`（isInferred）+ `resource_recommendation`（只引用 resource_capability.id，evidenceRef/sourcePath 真实来源快照，追溯链完整）；migration 0004；API `POST /api/v1/task-intelligence/analyze`（幂等复用）+ GET analyses/[id] + GET analyses；DTO/mappers/client + Mock 真实空态双模式；Store taskIntelligence 区块 + `/task-intelligence` 页面（输入 → 拆解/需求（推断徽标）→ 推荐卡片（score/理由/证据行）+ 历史列表）+ 导航「Task Intelligence」；**修检索噪声**：中文 2-gram 停用词、模板词反向匹配虚高（kwHits 改基于真实用户任务）、other 类型关闭正向匹配；验收场景「写一篇小红书文案」8 条 #1=1、「数据周报并整理成表格」8 条 #1=0.94（含数据整理子任务）、「今天天气怎么样」如实 0 推荐空态；lint 0/0、tsc、db:check、build（Real+Mock）、API 冒烟（样例/幂等/空态/追溯/事实推断分离）、145/128/487 零回归 | ✅ 已完成，待审批 |
 | 2026-09-10 | v1.8 | **Phase 4 — Capability Planning MVP（任务计划：排序/依赖/校验/回退）**
-| 2026-09-10 | v1.9 | **方向调整 S0 — 清理瘦身（删除全部演示假数据）** | 产品方向收敛为「本机真实 AI 资源工作台」：① `lib/mock-data/seed.ts` 六组演示数据（seedAgents/seedCapabilityDefinitions/seedAgentCapabilities/seedProjects/seedProjectAgents/seedRuns）全部置空，导出名保留（mock 引用方零改动，Mock 模式真实空态）；② `db/seed.ts` 重写为仅 `clearAll()`（清空 agent/capability_definition/agent_capability/project/project_agent/agent_run 六张演示业务表），`runSeed()` 兼容返回空计数；`db/init.ts` 不再种演示数据（migrate only）；`db/reset.ts` = 清空演示业务数据、保留真实资源；③ 实测清空数据库假记录：6 表归 0，真实资源线零回归（145 资源 / 128 可解析 / 487 当前能力标签）；④ 删除冗余文件：docs/previews 截图 40+、docs 工程化方案/Capability 架构设计/V1-Review/P4-1 旧文档（保留 P5-1 Runtime 契约文档与新增 ROADMAP-Real-Resources.md）、start-*.log、tsconfig.tsbuildinfo；⑤ 页面保留（agents/projects/capabilities/settings 骨架展示空态），Dashboard 已连接真实资源概览数据；lint 0/0 / tsc / db:check / build（Real+Mock）/ 8 页面 200 / API 空态与资源概览核对全绿 | ✅ S0 完成，待审批进入 S1 | | 把扁平推荐升级为「可验证任务计划」：七组件流水线 RecommendationPlan → PlanNormalizer（按需求重建 Retriever 候选集，恢复被 Reranker 丢弃的次优候选）→ StepOrderer（类别先验稳定拓扑排序，无先验保持并列）→ DependencyInferer（类别先验 + 文本信号，边仅当 from<to 构造性 DAG，无证据不强行建边）→ PrimarySelector（主选 + 回退链 ≤3，真实 score）→ PlanValidator（确定性：环/悬空→invalid，unmet/重复/低置信→partial）→ TaskPlan；新表 `task_plan`（valid/partial/invalid/failed + validation JSON 快照，一分析一当前计划）+ `plan_step`（primary FK resource_capability 只引用 + alternatives JSON + 推断 outputDescription/expectedInput + isInferred）+ `plan_dependency`（from/to FK + type + 推断 reason）；migration 0005；PlannerProvider 与 AnalysisProvider 同模式（planner-heuristic-v1 唯一实现 + planner-llm-v1 契约桩不注册）；API `POST /api/v1/task-intelligence/plan`（幂等）+ GET plans/[id] + GET analyses/[id]/plan（404=未生成）；DTO/mappers/client + Mock 真实空态双模式；Store plan 区块 + 任务分析页「任务计划」区块（状态徽标/校验 issues/依赖链/步骤流/回退链折叠）；验收：validator 四类问题矩阵全过、「写一篇小红书文案」2 步骤 0 依赖（并列不强行）+ 3 条真实回退候选、「数据周报并整理成表格」3 步骤 3 条 data_flow（文本信号）+ lark-base 重复如实 warning、幂等同 id、追溯 primary→capId→evidenceRef→sourcePath 完整、推断/事实字段分离落库、145/128/487 + 3 analyses 零回归、**lib/runtime 契约零改动（git diff 证明）**、Harness 零修改、lint 0/0/tsc/db:check/build（Real+Mock）/API/页面全过 | ✅ 已完成，待审批 |
+| 2026-09-10 | v1.10 | **S1 首战 — 新增 Hermes Harness Adapter（用户主战场真实资源）** | ① 新增 `lib/discovery/adapters/hermes.ts`：探测 `HOME/.hermes`，递归发现 skills 全部 135 个真实 SKILL.md（兼容 两层/单层分类即技能/三层 三种结构，修复 `computer-use` 被全局跳过名单误伤的问题——Hermes 内该目录是真实技能，改用自定义遍历仅跳隐藏目录）+ 2 个插件（superpowers 已解析、agency-agents 目录无 manifest 如实标记未解析）；② 新增 `fs-utils.extractUsage`：从 SKILL.md 正文确定性提取一行「如何使用」，Hermes/Doubao/Cursor 三类 SKILL.md 技能均带 usage；③ 前端资源列表行显示用法摘要、资源详情新增「如何使用」卡片（usage 兜底 description）；④ 实测入库：Hermes 137（135 技能 + 2 插件），资源总数 145→282，可解析 248→264；⑤ 验证：幂等扫描 282 不变、135 个 Hermes 文件扫描前后 SHA-1 完全一致（只读）、lint 0/0、tsc、db:check、build（Real+Mock）、页面 200、API hermes=137 全绿 | ✅ S1 Hermes 适配完成，待审批进入后续阶段 | | 产品方向收敛为「本机真实 AI 资源工作台」：① `lib/mock-data/seed.ts` 六组演示数据（seedAgents/seedCapabilityDefinitions/seedAgentCapabilities/seedProjects/seedProjectAgents/seedRuns）全部置空，导出名保留（mock 引用方零改动，Mock 模式真实空态）；② `db/seed.ts` 重写为仅 `clearAll()`（清空 agent/capability_definition/agent_capability/project/project_agent/agent_run 六张演示业务表），`runSeed()` 兼容返回空计数；`db/init.ts` 不再种演示数据（migrate only）；`db/reset.ts` = 清空演示业务数据、保留真实资源；③ 实测清空数据库假记录：6 表归 0，真实资源线零回归（145 资源 / 128 可解析 / 487 当前能力标签）；④ 删除冗余文件：docs/previews 截图 40+、docs 工程化方案/Capability 架构设计/V1-Review/P4-1 旧文档（保留 P5-1 Runtime 契约文档与新增 ROADMAP-Real-Resources.md）、start-*.log、tsconfig.tsbuildinfo；⑤ 页面保留（agents/projects/capabilities/settings 骨架展示空态），Dashboard 已连接真实资源概览数据；lint 0/0 / tsc / db:check / build（Real+Mock）/ 8 页面 200 / API 空态与资源概览核对全绿 | ✅ S0 完成，待审批进入 S1 | | 把扁平推荐升级为「可验证任务计划」：七组件流水线 RecommendationPlan → PlanNormalizer（按需求重建 Retriever 候选集，恢复被 Reranker 丢弃的次优候选）→ StepOrderer（类别先验稳定拓扑排序，无先验保持并列）→ DependencyInferer（类别先验 + 文本信号，边仅当 from<to 构造性 DAG，无证据不强行建边）→ PrimarySelector（主选 + 回退链 ≤3，真实 score）→ PlanValidator（确定性：环/悬空→invalid，unmet/重复/低置信→partial）→ TaskPlan；新表 `task_plan`（valid/partial/invalid/failed + validation JSON 快照，一分析一当前计划）+ `plan_step`（primary FK resource_capability 只引用 + alternatives JSON + 推断 outputDescription/expectedInput + isInferred）+ `plan_dependency`（from/to FK + type + 推断 reason）；migration 0005；PlannerProvider 与 AnalysisProvider 同模式（planner-heuristic-v1 唯一实现 + planner-llm-v1 契约桩不注册）；API `POST /api/v1/task-intelligence/plan`（幂等）+ GET plans/[id] + GET analyses/[id]/plan（404=未生成）；DTO/mappers/client + Mock 真实空态双模式；Store plan 区块 + 任务分析页「任务计划」区块（状态徽标/校验 issues/依赖链/步骤流/回退链折叠）；验收：validator 四类问题矩阵全过、「写一篇小红书文案」2 步骤 0 依赖（并列不强行）+ 3 条真实回退候选、「数据周报并整理成表格」3 步骤 3 条 data_flow（文本信号）+ lark-base 重复如实 warning、幂等同 id、追溯 primary→capId→evidenceRef→sourcePath 完整、推断/事实字段分离落库、145/128/487 + 3 analyses 零回归、**lib/runtime 契约零改动（git diff 证明）**、Harness 零修改、lint 0/0/tsc/db:check/build（Real+Mock）/API/页面全过 | ✅ 已完成，待审批 |
 
 ## 当前阶段
 
-**方向调整 S0 — 清理瘦身（删除全部演示假数据）**（已完成；**不自动进入下一阶段**，待审批进入 S1 真实资源浏览器）
+**S1 首战 — Hermes Harness Adapter（用户主战场真实资源入库）**（已完成；**不自动进入下一阶段**，待审批）
 
 ---
 
@@ -738,3 +738,27 @@ Resource Discovery MVP —— 实现完成、全量验证通过、待审批（�
 ### 遗留问题
 - agents / projects / capabilities / settings 页面当前为空态（骨架保留），属于"页面保留、数据真实化"的中间状态；是否重定向到真实资源功能，待 S1 及后续阶段决定。
 - README 尚未同步"方向调整 + 假数据已删除"说明（待后续阶段一并更新）。
+
+---
+
+## S1 Hermes Adapter 交付记录（2026-09-10）
+
+### 已完成
+1. **Hermes Harness Adapter**（lib/discovery/adapters/hermes.ts，注册入 registry）：
+   - 探测 HOME/.hermes；递归发现 skills 全部 135 个真实 SKILL.md（兼容两层 / 单层分类即技能 / 三层嵌套结构）
+   - 修复「computer-use」目录被全局跳过名单误伤（Cursor 运行态目录在 Hermes 里是真实技能），Hermes 改用自定义遍历仅跳过隐藏目录
+   - 2 个插件：superpowers（含 README，已解析）、agency-agents（目录无 SKILL.md/README，如实标记未解析）
+2. **「如何使用」提取**（fs-utils.extractUsage）：从 SKILL.md 正文确定性提取一行简短用法（去 frontmatter/标题/代码块，截断 200 字符）；Hermes / Doubao / Cursor 三类 SKILL.md 技能统一带 usage
+3. **前端展示**：资源列表行显示一行用法摘要；资源详情新增「如何使用」卡片（usage 缺失时兜底 description）
+4. **真实数据**：Hermes 137 条入库（135 技能 + 2 插件），资源总数 145→282，可解析 248→264，byHarness 含 hermes=137
+
+### 验证结果
+- lint 0/0、tsc、db:check、build（Real + Mock）全通过
+- 幂等：连续扫描资源总数 282 不变，无重复入库
+- 只读：135 个 Hermes SKILL.md 扫描前后 SHA-1 完全一致
+- API：/resources?harness=hermes total=137，详情含 usage 字段（如 windows-shell-interop 等真实提取）
+- 页面：/resources、/resources/capabilities、/dashboard 均 200
+
+### 遗留问题
+- claude Harness 下仍有 2 条指向 hermes 的历史路径残留（Desktop/hermes/dashboard 等，目录已不存在），如实标记未解析，待后续清理
+- 资源列表页暂未做「按类别分组展示」（Hermes 有 27 个类别），后续阶段可按类别浏览

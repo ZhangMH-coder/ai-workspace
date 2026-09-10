@@ -17,6 +17,10 @@ import {
 
 export function ResourceDetail({ resource }: { resource: DiscoveredResource }) {
   const metaEntries = Object.entries(resource.metadata ?? {});
+  const usage =
+    (typeof resource.metadata?.usage === "string" && resource.metadata.usage.trim()
+      ? resource.metadata.usage
+      : null) ?? resource.description;
   return (
     <div className="flex flex-col gap-4">
       <div>
@@ -40,6 +44,14 @@ export function ResourceDetail({ resource }: { resource: DiscoveredResource }) {
           {resource.description || "（无描述）"}
         </p>
       </div>
+
+      {/* 如何使用 */}
+      {resource.parseable && usage ? (
+        <div className="flex flex-col gap-1.5 rounded-xl border border-white/10 bg-white/[0.03] p-4">
+          <p className="text-[11px] font-medium uppercase tracking-wide text-ink-3">如何使用</p>
+          <p className="text-[13px] leading-relaxed text-ink">{usage}</p>
+        </div>
+      ) : null}
 
       {/* 溯源卡 */}
       <div className="flex flex-col gap-3 rounded-xl border border-white/10 bg-white/[0.03] p-4">

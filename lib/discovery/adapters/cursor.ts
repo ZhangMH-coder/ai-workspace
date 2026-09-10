@@ -10,7 +10,7 @@
  * - 目录存在但无对应指令文件 → parseable=false（保留路径）
  * - 跳过：extensions / debug-logs / ai-tracking / projects（运行态或工程历史）
  */
-import { exists, isDirectory, lastModified, listFiles, listSubdirs, p } from "../fs-utils";
+import { exists, isDirectory, lastModified, listFiles, listSubdirs, p, readHead, extractUsage } from "../fs-utils";
 import type { DiscoveryCandidate, DiscoveredRaw, HarnessAdapter } from "../types";
 
 function scanDirAsResources(
@@ -27,6 +27,7 @@ function scanDirAsResources(
     const found = expectedFiles.find((f) => exists(p(dir, f)));
     if (found) {
       const fp = p(dir, found);
+      const head = type === "skill" && found === "SKILL.md" ? readHead(fp) : null;
       out.push({
         type,
         name: dirName,
@@ -34,7 +35,12 @@ function scanDirAsResources(
         sourcePath: fp,
         status: "enabled",
         parseable: true,
-        metadata: { rootLabel, directory: dirName, file: found },
+        metadata: {
+          rootLabel,
+          directory: dirName,
+          file: found,
+          usage: head ? (extractUsage(head) ?? undefined) : undefined,
+        },
         lastModified: lastModified(fp),
       });
     } else {

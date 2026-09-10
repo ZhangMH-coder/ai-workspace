@@ -59,10 +59,10 @@
 
 ### S1 真实资源浏览器完善（✅ Hermes 适配已确认优先 2026-09-10）
 
-- **第一优先：新增 Hermes Harness Adapter**（用户主战场，实测 135 技能 / 27 类 / 2 插件，格式 SKILL.md 可复用现有解析器；当前 6 个适配器无 Hermes，需新增发现 + 解析 + 展示）
-- 资源列表：Harness 分组、类型筛选、搜索、状态（已解析/未解析）筛选
-- 资源详情：真实文件路径、解析状态、能力标签、证据片段
-- 验收：Hermes 135 技能 + 2 插件真实入库可浏览；全部 Harness 资源可搜索、可追溯
+- ✅ **Hermes Harness Adapter 已完成**（2026-09-10）：新增 lib/discovery/adapters/hermes.ts，递归发现 `.hermes/skills` 全部 135 技能（含单层分类即技能、三层嵌套、computer-use 等全局跳过名单误伤已修复）+ 2 插件；复用 parseFrontmatter + 新增 extractUsage 提取每技能「如何使用」
+- ✅ 资源列表已支持按 Harness 过滤（含 Hermes）、类型/状态筛选、搜索（沿用 V1 能力）
+- ✅ 资源详情新增「如何使用」卡片（usage 提取自 SKILL.md 正文，真实可读）；列表行亦显示一行用法摘要
+- ✅ 验收：Hermes 137 资源真实入库（135 技能 + 2 插件），资源总数 145→282，全部可浏览/搜索/追溯；幂等扫描 282 不变；135 文件扫描前后哈希完全一致（只读）；lint/tsc/db:check/build（Real+Mock）/API/页面全绿
 
 ### S2 能力使用说明书（executionHint 升级）
 

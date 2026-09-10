@@ -8,7 +8,7 @@
  * - 扫描：每个含 SKILL.md 的子目录 = 一个 Skill；解析 frontmatter 的 name/description
  * - 有 SKILL.md 但 frontmatter 不可解析 → parseable=false（保留路径，不猜测）
  */
-import { exists, isDirectory, lastModified, listSubdirs, p, parseFrontmatter, readHead } from "../fs-utils";
+import { exists, isDirectory, lastModified, listSubdirs, p, parseFrontmatter, readHead, extractUsage } from "../fs-utils";
 import type { DiscoveryCandidate, DiscoveredRaw, HarnessAdapter } from "../types";
 
 const SKILL_ROOTS = (home: string, local: string) => [
@@ -26,6 +26,7 @@ function scanSkillRoot(root: DiscoveryCandidate): DiscoveredRaw[] {
     const mtime = lastModified(skillMd) ?? lastModified(skillDir);
     if (!exists(skillMd)) continue; // 目录存在但无 SKILL.md，不是 Skill 资源，不索引
     const fm = parseFrontmatter(readHead(skillMd));
+    const usage = extractUsage(readHead(skillMd));
     if (fm && fm.name) {
       out.push({
         type: "skill",
@@ -34,7 +35,7 @@ function scanSkillRoot(root: DiscoveryCandidate): DiscoveredRaw[] {
         sourcePath: skillMd,
         status: "enabled",
         parseable: true,
-        metadata: { skillRoot: root.label, frontmatter: fm, directory: dirName },
+        metadata: { skillRoot: root.label, frontmatter: fm, directory: dirName, usage: usage ?? fm.description ?? null },
         lastModified: mtime,
       });
     } else {

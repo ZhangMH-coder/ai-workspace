@@ -146,3 +146,35 @@ export function parseFrontmatter(text: string | null): Frontmatter | null {
 export function p(...segments: string[]): string {
   return join(...segments);
 }
+
+/**
+ * 从 SKILL.md 头部文本提取一行简短「如何使用」。
+ * 规则（确定性，不猜测）：
+ * - 去掉 frontmatter 块（`---` 之间）
+ * - 跳过空行与 Markdown 标题行（#）
+ * - 取第一个有实质内容的段落，截断至 200 字符
+ * 提取不到则返回 null（由调用方兜底为 description）。
+ */
+export function extractUsage(headText: string | null, maxLen = 200): string | null {
+  if (!headText) return null;
+  const body = headText.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, "");
+  const lines = body.split(/\r?\n/);
+  const buf: string[] = [];
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (!line) {
+      if (buf.length > 0) break;
+      continue;
+    }
+    if (/^#{1,6}\s/.test(line)) continue; // 标题行
+    if (/^```/.test(line)) break; // 代码块边界
+    buf.push(line);
+    if (buf.join(" ").length >= maxLen) break;
+  }
+  const text = buf
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!text) return null;
+  return text.length > maxLen ? `${text.slice(0, maxLen)}…` : text;
+}

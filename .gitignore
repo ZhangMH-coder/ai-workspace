@@ -44,3 +44,4 @@ next-env.d.ts
 # P4-2 local runtime artifacts
 data/
 *.log
+.obsidian/

@@ -6,11 +6,12 @@
  * 真实数据验证页面：展示扫描到的真实资源（无 Demo 数据）；
  * 支持重新扫描（只读、幂等）；未扫描 / 未发现 / Mock 模式展示真实空态。
  */
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { BrainCircuit, RotateCcw, ScanSearch } from "lucide-react";
+import { BrainCircuit, LayoutGrid, List, RotateCcw, ScanSearch } from "lucide-react";
 import { toast } from "sonner";
 
+import { CategoryBrowser } from "@/components/resources/category-browser";
 import { EmptyDiscovery } from "@/components/resources/empty-discovery";
 import { HarnessGrid } from "@/components/resources/harness-grid";
 import { ResourceTable } from "@/components/resources/resource-table";
@@ -32,6 +33,7 @@ export default function ResourcesPage() {
   const error = useWorkspaceStore((s) => s.discovery.error);
   const fetchOverview = useWorkspaceStore((s) => s.fetchDiscoveryOverview);
   const runScan = useWorkspaceStore((s) => s.runResourceScan);
+  const [view, setView] = useState<"list" | "category">("list");
 
   useEffect(() => {
     void hydrate().then(() => fetchOverview());
@@ -142,13 +144,37 @@ export default function ResourcesPage() {
 
           {/* 资源列表 */}
           <Card className="border-white/10 bg-transparent">
-            <CardHeader className="px-4 pt-4">
+            <CardHeader className="flex-row items-center justify-between px-4 pt-4">
               <CardTitle className="text-[14px] font-semibold text-ink">
                 资源索引
               </CardTitle>
+              <div className="flex items-center gap-1 rounded-lg border border-white/[0.08] bg-white/[0.02] p-0.5">
+                <button
+                  type="button"
+                  onClick={() => setView("list")}
+                  className={`flex h-7 items-center gap-1.5 rounded-md px-2.5 text-[11.5px] transition-colors ${
+                    view === "list"
+                      ? "bg-white/[0.07] text-ink"
+                      : "text-ink-3 hover:text-ink-2"
+                  }`}
+                >
+                  <List className="size-3" /> 列表
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setView("category")}
+                  className={`flex h-7 items-center gap-1.5 rounded-md px-2.5 text-[11.5px] transition-colors ${
+                    view === "category"
+                      ? "bg-white/[0.07] text-ink"
+                      : "text-ink-3 hover:text-ink-2"
+                  }`}
+                >
+                  <LayoutGrid className="size-3" /> 按类别
+                </button>
+              </div>
             </CardHeader>
             <CardContent className="px-4 pb-4">
-              <ResourceTable />
+              {view === "list" ? <ResourceTable /> : <CategoryBrowser />}
             </CardContent>
           </Card>
         </div>

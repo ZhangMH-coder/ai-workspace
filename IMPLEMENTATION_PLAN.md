@@ -849,3 +849,24 @@ Resource Discovery MVP —— 实现完成、全量验证通过、待审批（�
 ### 当前状态
 - 阶段完成；未越界
 - Git：待提交
+
+---
+
+## S1.8 技能按类别分组浏览交付记录（2026-09-10）
+
+### 已完成
+1. **CategoryBrowser 组件**（components/resources/category-browser.tsx）：全量拉取 Hermes 技能（分页合并），按 metadata.category 真实分组，每类标题 + 数量 + 技能卡网格（名称 + 一行用法），无类别的归「未分类」，按数量降序。
+2. **资源页视图切换**（app/(workspace)/resources/page.tsx）：资源索引卡头部新增「列表 / 按类别」切换，默认列表，保留现有分页筛选能力。
+
+### 验证结果
+- lint 0/0、tsc 0、build 通过
+- 浏览器实渲染：类别视图显示「135 技能 / 25 类别」，software-development（28）居首，技能卡带真实用法；与列表视图一键切换正常
+- 数据：135 个 SKILL.md 全部来自真实分类元数据，零演示
+- 幂等/只读不受影响（纯前端视图）
+
+### 遗留问题
+- 类别视图仅覆盖 Hermes 技能（其余 Harness 技能无 category 元数据，暂不纳入）
+
+### 当前状态
+- 阶段完成；未越界
+- Git：待提交

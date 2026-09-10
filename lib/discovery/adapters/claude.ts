@@ -3,60 +3,34 @@
  *
  * 识别 Claude（Claude Code / Claude Desktop）Harness：
  * - 候选：HOME/.claude
- * - 扫描（白名单子目录，跳过运行态）：
- *   - projects/ 下每项目目录 → 找 CLAUDE.md（项目上下文指令）→ rule
- *     目录存在但无 CLAUDE.md → parseable=false（保留路径）
+ * - 扫描（白名单，跳过运行态与会话记录）：
+ *   - 根下 CLAUDE.md（全局上下文指令）→ rule
  *   - plugins/marketplaces/ 下每插件目录 → 找 manifest（.json / MARKETPLACE.json）→ plugin
- *   - 根下脚本文件（*.py / *.js / *.sh）→ other（检测到但暂无法解析为资源契约）
- * - 跳过：sessions / transcripts / cache / backups / telemetry / downloads / file-history
+ * - 明确跳过：
+ *   - projects/（Claude Code 项目会话记录目录，非用户资源，曾产生大量无 CLAUDE.md 噪声）
+ *   - sessions / transcripts / cache / backups / telemetry / downloads / file-history（运行态）
+ *   - 根下脚本文件（*.py / *.js / *.sh 为脚本，不是 Harness 资源契约）
  */
 import { exists, isDirectory, lastModified, listFiles, listSubdirs, p } from "../fs-utils";
 import type { DiscoveryCandidate, DiscoveredRaw, HarnessAdapter } from "../types";
-
-/** C--Users-Administrator → C:\Users\Administrator（Claude 项目目录名编码） */
-function decodeProjectName(dirName: string): string {
-  try {
-    return dirName.replace(/^C--/, "C:\\").replace(/-+/g, "\\");
-  } catch {
-    return dirName;
-  }
-}
 
 function scanClaudeRoot(root: DiscoveryCandidate): DiscoveredRaw[] {
   const out: DiscoveredRaw[] = [];
   const rootPath = root.root;
 
-  // projects/：项目级上下文（CLAUDE.md）
-  const projectsDir = p(rootPath, "projects");
-  if (isDirectory(projectsDir)) {
-    for (const dirName of listSubdirs(projectsDir)) {
-      const projectDir = p(projectsDir, dirName);
-      const claudeMd = p(projectDir, "CLAUDE.md");
-      const decoded = decodeProjectName(dirName);
-      if (exists(claudeMd)) {
-        out.push({
-          type: "rule",
-          name: decoded,
-          description: `Claude 项目上下文（${decoded}）`,
-          sourcePath: claudeMd,
-          status: "enabled",
-          parseable: true,
-          metadata: { projectDir, decoded },
-          lastModified: lastModified(claudeMd),
-        });
-      } else {
-        out.push({
-          type: "rule",
-          name: decoded,
-          description: "发现 Claude 项目目录，但未找到 CLAUDE.md",
-          sourcePath: projectDir,
-          parseable: false,
-          parseNote: "项目目录内未找到 CLAUDE.md",
-          metadata: { projectDir, decoded },
-          lastModified: lastModified(projectDir),
-        });
-      }
-    }
+  // 根下全局上下文：CLAUDE.md → rule
+  const globalRule = p(rootPath, "CLAUDE.md");
+  if (exists(globalRule)) {
+    out.push({
+      type: "rule",
+      name: "Claude 全局规则",
+      description: "Claude Code 全局上下文指令（.claude/CLAUDE.md）",
+      sourcePath: globalRule,
+      status: "enabled",
+      parseable: true,
+      metadata: { harness: "Claude", scope: "global" },
+      lastModified: lastModified(globalRule),
+    });
   }
 
   // plugins/marketplaces/：插件 manifest
@@ -88,22 +62,6 @@ function scanClaudeRoot(root: DiscoveryCandidate): DiscoveredRaw[] {
           lastModified: lastModified(pluginDir),
         });
       }
-    }
-  }
-
-  // 根下脚本文件 → other（检测到但暂无法解析）
-  for (const f of listFiles(rootPath)) {
-    if (/\.(py|js|ts|sh|ps1)$/i.test(f)) {
-      out.push({
-        type: "other",
-        name: f,
-        description: "Harness 根目录下的脚本文件（未定义资源契约）",
-        sourcePath: p(rootPath, f),
-        parseable: false,
-        parseNote: "脚本文件无统一资源契约，仅保留位置",
-        metadata: { rootLabel: root.label },
-        lastModified: lastModified(p(rootPath, f)),
-      });
     }
   }
 

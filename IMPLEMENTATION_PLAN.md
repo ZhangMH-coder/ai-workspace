@@ -798,3 +798,29 @@ Resource Discovery MVP —— 实现完成、全量验证通过、待审批（�
 ### 当前状态
 - 阶段完成；未越界（仅 Hermes Adapter 追加扫描 + 首页展示，未动 Runtime / 其它核心模块）
 - Git：待提交（dashboard/page.tsx、hermes.ts、showcase/ 4 组件）
+
+---
+
+## S1.6 清理收尾 + README 同步（2026-09-10）
+
+### 已完成
+1. **扫描噪声收敛**（lib/discovery/adapters/claude.ts）：Claude Adapter 移除 projects/ 会话记录扫描（曾产出 13 条无 CLAUDE.md 噪声）+ 根下脚本扫描（anthropic_proxy.py 非资源）；仅保留 plugins/marketplaces 与根 CLAUDE.md。
+2. **索引孤儿清理**（db/service.ts + db/repository.ts）：runResourceScan 末尾删除 scanId 非本次的记录——adapter 排除的路径 / 已消失的源自动从索引移除，索引与真实文件系统保持一致。
+3. **重复页面删除**：/capabilities（CapabilityDefinition 空壳）与 /resources/capabilities（真实能力索引）概念重复 → 删除 app/(workspace)/capabilities/ 整目录 + 导航项（lib/navigation.ts 移除 Blocks 项）。
+4. **README 重写**：从 P1-P5 旧描述（假业务 + 已删文档引用）更新为当前「真实本地 AI 资源展示平台」定位：核心能力、页面结构、扫描语义、数据基线、明确未实现清单；移除对已删文档的引用。
+
+### 验证结果
+- lint 0/0、tsc 0、build（Real）通过
+- 重扫：total 285→270，claude 15→0（13 条会话记录 + 2 条不存在路径被清理），**可解析 267 一条未少**
+- byType：skill 258 / plugin 4 / prompt 2 / rule 6 / other 1（原 rule 20 中 claude 噪声 14 条已清）
+- 幂等：重扫 total=270 稳定
+- 页面：全部 7 个路由 200；/capabilities → 404 ✓；Dashboard 数字更新 270/267/6/140
+- 原始 Harness 文件零修改
+
+### 遗留问题
+- docs/ROADMAP-Real-Resources.md 与 docs/P5-1 为历史设计文档，内部交叉引用旧评审，不影响运行，待后续统一归档
+- agents / projects / settings 仍为空壳骨架页面（S0 用户确认保留），后续按展示方向决定去留
+
+### 当前状态
+- 阶段完成；未越界（仅 Adapter 收敛 + 索引清理 + 页面去重 + 文档）
+- Git：待提交

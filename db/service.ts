@@ -467,6 +467,10 @@ export function runResourceScan(): RunScanResult {
     resources.push(resourceToDomain(row));
   }
 
+  // 索引同步：删除「本次扫描不再产出」的旧记录（adapter 排除噪声 / 源路径已消失时，
+  // 旧索引不得残留，保证索引与真实文件系统一致）。
+  repo.deleteDiscoveredResourcesNotInScan(scanId);
+
   return {
     scanRun: scanRunToDomain(repo.getScanRun(scanId))!,
     harnesses: harnessSummaries,

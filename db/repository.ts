@@ -489,6 +489,11 @@ export function getLatestScanRun() {
   return db.select().from(scanRuns).orderBy(desc(scanRuns.startedAt)).limit(1).get() ?? null;
 }
 
+/** 删除不属于指定 scanId 的旧索引记录（本次扫描未覆盖 = 源已消失 / adapter 已排除） */
+export function deleteDiscoveredResourcesNotInScan(scanId: string) {
+  db.delete(discoveredResources).where(ne(discoveredResources.scanId, scanId)).run();
+}
+
 export function getScanRun(id: string) {
   return db.select().from(scanRuns).where(eq(scanRuns.id, id)).get() ?? null;
 }

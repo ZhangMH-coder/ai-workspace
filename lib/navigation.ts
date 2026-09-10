@@ -1,5 +1,4 @@
 import {
-  Blocks,
   Bot,
   BrainCircuit,
   FolderKanban,
@@ -49,12 +48,6 @@ export const navGroups: NavGroup[] = [
         href: "/agents",
         icon: Bot,
         description: "创建与配置智能体",
-      },
-      {
-        title: "Capabilities",
-        href: "/capabilities",
-        icon: Blocks,
-        description: "能力资产库：Skills / Memory / Rules / Tools",
       },
     ],
   },

@@ -1,11 +1,10 @@
 /**
- * Reset 脚本（P4-2a）：清空业务数据 + 重跑 Seed（保留 migration 历史）
+ * Reset 脚本（方向调整 S0）：清空演示业务数据，保留真实资源数据
  * 用法：npm run db:reset
  */
-import { clearAll, runSeed } from "./seed";
+import { clearAll } from "./seed";
 import { sqlite } from "./db";
 
 clearAll();
-const counts = runSeed();
-console.log("✓ demo data reset:", JSON.stringify(counts));
+console.log("✓ 演示业务数据已清空（真实资源数据保留）");
 sqlite.close();

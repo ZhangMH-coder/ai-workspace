@@ -27,11 +27,12 @@
 | 2026-09-08 | v1.5 | **P5-1 AI Runtime 架构与契约设计（纯设计，当前阶段）** | 交付 `docs/P5-1-AI-Runtime-Architecture-Contract.md`：目标架构 Agent→Runtime→Model/Prompt/Context/Capability/Execution→Run；Runtime 编排层（lib/runtime/*）位于 Service 与 Provider 之间；RuntimeRequest/ModelConfig/ExecutionContext/RuntimeResult/RuntimeEvent/RuntimeError/TokenUsage 域模型；Run 状态机五态（queued/running/succeeded/failed/cancelled）+ 合法转换 + 存量 success→succeeded 迁移策略 + 统计分母显式定义；Capability 两层只读消费（Definition 资产 + AgentCapability 装配 → ExecutionContext，四类职责与注入顺序）；统一 RuntimeProvider 接口（Adapter 注册表，禁止 Service 硬编码）；Streaming Event 契约（delta/tool_call/tool_result/finish/error + SSE 细则，P5-2 不实现）；错误分层（API/Runtime/Provider/Tool/Timeout-Cancel → Run 落库 error_code）；Token/Cost 模型（input/output/total 落库、cost 扩展位不落库）；持久化边界（Run 落库、事件流仅内存、完整 output 不持久化）；Mock→Real 双模式替换路径（P5-2 仅 MockProvider + 编排层）；P5-2 最小实施计划（10 项，明确不做清单）；风险与边界 | ✅ 已完成，待审批进入 P5-2 |
 | 2026-09-09 | v1.6 | **Phase 2 — Resource Intelligence MVP（能力索引）** | 145 个真实资源（128 可解析）从「被展示」升级为「能力索引」：新表 `resource_analysis`（保留历史：analyzerVersion/createdAt/isCurrent/inputFingerprint，唯一键 resourceId+inputFingerprint+analyzerVersion 防同版本重复）+ `resource_capability`（每条标签必须 evidenceRef+evidenceSnippet 可追溯）；`lib/analysis/*` 分析层（DocumentReader 只读白名单解析 + fingerprint 增量机制 + HeuristicAnalyzer heuristic-v1 唯一实际分析器 + LLMAnalyzer 仅契约桩不注册）；API 5 端点（run/status/resources/[id]/capabilities/match）；前端能力索引页 `/resources/capabilities`（状态卡 + 增量分析 + 任务→资源匹配 + 类别分组）+ 资源详情能力区块（InsightPanel）+ 导航「Resource Capabilities」；Mock 模式真实空态不伪造；**修数据一致性**：同指纹重跑失败时旧标签一并失效（failed 资源不再残留旧能力标签）；最终态 145 / 128 analyzed / 17 failed / 487 标签（全部可追溯）；lint 0/0、tsc、db:check、build（Real+Mock）、增量/幂等/追溯/只读/Mock 空态验证全过 | ✅ 已完成，待审批 |
 | 2026-09-09 | v1.7 | **Phase 3 — Task Intelligence MVP（任务理解与能力编排）** | 把「资源能力索引」升级为「任务理解层」：六组件流水线 Task → TaskParser（通用领域词典类型识别）→ TaskDecomposer（类型模板 + 附加意图拆解）→ RequirementExtractor（能力需求，isInferred 固定 true）→ CapabilityRetriever（复用现有打分公式 + 真实用户任务反向匹配 + other 类型仅反向信号）→ Reranker（跨需求合并/同资源去重/证据质量分级/最低推荐分 0.5 如实过滤）→ Assembler（RecommendationPlan，仅「选什么」不执行，lib/runtime 契约零改动）；新表 `task_analysis`（历史 + fingerprint + isCurrent，唯一键 task+inputFingerprint+analyzerVersion）+ `task_requirement`（isInferred）+ `resource_recommendation`（只引用 resource_capability.id，evidenceRef/sourcePath 真实来源快照，追溯链完整）；migration 0004；API `POST /api/v1/task-intelligence/analyze`（幂等复用）+ GET analyses/[id] + GET analyses；DTO/mappers/client + Mock 真实空态双模式；Store taskIntelligence 区块 + `/task-intelligence` 页面（输入 → 拆解/需求（推断徽标）→ 推荐卡片（score/理由/证据行）+ 历史列表）+ 导航「Task Intelligence」；**修检索噪声**：中文 2-gram 停用词、模板词反向匹配虚高（kwHits 改基于真实用户任务）、other 类型关闭正向匹配；验收场景「写一篇小红书文案」8 条 #1=1、「数据周报并整理成表格」8 条 #1=0.94（含数据整理子任务）、「今天天气怎么样」如实 0 推荐空态；lint 0/0、tsc、db:check、build（Real+Mock）、API 冒烟（样例/幂等/空态/追溯/事实推断分离）、145/128/487 零回归 | ✅ 已完成，待审批 |
-| 2026-09-10 | v1.8 | **Phase 4 — Capability Planning MVP（任务计划：排序/依赖/校验/回退）** | 把扁平推荐升级为「可验证任务计划」：七组件流水线 RecommendationPlan → PlanNormalizer（按需求重建 Retriever 候选集，恢复被 Reranker 丢弃的次优候选）→ StepOrderer（类别先验稳定拓扑排序，无先验保持并列）→ DependencyInferer（类别先验 + 文本信号，边仅当 from<to 构造性 DAG，无证据不强行建边）→ PrimarySelector（主选 + 回退链 ≤3，真实 score）→ PlanValidator（确定性：环/悬空→invalid，unmet/重复/低置信→partial）→ TaskPlan；新表 `task_plan`（valid/partial/invalid/failed + validation JSON 快照，一分析一当前计划）+ `plan_step`（primary FK resource_capability 只引用 + alternatives JSON + 推断 outputDescription/expectedInput + isInferred）+ `plan_dependency`（from/to FK + type + 推断 reason）；migration 0005；PlannerProvider 与 AnalysisProvider 同模式（planner-heuristic-v1 唯一实现 + planner-llm-v1 契约桩不注册）；API `POST /api/v1/task-intelligence/plan`（幂等）+ GET plans/[id] + GET analyses/[id]/plan（404=未生成）；DTO/mappers/client + Mock 真实空态双模式；Store plan 区块 + 任务分析页「任务计划」区块（状态徽标/校验 issues/依赖链/步骤流/回退链折叠）；验收：validator 四类问题矩阵全过、「写一篇小红书文案」2 步骤 0 依赖（并列不强行）+ 3 条真实回退候选、「数据周报并整理成表格」3 步骤 3 条 data_flow（文本信号）+ lark-base 重复如实 warning、幂等同 id、追溯 primary→capId→evidenceRef→sourcePath 完整、推断/事实字段分离落库、145/128/487 + 3 analyses 零回归、**lib/runtime 契约零改动（git diff 证明）**、Harness 零修改、lint 0/0/tsc/db:check/build（Real+Mock）/API/页面全过 | ✅ 已完成，待审批 |
+| 2026-09-10 | v1.8 | **Phase 4 — Capability Planning MVP（任务计划：排序/依赖/校验/回退）**
+| 2026-09-10 | v1.9 | **方向调整 S0 — 清理瘦身（删除全部演示假数据）** | 产品方向收敛为「本机真实 AI 资源工作台」：① `lib/mock-data/seed.ts` 六组演示数据（seedAgents/seedCapabilityDefinitions/seedAgentCapabilities/seedProjects/seedProjectAgents/seedRuns）全部置空，导出名保留（mock 引用方零改动，Mock 模式真实空态）；② `db/seed.ts` 重写为仅 `clearAll()`（清空 agent/capability_definition/agent_capability/project/project_agent/agent_run 六张演示业务表），`runSeed()` 兼容返回空计数；`db/init.ts` 不再种演示数据（migrate only）；`db/reset.ts` = 清空演示业务数据、保留真实资源；③ 实测清空数据库假记录：6 表归 0，真实资源线零回归（145 资源 / 128 可解析 / 487 当前能力标签）；④ 删除冗余文件：docs/previews 截图 40+、docs 工程化方案/Capability 架构设计/V1-Review/P4-1 旧文档（保留 P5-1 Runtime 契约文档与新增 ROADMAP-Real-Resources.md）、start-*.log、tsconfig.tsbuildinfo；⑤ 页面保留（agents/projects/capabilities/settings 骨架展示空态），Dashboard 已连接真实资源概览数据；lint 0/0 / tsc / db:check / build（Real+Mock）/ 8 页面 200 / API 空态与资源概览核对全绿 | ✅ S0 完成，待审批进入 S1 | | 把扁平推荐升级为「可验证任务计划」：七组件流水线 RecommendationPlan → PlanNormalizer（按需求重建 Retriever 候选集，恢复被 Reranker 丢弃的次优候选）→ StepOrderer（类别先验稳定拓扑排序，无先验保持并列）→ DependencyInferer（类别先验 + 文本信号，边仅当 from<to 构造性 DAG，无证据不强行建边）→ PrimarySelector（主选 + 回退链 ≤3，真实 score）→ PlanValidator（确定性：环/悬空→invalid，unmet/重复/低置信→partial）→ TaskPlan；新表 `task_plan`（valid/partial/invalid/failed + validation JSON 快照，一分析一当前计划）+ `plan_step`（primary FK resource_capability 只引用 + alternatives JSON + 推断 outputDescription/expectedInput + isInferred）+ `plan_dependency`（from/to FK + type + 推断 reason）；migration 0005；PlannerProvider 与 AnalysisProvider 同模式（planner-heuristic-v1 唯一实现 + planner-llm-v1 契约桩不注册）；API `POST /api/v1/task-intelligence/plan`（幂等）+ GET plans/[id] + GET analyses/[id]/plan（404=未生成）；DTO/mappers/client + Mock 真实空态双模式；Store plan 区块 + 任务分析页「任务计划」区块（状态徽标/校验 issues/依赖链/步骤流/回退链折叠）；验收：validator 四类问题矩阵全过、「写一篇小红书文案」2 步骤 0 依赖（并列不强行）+ 3 条真实回退候选、「数据周报并整理成表格」3 步骤 3 条 data_flow（文本信号）+ lark-base 重复如实 warning、幂等同 id、追溯 primary→capId→evidenceRef→sourcePath 完整、推断/事实字段分离落库、145/128/487 + 3 analyses 零回归、**lib/runtime 契约零改动（git diff 证明）**、Harness 零修改、lint 0/0/tsc/db:check/build（Real+Mock）/API/页面全过 | ✅ 已完成，待审批 |
 
 ## 当前阶段
 
-**Phase 4 — Capability Planning MVP（任务计划：排序/依赖/校验/回退）**（已完成；**不自动进入下一阶段**，待审批）
+**方向调整 S0 — 清理瘦身（删除全部演示假数据）**（已完成；**不自动进入下一阶段**，待审批进入 S1 真实资源浏览器）
 
 ---
 
@@ -715,3 +716,25 @@ Resource Discovery MVP —— 实现完成、全量验证通过、待审批（�
 ## 下一步计划
 
 等待审批。后续可选方向（均未获批准前不实施）：Plan 编辑/重排 UI；Plan → Agent 执行批次桥接（Runtime 消费 TaskPlan 的前置映射契约）；ResourceCapability → CapabilityDefinition 人工提炼；真实 LLM 任务理解/计划生成；Agent 覆盖度推荐。
+
+---
+
+## 方向调整记录（2026-09-10）
+
+**用户决策**：产品只展示本机真实 AI 资源，删除全部演示/假数据；页面骨架保留；冗余文件清理。
+
+### S0 已完成内容
+1. **假数据源清除**：前端 Mock seed（lib/mock-data/seed.ts）六组演示数据全部置空；数据库 seed 脚本（db/seed.ts）重写为仅清空演示业务表；db:init 不再种数据；db:reset 语义 = 清空演示业务数据 + 保留真实资源。
+2. **数据库假记录清零**（实测）：agent / capability_definition / agent_capability / project / project_agent / agent_run 六表全部归 0。
+3. **真实资源零回归**（实测）：145 资源 / 128 可解析 / 487 当前能力标签 / 6 Harness 概览完整。
+4. **冗余文件删除**：docs/previews（40+ 截图）、工程化方案与技术架构说明.md、Capability 架构设计.md、V1-Architecture-Review.md、P4-1-Backend-Architecture-API-Design.md、start-real.log、start-mock.log、tsconfig.tsbuildinfo。保留：P5-1-AI-Runtime-Architecture-Contract.md（Runtime 契约仍在使用）、新增 docs/ROADMAP-Real-Resources.md（新方向路线图）。
+5. **页面保留**：agents / projects / capabilities / settings 骨架保留并展示空态；Dashboard 已连接真实资源概览（145/128/6 Harness）。
+
+### 验证结果
+- lint 0/0、tsc --noEmit、build（Real + Mock 双模式）全部通过
+- 8 个页面 HTTP 200；/api/v1/agents 空态（agents=0）；资源概览 API 真实数据完整
+- 既有真实资源数据零回归
+
+### 遗留问题
+- agents / projects / capabilities / settings 页面当前为空态（骨架保留），属于"页面保留、数据真实化"的中间状态；是否重定向到真实资源功能，待 S1 及后续阶段决定。
+- README 尚未同步"方向调整 + 假数据已删除"说明（待后续阶段一并更新）。

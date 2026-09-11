@@ -902,3 +902,22 @@ Resource Discovery MVP —— 实现完成、全量验证通过、待审批（�
 
 ### 当前状态
 - 阶段完成；未越界；Git：待提交
+
+---
+
+## S1.11 Settings 展示化交付记录（2026-09-11）
+
+### 已完成
+1. **Settings 从空壳改为「本机环境与资源扫描信息」展示页**（app/(workspace)/settings/page.tsx 重写为 server component，force-dynamic）：
+   - EnvInfo：运行模式（Real/Mock）、数据文件真实路径与体积（fs.stat 实测）、存储策略
+   - HarnessDirectories：已命中 Harness 目录清单（同 /resources 同源 store 数据，含真实路径与资源数）
+   - ResourceStats：资源统计（总数/已解析/命中数/上次扫描）+ 类型分布 + 4 条扫描策略说明（只读/幂等/真实空态/可追溯）
+2. **零新增偏好开关**：扫描策略以只读说明呈现，未引入可写偏好（避免扩大范围）；无假数据。
+
+### 验证结果
+- lint 0/0、tsc 0、build 通过
+- 浏览器实渲染：Real 模式、data/ai-workspace.db（1.5 MB）、Claude(0)/Codex(3)/Cursor(19)/Cursor User(1)/Doubao Skills(105) 等真实路径全部显示
+- 数据与 /resources 同源（同一 overview store），无第二数据源
+
+### 当前状态
+- 阶段完成；未越界；Git：待提交

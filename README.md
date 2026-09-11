@@ -14,12 +14,25 @@
 | **Capability Planning** | 将推荐资源组织为可验证的任务计划（步骤 / 依赖 / 备选 / 确定性校验） |
 | **酷炫展示首页** | Dashboard 呈现真实资源统计、Hermes 运行配置（默认模型 / Provider / 可用模型）、人设、精选技能画廊 |
 
+## 界面预览
+
+> 以下截图均为**本机真实数据**实拍（同一套 270 资源基线）。
+
+| 页面 | 预览 |
+| --- | --- |
+| 展示首页（资源统计 + 类型 + Hermes 配置卡 + 技能画廊） | ![Dashboard](docs/screenshots/01-dashboard.png) |
+| 资源列表（统计 + Harness 网格 + 可筛选列表） | ![Resources](docs/screenshots/02-resources.png) |
+| 资源索引 · 按类别视图（135 技能 / 25 类） | ![Categories](docs/screenshots/03-resources-categories.png) |
+| Hermes 主配置详情（默认模型 / Provider / 16 个可用模型） | ![Hermes Config](docs/screenshots/04-hermes-config.png) |
+
+> 注意：截图中显示的路径、模型、人设内容来自截图时运行者的本机环境；别人克隆项目后扫到的是**自己电脑**的资源。
+
 ## 页面结构
 
 | 路由 | 内容 |
 | --- | --- |
 | `/dashboard` | 展示首页：真实资源统计 + 类型分类 + Hermes 配置与人设 + 精选技能 |
-| `/resources` | 资源列表（搜索 / 类型 / Harness 筛选，每行带一行「如何使用」） |
+| `/resources` | 资源列表（搜索 / 类型 / Harness 筛选 + 「列表 / 按类别」双视图，每行带一行「如何使用」） |
 | `/resources/[id]` | 资源详情（含「如何使用」卡片，可追溯到 sourcePath 真实文件） |
 | `/resources/capabilities` | 资源能力索引（全部可追溯 ResourceCapability） |
 | `/task-intelligence` | 任务分析：输入任务 → 拆解 → 能力检索 → 推荐 → 计划 |

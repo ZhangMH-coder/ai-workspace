@@ -8,7 +8,7 @@
 
 | 能力 | 说明 |
 | --- | --- |
-| **Resource Discovery** | 扫描本机 AI Harness（Hermes / Doubao / Cursor / Claude / Codex 等）真实目录，发现 SKILL.md、SOUL.md 人设、config 配置、插件等资源，统一索引（name / type / sourcePath / usage / parseable），**全程只读** |
+| **Resource Discovery** | 扫描本机 AI Harness（Hermes / Doubao / Cursor / Claude / Codex 等）真实目录，发现 SKILL.md、SOUL.md 人设、config 配置、插件等资源，统一索引（name / type / sourcePath / usage / parseable），**全程只读**；支持用户级隐藏（按 sourcePath 展示排除，非物理删除，可在 Settings 恢复） |
 | **Resource Intelligence** | 对真实资源做能力归纳，生成可追溯的 ResourceCapability（每条能力带 evidenceRef + evidenceSnippet，可回溯到真实文件） |
 | **Task Intelligence** | 中文任务 → 拆解 → 能力需求 → 从真实能力标签检索候选资源 → 推荐（含推荐理由） |
 | **Capability Planning** | 将推荐资源组织为可验证的任务计划（步骤 / 依赖 / 备选 / 确定性校验） |
@@ -32,11 +32,11 @@
 | 路由 | 内容 |
 | --- | --- |
 | `/dashboard` | 展示首页：真实资源统计 + 类型分类 + Hermes 配置与人设 + 精选技能 |
-| `/resources` | 资源列表（搜索 / 类型 / Harness 筛选 + 「列表 / 按类别」双视图，每行带一行「如何使用」） |
-| `/resources/[id]` | 资源详情（含「如何使用」卡片，可追溯到 sourcePath 真实文件） |
+| `/resources` | 资源列表（搜索 / 类型 / Harness 筛选 + 「列表 / 按类别」双视图，每行带一行「如何使用」，行内可隐藏） |
+| `/resources/[id]` | 资源详情（含「如何使用」卡片，可追溯到 sourcePath 真实文件；支持隐藏 / 恢复展示） |
 | `/resources/capabilities` | 资源能力索引（全部可追溯 ResourceCapability） |
 | `/task-intelligence` | 任务分析：输入任务 → 拆解 → 能力检索 → 推荐 → 计划 |
-| `/agents` `/projects` `/settings` | 早期业务模块骨架（S0 已清空数据，仅保留页面，暂不扩展） |
+| `/settings` | 本机环境信息（模式 / 数据库 / Harness 目录）+ 资源统计 + 已隐藏资源恢复 |
 
 ## 环境要求
 
@@ -155,6 +155,8 @@ SQLite（better-sqlite3 + Drizzle；WAL + foreign_keys=ON）
 ```
 
 **真实资源线（数据流）**：本机文件系统 → 各 Harness Adapter 只读扫描 → `discovered_resources` 索引 → HeuristicAnalyzer 能力归纳 → `resource_capability`（可追溯 evidenceRef）→ 任务拆解与能力检索 → 推荐计划。全程原始 Harness 文件零修改。
+
+**资源隐藏（展示排除）**：用户隐藏记录存 `user_hidden_resource`（按 sourcePath，与资源 ID 解耦，重扫不丢失）；列表/类别/能力索引查询统一过滤，Dashboard 与 Settings 的真实发现统计不变；恢复在 Settings 或详情页即可完成。
 
 **扫描语义**：`by sourcePath upsert` + 扫描后孤儿清理（adapter 排除的路径 / 已消失的源自动移除索引），重复扫描不产生重复资源。
 

@@ -12,6 +12,19 @@ import { NextRequest, NextResponse } from "next/server";
 import * as service from "@/db/service";
 import { handleError } from "@/lib/api/server";
 
+/** GET：查询资源当前是否被隐藏（详情页展示状态用） */
+export async function GET(
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+    return NextResponse.json({ hidden: service.isResourceHidden(id) });
+  } catch (e) {
+    return handleError(e);
+  }
+}
+
 export async function POST(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }

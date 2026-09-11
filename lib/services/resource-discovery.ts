@@ -22,6 +22,8 @@ export const fetchResourceDetail = USE_MOCK ? mock.fetchResourceDetail : http.fe
 
 export const hideResource = USE_MOCK ? mock.hideResource : http.hideResource;
 
+export const isResourceHidden = USE_MOCK ? mock.isResourceHidden : http.isResourceHidden;
+
 export const unhideResource = USE_MOCK ? mock.unhideResource : http.unhideResource;
 
 export const listHiddenResources = USE_MOCK

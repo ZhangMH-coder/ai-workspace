@@ -941,3 +941,21 @@ Resource Discovery MVP —— 实现完成、全量验证通过、待审批（�
 
 ### 当前状态
 - 阶段完成；未越界（未改 Dashboard/Project/Agent/Capability/Run/Agent 装配）；Git：待提交
+
+---
+
+## S1.13 隐藏功能收尾（CategoryBrowser 口径核实 + 详情页隐藏状态 + README 同步）（2026-09-11）
+
+### 已完成
+1. **CategoryBrowser 口径核实**：实证确认类别视图走同一 API（repository 默认 excludeHidden 过滤），隐藏后 hermes+skill 查询 135→134→135，上一轮误报的「类别视图不随隐藏过滤」为伪问题，无需修改。
+2. **详情页「已隐藏」状态与就地恢复**：新增 GET `/resources/[id]/hidden` 状态端点；详情页加载时查询隐藏状态，已隐藏时显示警示横幅 +「恢复展示」按钮（就地恢复，无需跳 Settings）。
+3. **README 同步**：核心能力表补充「用户级隐藏（展示排除）」；页面结构更新 /resources、/resources/[id]、/settings 说明；新增「资源隐藏」数据流说明。
+
+### 验证结果
+- lint 0/0、tsc 0、build 通过
+- API：GET hidden 状态端点返回 `{hidden:false}` 正确
+- 浏览器实测：详情页隐藏→跳列表；直接访问已隐藏详情页显示横幅+恢复按钮；点击恢复→toast「已恢复展示」+横幅消失
+- 数据已还原（hidden=0，total=270）
+
+### 当前状态
+- 阶段完成；未越界；Git：待提交

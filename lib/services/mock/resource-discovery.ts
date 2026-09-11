@@ -39,6 +39,10 @@ export async function hideResource(): Promise<never> {
   throw new ApiError(404, { code: "NOT_FOUND", message: "Mock 模式无资源可隐藏" });
 }
 
+export async function isResourceHidden(): Promise<boolean> {
+  return false;
+}
+
 export async function unhideResource(): Promise<never> {
   throw new ApiError(404, { code: "NOT_FOUND", message: "Mock 模式无资源可恢复" });
 }

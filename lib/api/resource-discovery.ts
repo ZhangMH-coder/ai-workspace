@@ -61,6 +61,12 @@ export async function hideResource(id: string): Promise<HiddenResourceInfo> {
   return dto.hidden;
 }
 
+/** 查询资源当前是否被隐藏（详情页状态展示） */
+export async function isResourceHidden(id: string): Promise<boolean> {
+  const dto = await http.get<{ hidden: boolean }>(`/resource-discovery/resources/${id}/hidden`);
+  return dto.hidden;
+}
+
 export async function unhideResource(id: string): Promise<{ sourcePath: string }> {
   const dto = await http.del<{ unhidden: { sourcePath: string } }>(
     `/resource-discovery/resources/${id}/hidden`

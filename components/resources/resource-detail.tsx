@@ -6,13 +6,15 @@
  */
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, EyeOff, FileCode2, FolderOpen } from "lucide-react";
+import { useEffect, useState } from "react";
+import { ArrowLeft, EyeOff, FileCode2, FolderOpen, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { useWorkspaceStore } from "@/stores/workspace";
+import { isResourceHidden } from "@/lib/services/resource-discovery";
 import {
   resourceTypeLabel,
   type DiscoveredResource,
@@ -21,11 +23,24 @@ import {
 export function ResourceDetail({ resource }: { resource: DiscoveredResource }) {
   const router = useRouter();
   const hideResource = useWorkspaceStore((s) => s.hideResource);
+  const unhideResource = useWorkspaceStore((s) => s.unhideResource);
+  const [hidden, setHidden] = useState(false);
+  const [restoring, setRestoring] = useState(false);
   const metaEntries = Object.entries(resource.metadata ?? {});
   const usage =
     (typeof resource.metadata?.usage === "string" && resource.metadata.usage.trim()
       ? resource.metadata.usage
       : null) ?? resource.description;
+
+  useEffect(() => {
+    let cancelled = false;
+    isResourceHidden(resource.id).then((h) => {
+      if (!cancelled) setHidden(h);
+    }).catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [resource.id]);
 
   async function handleHide() {
     try {
@@ -37,8 +52,37 @@ export function ResourceDetail({ resource }: { resource: DiscoveredResource }) {
     }
   }
 
+  async function handleRestore() {
+    setRestoring(true);
+    try {
+      await unhideResource(resource.id);
+      setHidden(false);
+      toast.success("已恢复展示");
+    } catch {
+      toast.error("恢复失败");
+    } finally {
+      setRestoring(false);
+    }
+  }
+
   return (
     <div className="flex flex-col gap-4">
+      {hidden ? (
+        <div className="flex items-center justify-between gap-3 rounded-xl border border-warning/25 bg-warning/[0.07] px-4 py-2.5">
+          <p className="text-[12px] text-warning">
+            此资源已从列表中隐藏（原始文件未受影响）
+          </p>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={restoring}
+            onClick={handleRestore}
+            className="h-7 gap-1.5 border-warning/25 px-2.5 text-[12px] text-warning hover:text-warning"
+          >
+            <RotateCcw className="size-3.5" /> 恢复展示
+          </Button>
+        </div>
+      ) : null}
       <div>
         <div className="mb-3 flex items-center justify-between gap-2">
           <Link href="/resources">

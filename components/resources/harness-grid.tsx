@@ -54,6 +54,14 @@ export function HarnessGrid({
             <p className="truncate font-mono text-[11px] text-ink-2">
               {h.found ? h.rootPath : "未在候选位置命中"}
             </p>
+            {h.extraRoots && h.extraRoots.length > 0 ? (
+              <p
+                className="mt-0.5 truncate text-[10.5px] text-ink-3"
+                title={`另有候选根：\n${h.extraRoots.join("\n")}`}
+              >
+                另有 {h.extraRoots.length} 个候选根
+              </p>
+            ) : null}
           </div>
           {!h.found ? (
             <p className="text-[11px] text-ink-3">该 Harness 在本机未安装或未配置</p>

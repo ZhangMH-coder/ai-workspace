@@ -320,6 +320,8 @@ export interface HarnessScanSummary {
   found: boolean;
   resourceCount: number;
   scannedAt: string;
+  /** 同一 Harness 命中的其它候选根（仅展示冗余信息用，非独立条目） */
+  extraRoots?: string[];
 }
 
 /** 扫描位置（探测过的候选根 + 命中它的 Harness） */

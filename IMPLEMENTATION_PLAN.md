@@ -959,3 +959,21 @@ Resource Discovery MVP —— 实现完成、全量验证通过、待审批（�
 
 ### 当前状态
 - 阶段完成；未越界；Git：待提交
+
+---
+
+## S1.14 Harness 网格去重（豆包技能多根冗余）（2026-09-11）
+
+### 已完成
+1. **根因**：doubao-skills 扫描命中 3 个根目录（.skills 105 / .user_skills 0 / Doubao\skills 0），overview 把同一 Harness 的多条根记录全量返回，前端渲染成多张同名牌卡片。
+2. **数据层合并**：getDiscoveryOverview 按 harnessId 分组去重（取 resourceCount 最大者为主卡），其余根进 extraRoots 次要展示；新增 mergeHarnessScans；DTO/mapper 透传 extraRoots。
+3. **前端**：harness-grid 主卡显示主根路径，副行显示「另有 N 个候选根」（title 悬停查看完整路径）；资源统计卡「命中的 Harness」9→7（唯一 Harness 类型数，口径更真实）；下拉筛选自动去重。
+
+### 验证结果
+- lint 0/0、tsc 0、build 通过
+- API：overview.harnesses 9→7，doubao-skills 单卡 n=105 + extraRoots 2 条
+- 浏览器实测：网格显示「另有 2 个候选根」，统计 7
+- 数据口径：仅展示层合并，领域数据（discovered_resource / harness_scan）零改动
+
+### 当前状态
+- 阶段完成；未越界；Git：待提交

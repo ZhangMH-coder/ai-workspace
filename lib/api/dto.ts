@@ -145,6 +145,7 @@ export interface HarnessScanSummaryDTO {
   found: boolean;
   resourceCount: number;
   scannedAt: string;
+  extraRoots?: string[];
 }
 
 export interface ScanRunDTO {

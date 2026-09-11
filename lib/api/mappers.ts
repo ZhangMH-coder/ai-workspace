@@ -189,6 +189,7 @@ export function toHarnessScanSummary(d: HarnessScanSummaryDTO): HarnessScanSumma
     found: d.found,
     resourceCount: d.resourceCount,
     scannedAt: d.scannedAt,
+    ...(d.extraRoots && d.extraRoots.length > 0 ? { extraRoots: d.extraRoots } : {}),
   };
 }
 

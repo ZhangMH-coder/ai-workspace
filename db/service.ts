@@ -371,7 +371,8 @@ function harnessScanToDomain(
   row: Pick<
     HarnessScanRow,
     "harnessId" | "harnessName" | "rootPath" | "found" | "resourceCount" | "scannedAt"
-  >
+  >,
+  extraRoots?: string[]
 ): HarnessScanSummary {
   return {
     harnessId: row.harnessId,
@@ -380,7 +381,29 @@ function harnessScanToDomain(
     found: row.found,
     resourceCount: row.resourceCount,
     scannedAt: row.scannedAt,
+    ...(extraRoots && extraRoots.length > 0 ? { extraRoots } : {}),
   };
+}
+
+/**
+ * 按 harnessId 合并最新扫描的多根记录：同一 Harness 只保留一条主卡
+ * （取 resourceCount 最大者），其余候选根放入 extraRoots 供次要展示，
+ * 避免「豆包技能」等同一 Harness 因命中多个根目录而重复出现多张卡片。
+ */
+function mergeHarnessScans(
+  rows: Parameters<typeof harnessScanToDomain>[0][]
+): HarnessScanSummary[] {
+  const byId = new Map<string, Parameters<typeof harnessScanToDomain>[0][]>();
+  for (const row of rows) {
+    const list = byId.get(row.harnessId) ?? [];
+    list.push(row);
+    byId.set(row.harnessId, list);
+  }
+  return [...byId.values()].map((group) => {
+    const sorted = [...group].sort((a, b) => b.resourceCount - a.resourceCount);
+    const [main, ...rest] = sorted;
+    return harnessScanToDomain(main, rest.map((r) => r.rootPath));
+  });
 }
 
 function resourceToDomain(row: DiscoveredResourceRow): DiscoveredResource {
@@ -484,7 +507,7 @@ export function getDiscoveryOverview(): DiscoveryOverview {
   if (!latest) {
     return { scanRun: null, harnesses: [], totalResources: 0, parseableCount: 0, lastScannedAt: null };
   }
-  const harnesses = repo.listHarnessScansByScan(latest.id).map(harnessScanToDomain);
+  const harnesses = mergeHarnessScans(repo.listHarnessScansByScan(latest.id));
   return {
     scanRun: scanRunToDomain(latest),
     harnesses,

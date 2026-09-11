@@ -993,3 +993,24 @@ Resource Discovery MVP —— 实现完成、全量验证通过、待审批（�
 
 ### 当前状态
 - 阶段完成；未越界；Git：待提交
+
+---
+
+## S1.16 开源发布准备（2026-09-11）
+
+### 已完成
+1. **发布前安全审计**：被跟踪代码无真实密钥/token/secret（关键词命中均为业务词如 formatTokens）；hermes adapter 确认不读取 api_key/secret/authorization/Bearer（只读模型/Provider/base_url 元数据）；git 历史无 .env 提交；数据库 data/ 未被跟踪。
+2. **临时文件清理**：`.tmp-user-image.png` 已 git rm --cached 并物理删除；`.gitignore` 追加 `.tmp-*`。
+3. **README 截图更新**：4 张预览图全部重新实拍（01-dashboard 271/268/6/140；02-resources 271/7/1h/4；03 按类别技能卡区；04 Hermes 主配置详情），README 预览表与「当前真实数据基线」同步为 API 实测数字（271/268、skill 259/plugin 4/prompt 2/rule 6、harness 7：hermes 140/doubao 105/cursor 19+1/codex 3/claude 空根/project-agents 2）。
+4. **Docker/CI 核验**：Dockerfile + docker-compose.yml 存在；CI（npm ci→lint→tsc→db:init+db:check(独立 ci.db)→build）不依赖本地数据库；本机无 docker 命令，真实引擎验证记为环境依赖项（P4-4 同结论）。
+5. **发布前完整回归**：lint / tsc / db:check / build 全绿。
+
+### 验证结果
+- lint ✅ / tsc ✅ / db:check ✅ / build ✅
+- 敏感审计 ✅（无密钥、无 .env、无数据库入库、adapter 不读密钥）
+- 截图已更新并同步 README ✅
+- Docker 真实引擎：❌（本机无 docker 命令，环境限制，不阻塞发布）
+
+### 当前状态
+- 阶段完成；未越界；Git：待提交（含 .gitignore/.tmp 删除/README/截图）
+- 遗留：git remote 为空——推送需用户提供 GitHub 仓库 URL 或确认创建方式

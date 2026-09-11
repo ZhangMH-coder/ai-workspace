@@ -16,13 +16,13 @@
 
 ## 界面预览
 
-> 以下截图均为**本机真实数据**实拍（同一套 270 资源基线）。
+> 以下截图均为**本机真实数据**实拍（当前基线：271 资源 / 268 可解析 / 7 个 Harness / 140 个 Hermes 技能）。
 
 | 页面 | 预览 |
 | --- | --- |
 | 展示首页（资源统计 + 类型 + Hermes 配置卡 + 技能画廊） | ![Dashboard](docs/screenshots/01-dashboard.png) |
 | 资源列表（统计 + Harness 网格 + 可筛选列表） | ![Resources](docs/screenshots/02-resources.png) |
-| 资源索引 · 按类别视图（135 技能 / 25 类） | ![Categories](docs/screenshots/03-resources-categories.png) |
+| 资源索引 · 按类别视图（技能卡 + 每项真实用法说明） | ![Categories](docs/screenshots/03-resources-categories.png) |
 | Hermes 主配置详情（默认模型 / Provider / 16 个可用模型） | ![Hermes Config](docs/screenshots/04-hermes-config.png) |
 
 > 注意：截图中显示的路径、模型、人设内容来自截图时运行者的本机环境；别人克隆项目后扫到的是**自己电脑**的资源。
@@ -174,9 +174,9 @@ SQLite（better-sqlite3 + Drizzle；WAL + foreign_keys=ON）
 
 ## 当前真实数据基线（2026-09 实测）
 
-- 扫描结果：**270 个资源 / 267 个可解析**（其中 Hermes 140：135 技能 + 2 插件 + 2 人设 + 1 主配置）
-- 已识别 Harness：Hermes（主力）、Doubao（105 技能）、Cursor、Codex、Claude（已收敛会话记录噪声）、其它少量残留
-- 资源类型：skill 258 / plugin 4 / prompt 2 / rule 6 / other 1（未解析条目均如实标记 parseable=false 并保留真实路径）
+- 扫描结果：**271 个资源 / 268 个可解析**（其中 Hermes 140：135 技能 + 2 插件 + 2 人设 + 1 主配置）
+- 已识别 Harness：Hermes（主力）、Doubao（105 技能）、Cursor（19 + User 1）、Codex（3）、Claude（空根）、project-agents（2，本仓库 AGENTS/CLAUDE.md）
+- 资源类型：skill 259 / plugin 4 / prompt 2 / rule 6（未解析条目均如实标记 parseable=false 并保留真实路径）
 
 ## 明确未实现（有意延后）
 

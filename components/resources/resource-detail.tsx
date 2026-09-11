@@ -7,14 +7,26 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { ArrowLeft, EyeOff, FileCode2, FolderOpen, RotateCcw } from "lucide-react";
+import {
+  ArrowLeft,
+  ChevronDown,
+  ChevronUp,
+  EyeOff,
+  FileCode2,
+  FolderOpen,
+  RotateCcw,
+  Share2,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { useWorkspaceStore } from "@/stores/workspace";
-import { isResourceHidden } from "@/lib/services/resource-discovery";
+import {
+  fetchDiscoveredResources,
+  isResourceHidden,
+} from "@/lib/services/resource-discovery";
 import {
   resourceTypeLabel,
   type DiscoveredResource,
@@ -26,11 +38,13 @@ export function ResourceDetail({ resource }: { resource: DiscoveredResource }) {
   const unhideResource = useWorkspaceStore((s) => s.unhideResource);
   const [hidden, setHidden] = useState(false);
   const [restoring, setRestoring] = useState(false);
+  const [usageExpanded, setUsageExpanded] = useState(false);
   const metaEntries = Object.entries(resource.metadata ?? {});
   const usage =
     (typeof resource.metadata?.usage === "string" && resource.metadata.usage.trim()
       ? resource.metadata.usage
       : null) ?? resource.description;
+  const usageLong = (usage?.length ?? 0) > 180;
 
   useEffect(() => {
     let cancelled = false;
@@ -119,7 +133,30 @@ export function ResourceDetail({ resource }: { resource: DiscoveredResource }) {
       {resource.parseable && usage ? (
         <div className="flex flex-col gap-1.5 rounded-xl border border-white/10 bg-white/[0.03] p-4">
           <p className="text-[11px] font-medium uppercase tracking-wide text-ink-3">如何使用</p>
-          <p className="text-[13px] leading-relaxed text-ink">{usage}</p>
+          <p
+            className={`text-[13px] leading-relaxed text-ink ${
+              usageLong && !usageExpanded ? "line-clamp-4" : ""
+            }`}
+          >
+            {usage}
+          </p>
+          {usageLong ? (
+            <button
+              type="button"
+              onClick={() => setUsageExpanded((v) => !v)}
+              className="mt-0.5 flex w-fit items-center gap-1 text-[11.5px] text-primary transition-colors hover:text-primary/80"
+            >
+              {usageExpanded ? (
+                <>
+                  <ChevronUp className="size-3" /> 收起
+                </>
+              ) : (
+                <>
+                  <ChevronDown className="size-3" /> 展开全部
+                </>
+              )}
+            </button>
+          ) : null}
         </div>
       ) : null}
 
@@ -154,6 +191,9 @@ export function ResourceDetail({ resource }: { resource: DiscoveredResource }) {
           <TraceRow label="状态" value={resource.status === "enabled" ? "enabled" : "unknown（无法判断）"} />
         </div>
       </div>
+
+      {/* 相关资源：同 Harness，优先同类型（来自真实索引，不复制数据） */}
+      <RelatedResources harnessId={resource.harnessId} currentId={resource.id} type={resource.type} />
 
       {!resource.parseable ? (
         <div className="flex items-start gap-2.5 rounded-xl border border-warning/25 bg-warning/[0.06] p-3.5">
@@ -196,6 +236,76 @@ export function ResourceDetail({ resource }: { resource: DiscoveredResource }) {
   );
 }
 
+/** 相关资源：同 Harness 的其他真实资源（同类型优先），点击进入各自详情 */
+function RelatedResources({
+  harnessId,
+  currentId,
+  type,
+}: {
+  harnessId: string;
+  currentId: string;
+  type: string;
+}) {
+  const [items, setItems] = useState<DiscoveredResource[] | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchDiscoveredResources({ harness: harnessId, pageSize: 20 })
+      .then((r) => {
+        if (cancelled) return;
+        const others = r.items.filter((x) => x.id !== currentId);
+        others.sort((a, b) => {
+          const sa = a.type === type ? 0 : 1;
+          const sb = b.type === type ? 0 : 1;
+          return sa - sb;
+        });
+        setItems(others.slice(0, 4));
+      })
+      .catch(() => {
+        if (!cancelled) setItems([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [harnessId, currentId, type]);
+
+  if (items === null) return null;
+  if (items.length === 0) return null;
+
+  return (
+    <div className="flex flex-col gap-2.5 rounded-xl border border-white/10 bg-white/[0.03] p-4">
+      <div className="flex items-center gap-1.5">
+        <Share2 className="size-3.5 text-ink-3" />
+        <p className="text-[11px] font-medium uppercase tracking-wide text-ink-3">相关资源</p>
+      </div>
+      <div className="grid gap-2 sm:grid-cols-2">
+        {items.map((r) => (
+          <Link
+            key={r.id}
+            href={`/resources/${r.id}`}
+            className="group flex min-w-0 flex-col gap-1 rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-2.5 transition-colors hover:border-primary/25 hover:bg-white/[0.04]"
+          >
+            <div className="flex min-w-0 items-center gap-2">
+              <p className="truncate text-[12.5px] font-medium text-ink group-hover:text-primary">
+                {r.name}
+              </p>
+              <Badge
+                variant="outline"
+                className="shrink-0 border-white/10 text-[9.5px] font-normal text-ink-3"
+              >
+                {resourceTypeLabel(r.type)}
+              </Badge>
+            </div>
+            {r.description ? (
+              <p className="truncate text-[11px] text-ink-3">{r.description}</p>
+            ) : null}
+          </Link>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function TraceRow({
   label,
   value,
@@ -204,8 +314,7 @@ function TraceRow({
   label: string;
   value: string;
   mono?: boolean;
-}) {
-  return (
+}) {  return (
     <div className="flex flex-wrap items-baseline gap-2 text-[12px]">
       <span className="w-20 shrink-0 text-ink-3">{label}</span>
       <span

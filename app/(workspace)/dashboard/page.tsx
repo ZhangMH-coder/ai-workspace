@@ -98,7 +98,7 @@ export default function DashboardPage() {
         title="AI Workspace"
         description="你的本机 AI 资源工作台 —— 真实发现 · 能力索引 · 一处呈现"
         actions={
-          <Button variant="outline" size="sm" className="h-8 gap-1.5 text-[12px]" onClick={onScan} disabled={scanning}>
+          <Button size="sm" className="h-8 gap-1.5 text-[12px]" onClick={onScan} disabled={scanning}>
             <RefreshCw className={`size-3.5 ${scanning ? "animate-spin" : ""}`} />
             {scanning ? "扫描中…" : "重新扫描"}
           </Button>

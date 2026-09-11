@@ -25,7 +25,7 @@ const TYPE_FILTERS: (ResourceType | "all")[] = [
   ...RESOURCE_TYPE_OPTIONS.map((t) => t.id),
 ];
 
-export function ResourceTable() {
+export function ResourceTable({ initialHarness }: { initialHarness?: string }) {
   const resources = useWorkspaceStore((s) => s.discovery.resources);
   const total = useWorkspaceStore((s) => s.discovery.resourcesTotal);
   const loading = useWorkspaceStore((s) => s.discovery.loading);
@@ -34,7 +34,7 @@ export function ResourceTable() {
   const hideResource = useWorkspaceStore((s) => s.hideResource);
 
   const [type, setType] = useState<ResourceType | "all">("all");
-  const [harness, setHarness] = useState<string>("all");
+  const [harness, setHarness] = useState<string>(initialHarness ?? "all");
   const [parseable, setParseable] = useState<"all" | "true" | "false">("all");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);

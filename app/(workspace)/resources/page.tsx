@@ -34,6 +34,10 @@ export default function ResourcesPage() {
   const fetchOverview = useWorkspaceStore((s) => s.fetchDiscoveryOverview);
   const runScan = useWorkspaceStore((s) => s.runResourceScan);
   const [view, setView] = useState<"list" | "category">("list");
+  const [initialHarness] = useState<string | undefined>(() => {
+    if (typeof window === "undefined") return undefined;
+    return new URLSearchParams(window.location.search).get("harness") ?? undefined;
+  });
 
   useEffect(() => {
     void hydrate().then(() => fetchOverview());
@@ -105,8 +109,10 @@ export default function ResourcesPage() {
               hint={`${parseableCount} 个已解析`}
             />
             <StatCard
-              label="命中的 Harness"
-              value={String(overview?.harnesses.filter((h) => h.found).length ?? 0)}
+              label="有资源的 Harness"
+              value={String(
+                overview?.harnesses.filter((h) => h.found && h.resourceCount > 0).length ?? 0,
+              )}
               hint="详见下方网格"
             />
             <StatCard
@@ -174,7 +180,11 @@ export default function ResourcesPage() {
               </div>
             </CardHeader>
             <CardContent className="px-4 pb-4">
-              {view === "list" ? <ResourceTable /> : <CategoryBrowser />}
+              {view === "list" ? (
+                <ResourceTable initialHarness={initialHarness} />
+              ) : (
+                <CategoryBrowser />
+              )}
             </CardContent>
           </Card>
         </div>

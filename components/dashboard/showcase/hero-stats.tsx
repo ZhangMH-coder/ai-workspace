@@ -49,13 +49,28 @@ export function HeroStats({ data }: { data: HeroStatsData | null }) {
     { icon: <Boxes className="size-4" />, value: formatNumber(data.totalResources), label: "已发现真实资源" },
     { icon: <CheckCircle2 className="size-4" />, value: formatNumber(data.parseableCount), label: "成功解析" },
     { icon: <Gauge className="size-4" />, value: formatNumber(data.harnessCount), label: "Harness 框架" },
-    { icon: <Sparkles className="size-4" />, value: formatNumber(data.hermesCount), label: "Hermes 技能 · 你的主力" },
+    { icon: <Sparkles className="size-4" />, value: formatNumber(data.hermesCount), label: "Hermes 资源 · 你的主力" },
   ];
   return (
-    <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-      {items.map((it, i) => (
-        <StatItem key={it.label} icon={it.icon} value={it.value} label={it.label} delay={0.08 * i} />
-      ))}
+    <div className="flex flex-col gap-3">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        {items.map((it, i) => (
+          <StatItem key={it.label} icon={it.icon} value={it.value} label={it.label} delay={0.08 * i} />
+        ))}
+      </div>
+      {data.lastScannedAt ? (
+        <p className="text-center text-[11px] text-ink-3">
+          上次扫描 <span className="text-ink-2">{formatAgo(data.lastScannedAt)}</span> · 数据只存本地库
+        </p>
+      ) : null}
     </div>
   );
+}
+
+function formatAgo(iso: string): string {
+  const ms = Date.now() - new Date(iso).getTime();
+  if (ms < 60_000) return "刚刚";
+  if (ms < 3_600_000) return `${Math.floor(ms / 60_000)} 分钟前`;
+  if (ms < 86_400_000) return `${Math.floor(ms / 3_600_000)} 小时前`;
+  return new Date(iso).toLocaleString();
 }

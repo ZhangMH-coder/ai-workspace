@@ -1014,3 +1014,21 @@ Resource Discovery MVP —— 实现完成、全量验证通过、待审批（�
 ### 当前状态
 - 阶段完成；未越界；Git：待提交（含 .gitignore/.tmp 删除/README/截图）
 - 遗留：git remote 为空——推送需用户提供 GitHub 仓库 URL 或确认创建方式
+
+---
+
+## S1.17 页面体验打磨（口径统一 + 链接修复）（2026-09-11）
+
+### 已完成
+1. **Harness 统计口径统一**：首页「Harness 框架」（byHarness 键数=有资源）与资源页「命中的 Harness」（filter found，含 Claude 空根）不一致（6 vs 7）→ 资源页改为「有资源的 Harness」= filter(found && resourceCount>0)，两页统一为 6。
+2. **标签准确性**：首页「Hermes 技能 · 你的主力」实为 Hermes 全部资源（140 含插件/人设/配置）→ 改为「Hermes 资源 · 你的主力」。
+3. **信息补充**：首页 HeroStats 补充「上次扫描 xxx · 数据只存本地库」时间行（此前 lastScannedAt 字段存在但未渲染）。
+4. **链接修复**：首页技能画廊「查看全部 →」链接到 /resources?harness=hermes，但资源页不支持该 query → ResourceTable 增加 initialHarness prop，资源页从 URL 读取初始过滤，链接现在真正生效（进入即过滤 Hermes）。
+5. **按钮一致性**：首页「重新扫描」从 outline 改为实心主色，与资源页主操作样式统一。
+
+### 验证结果
+- lint ✅ / tsc ✅ / build ✅
+- 浏览器实测：首页显示「上次扫描 1 小时前 · 数据只存本地库」+「Hermes 资源 · 你的主力」；资源页「有资源的 Harness 6」与首页「Harness 框架 6」一致；/resources?harness=hermes 进入即过滤；控制台 0 error
+
+### 当前状态
+- 阶段完成；未越界；Git：待提交

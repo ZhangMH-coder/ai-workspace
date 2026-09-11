@@ -1032,3 +1032,18 @@ Resource Discovery MVP —— 实现完成、全量验证通过、待审批（�
 
 ### 当前状态
 - 阶段完成；未越界；Git：待提交
+
+---
+
+## S1.18 移除 TopBar 演示工作区切换器（2026-09-11）
+
+### 已完成
+1. **问题**：用户截图指出 TopBar 左侧「工作区」切换器（Acme AI / 个人空间）——P1 早期演示组件，点击仅弹"演示"toast，与项目零 Demo 原则冲突，当前单机本地资源产品无多工作区概念。
+2. **修复**：移除 WorkspaceSwitcher 组件及 Building2 / ChevronsUpDown import；TopBar 左侧现为 [移动端菜单] + 当前页面标题，更简洁。
+
+### 验证结果
+- lint ✅ / tsc ✅ / build ✅
+- 浏览器实测：TopBar 无 Acme AI / 工作区字样，直接显示当前页标题；控制台 0 error
+
+### 当前状态
+- 阶段完成；未越界；Git：待提交

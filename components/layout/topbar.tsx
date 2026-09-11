@@ -4,8 +4,6 @@ import { usePathname } from "next/navigation";
 import {
   Bell,
   BellOff,
-  Building2,
-  ChevronsUpDown,
   LogOut,
   Menu,
   Search,
@@ -49,8 +47,6 @@ export function TopBar({ onMenuClick, onCommandOpen }: TopBarProps) {
         >
           <Menu className="h-4 w-4" />
         </Button>
-        <WorkspaceSwitcher />
-        <span className="hidden h-4 w-px bg-white/10 sm:block" aria-hidden="true" />
         <h1 className="truncate text-[15px] font-semibold tracking-tight text-ink">
           {current?.title ?? "AI Workspace"}
         </h1>
@@ -63,35 +59,6 @@ export function TopBar({ onMenuClick, onCommandOpen }: TopBarProps) {
         <AccountMenu />
       </div>
     </header>
-  );
-}
-
-function WorkspaceSwitcher() {
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <button
-          className="flex h-8 items-center gap-1.5 rounded-lg px-2 text-[13px] font-medium text-ink-2 transition-colors hover:bg-white/5 hover:text-ink"
-          aria-label="切换工作区"
-        >
-          <Building2 className="h-3.5 w-3.5 text-ink-3" />
-          <span className="hidden md:inline">Acme AI</span>
-          <ChevronsUpDown className="h-3 w-3 text-ink-3" />
-        </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-52">
-        <DropdownMenuLabel>工作区</DropdownMenuLabel>
-        <DropdownMenuItem onSelect={() => toast("已切换至 Acme AI（演示）")}>
-          <Building2 className="h-4 w-4" />
-          <span>Acme AI</span>
-          <span className="ml-auto text-[11px] text-ink-3">当前</span>
-        </DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => toast("已切换至个人空间（演示）")}>
-          <UserRound className="h-4 w-4" />
-          <span>个人空间</span>
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
   );
 }
 

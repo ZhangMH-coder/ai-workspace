@@ -921,3 +921,23 @@ Resource Discovery MVP —— 实现完成、全量验证通过、待审批（�
 
 ### 当前状态
 - 阶段完成；未越界；Git：待提交
+
+---
+
+## S1.12 资源隐藏（展示排除）交付记录（2026-09-11）
+
+### 已完成
+1. **用户级隐藏数据层**：新增 `user_hidden_resource` 表（migration 0006），按 sourcePath 记录隐藏（非物理删除；重扫资源 ID 变化不丢失隐藏状态）。
+2. **Service / Repository / API**：hideResource / unhideResource / unhideResourceRecord / listHiddenResources / isResourceHidden 五个写读函数；API：POST+DELETE `/api/v1/resource-discovery/resources/[id]/hidden`、GET `/api/v1/resource-discovery/hidden`、DELETE `/api/v1/resource-discovery/hidden/[id]`；列表查询默认 `excludeHidden` 过滤（notInArray 子查询）。
+3. **前端三个入口**：资源列表行内「隐藏」按钮（hover 显示，事件阻断不触发行跳转）、详情页「隐藏此资源」按钮（隐藏后跳回列表）、Settings「已隐藏资源」区块（sourcePath + 隐藏时间 + 一键恢复；恢复按隐藏记录 id，不依赖资源是否仍存在）。
+4. **统计口径保持不变**：隐藏只影响列表展示；Dashboard / Settings「已索引资源 270」等真实发现统计不变。
+5. **Mock 空态**：Mock 模式 hide/unhide 抛 404、list 返回 []，不伪造。
+
+### 验证结果
+- lint 0/0、tsc 0、build 通过；db:migrate 应用 0006、db:check 通过
+- API 实测：隐藏前 total=270 → POST 隐藏 → 269 → GET /hidden 1 条 → 幂等重复 POST 仍 1 条 → DELETE 恢复 → 270；不存在 id → HTTP 404
+- 浏览器实测：列表行隐藏（toast + 行消失 + 分页 269）、详情页隐藏（toast + 跳回列表 269）、Settings 恢复（toast「已恢复展示」+ 空态）、控制台 0 error
+- 原始 Harness 文件只读：sheet SKILL.md LastWriteTime 未变化
+
+### 当前状态
+- 阶段完成；未越界（未改 Dashboard/Project/Agent/Capability/Run/Agent 装配）；Git：待提交

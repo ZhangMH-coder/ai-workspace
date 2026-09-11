@@ -7,7 +7,8 @@
  * Adapter 边界：本层只依赖 drizzle-orm（better-sqlite3 driver 在 db.ts 隔离）；
  * 未来切 node:sqlite / libsql 时本层代码零改动。
  */
-import { and, asc, count, desc, eq, gte, inArray, like, lt, ne, or, sql } from "drizzle-orm";
+import { randomUUID } from "node:crypto";
+import { and, asc, count, desc, eq, gte, inArray, like, lt, ne, notInArray, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
 import { db } from "./db";
 import {
@@ -17,6 +18,7 @@ import {
   capabilityDefinitions,
   discoveredResources,
   harnessScans,
+  planDependencies,
   projectAgents,
   projects,
   resourceAnalyses,
@@ -26,7 +28,7 @@ import {
   taskAnalyses,
   taskPlans,
   taskRequirements,
-  planDependencies,
+  userHiddenResources,
   planSteps,
 } from "./schema";
 
@@ -512,6 +514,8 @@ export interface DiscoveredResourceQuery {
   type?: string;
   harness?: string;
   parseable?: boolean;
+  /** 是否排除用户隐藏的资源（默认 true：列表展示过滤；统计口径用 false） */
+  excludeHidden?: boolean;
   page: number;
   pageSize: number;
 }
@@ -525,6 +529,14 @@ export function listDiscoveredResources(q: DiscoveredResourceQuery) {
   if (q.type) conds.push(eq(discoveredResources.type, q.type));
   if (q.harness) conds.push(eq(discoveredResources.harnessId, q.harness));
   if (q.parseable !== undefined) conds.push(eq(discoveredResources.parseable, q.parseable));
+  if (q.excludeHidden !== false) {
+    conds.push(
+      notInArray(
+        discoveredResources.sourcePath,
+        db.select({ p: userHiddenResources.sourcePath }).from(userHiddenResources)
+      )
+    );
+  }
   const where = conds.length ? and(...conds) : undefined;
 
   const total = db
@@ -545,6 +557,45 @@ export function listDiscoveredResources(q: DiscoveredResourceQuery) {
 
 export function getDiscoveredResource(id: string) {
   return db.select().from(discoveredResources).where(eq(discoveredResources.id, id)).get() ?? null;
+}
+
+/* ---------------- 用户级资源隐藏（展示排除） ---------------- */
+
+export function listHiddenSourcePaths(): Set<string> {
+  const rows = db.select({ p: userHiddenResources.sourcePath }).from(userHiddenResources).all();
+  return new Set(rows.map((r) => r.p));
+}
+
+export function addHiddenResource(sourcePath: string) {
+  return db
+    .insert(userHiddenResources)
+    .values({ id: randomUUID(), sourcePath, hiddenAt: new Date().toISOString() })
+    .onConflictDoNothing()
+    .run();
+}
+
+export function removeHiddenResource(sourcePath: string) {
+  return db
+    .delete(userHiddenResources)
+    .where(eq(userHiddenResources.sourcePath, sourcePath))
+    .run();
+}
+
+/** 按隐藏记录 id 删除（Settings 恢复用：不依赖 discovered_resource 是否仍存在） */
+export function removeHiddenResourceById(id: string) {
+  return db.delete(userHiddenResources).where(eq(userHiddenResources.id, id)).run();
+}
+
+export function listHiddenResources() {
+  return db
+    .select({
+      id: userHiddenResources.id,
+      sourcePath: userHiddenResources.sourcePath,
+      hiddenAt: userHiddenResources.hiddenAt,
+    })
+    .from(userHiddenResources)
+    .orderBy(desc(userHiddenResources.hiddenAt))
+    .all();
 }
 
 export function countDiscoveredResources() {

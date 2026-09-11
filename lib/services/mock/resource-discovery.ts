@@ -32,3 +32,21 @@ export async function fetchDiscoveredResources(): Promise<{ items: DiscoveredRes
 export async function fetchResourceDetail(): Promise<DiscoveredResource> {
   throw new ApiError(404, { code: "NOT_FOUND", message: "Mock 模式无资源可展示" });
 }
+
+/* ---------------- 用户级资源隐藏（Mock：真实空态） ---------------- */
+
+export async function hideResource(): Promise<never> {
+  throw new ApiError(404, { code: "NOT_FOUND", message: "Mock 模式无资源可隐藏" });
+}
+
+export async function unhideResource(): Promise<never> {
+  throw new ApiError(404, { code: "NOT_FOUND", message: "Mock 模式无资源可恢复" });
+}
+
+export async function listHiddenResources(): Promise<{ id: string; sourcePath: string; hiddenAt: string }[]> {
+  return [];
+}
+
+export async function unhideResourceRecord(): Promise<never> {
+  throw new ApiError(404, { code: "NOT_FOUND", message: "Mock 模式无资源可恢复" });
+}

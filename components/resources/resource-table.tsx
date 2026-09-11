@@ -6,7 +6,8 @@
  */
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { ArrowRight, Search } from "lucide-react";
+import { EyeOff, Search } from "lucide-react";
+import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -30,6 +31,7 @@ export function ResourceTable() {
   const loading = useWorkspaceStore((s) => s.discovery.loading);
   const harnesses = useWorkspaceStore((s) => s.discovery.overview?.harnesses ?? []);
   const fetchResources = useWorkspaceStore((s) => s.fetchDiscoveredResources);
+  const hideResource = useWorkspaceStore((s) => s.hideResource);
 
   const [type, setType] = useState<ResourceType | "all">("all");
   const [harness, setHarness] = useState<string>("all");
@@ -132,7 +134,28 @@ export function ResourceTable() {
             当前筛选条件下没有资源（仅展示真实索引结果）
           </div>
         ) : (
-          resources.map((r) => <ResourceRow key={r.id} resource={r} />)
+          resources.map((r) => (
+            <ResourceRow
+              key={r.id}
+              resource={r}
+              onHide={async (res) => {
+                try {
+                  await hideResource(res.id);
+                  toast.success(`已隐藏 ${res.name}（可在 Settings 恢复）`);
+                  await fetchResources({
+                    type: type === "all" ? undefined : type,
+                    harness: harness === "all" ? undefined : harness,
+                    parseable: parseable === "all" ? undefined : parseable === "true",
+                    search: search || undefined,
+                    page,
+                    pageSize: PAGE_SIZE,
+                  });
+                } catch {
+                  toast.error("隐藏失败");
+                }
+              }}
+            />
+          ))
         )}
       </div>
 
@@ -174,37 +197,50 @@ function usageOf(resource: DiscoveredResource): string {
   return resource.description || resource.framework;
 }
 
-function ResourceRow({ resource }: { resource: DiscoveredResource }) {
+function ResourceRow({
+  resource,
+  onHide,
+}: {
+  resource: DiscoveredResource;
+  onHide: (resource: DiscoveredResource) => void;
+}) {
   return (
-    <Link
-      href={`/resources/${resource.id}`}
-      className="flex items-center gap-3 border-b border-white/[0.04] px-4 py-2.5 transition-colors last:border-0 hover:bg-white/[0.03]"
-    >
-      <div className="w-1/4 min-w-0">
-        <p className="truncate text-[13px] font-medium text-ink">{resource.name}</p>
-        <p className="truncate text-[11px] text-ink-3" title={usageOf(resource)}>
-          {usageOf(resource)}
-        </p>
-      </div>
-      <div className="w-16">
-        <Badge variant="outline" className="border-white/10 text-[11px] font-normal text-ink-2">
-          {resourceTypeLabel(resource.type)}
-        </Badge>
-      </div>
-      <div className="w-28 truncate text-[12px] text-ink-2">{resource.source}</div>
-      <div className="hidden min-w-0 flex-1 md:block">
-        <p className="truncate font-mono text-[11px] text-ink-3">{resource.sourcePath}</p>
-      </div>
-      <div className="flex w-24 items-center justify-end gap-1.5">
-        {resource.parseable ? (
-          <Badge className="border-success/30 bg-success/10 text-success">已解析</Badge>
-        ) : (
-          <Badge className="border-warning/30 bg-warning/10 text-warning" title={resource.parseNote ?? ""}>
-            暂无法解析
+    <div className="group flex items-center gap-3 border-b border-white/[0.04] px-4 py-2.5 transition-colors last:border-0 hover:bg-white/[0.03]">
+      <Link href={`/resources/${resource.id}`} className="flex min-w-0 flex-1 items-center gap-3">
+        <div className="w-1/4 min-w-0">
+          <p className="truncate text-[13px] font-medium text-ink">{resource.name}</p>
+          <p className="truncate text-[11px] text-ink-3" title={usageOf(resource)}>
+            {usageOf(resource)}
+          </p>
+        </div>
+        <div className="w-16">
+          <Badge variant="outline" className="border-white/10 text-[11px] font-normal text-ink-2">
+            {resourceTypeLabel(resource.type)}
           </Badge>
-        )}
-        <ArrowRight className="size-3 text-ink-3" />
-      </div>
-    </Link>
+        </div>
+        <div className="w-28 truncate text-[12px] text-ink-2">{resource.source}</div>
+        <div className="hidden min-w-0 flex-1 md:block">
+          <p className="truncate font-mono text-[11px] text-ink-3">{resource.sourcePath}</p>
+        </div>
+        <div className="flex w-24 items-center justify-end gap-1.5">
+          {resource.parseable ? (
+            <Badge className="border-success/30 bg-success/10 text-success">已解析</Badge>
+          ) : (
+            <Badge className="border-warning/30 bg-warning/10 text-warning" title={resource.parseNote ?? ""}>
+              暂无法解析
+            </Badge>
+          )}
+        </div>
+      </Link>
+      <button
+        type="button"
+        onClick={() => onHide(resource)}
+        title="从展示中隐藏此资源（不删除原始文件）"
+        aria-label={`隐藏 ${resource.name}`}
+        className="shrink-0 rounded-md border border-white/[0.08] bg-white/[0.03] p-1.5 text-ink-3 opacity-0 transition-all hover:border-white/20 hover:text-ink group-hover:opacity-100"
+      >
+        <EyeOff className="size-3.5" />
+      </button>
+    </div>
   );
 }

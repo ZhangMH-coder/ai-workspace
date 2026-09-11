@@ -19,3 +19,15 @@ export const fetchDiscoveredResources = USE_MOCK
   : http.fetchDiscoveredResources;
 
 export const fetchResourceDetail = USE_MOCK ? mock.fetchResourceDetail : http.fetchResourceDetail;
+
+export const hideResource = USE_MOCK ? mock.hideResource : http.hideResource;
+
+export const unhideResource = USE_MOCK ? mock.unhideResource : http.unhideResource;
+
+export const listHiddenResources = USE_MOCK
+  ? mock.listHiddenResources
+  : http.listHiddenResources;
+
+export const unhideResourceRecord = USE_MOCK
+  ? mock.unhideResourceRecord
+  : http.unhideResourceRecord;

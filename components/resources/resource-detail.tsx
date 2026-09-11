@@ -5,30 +5,56 @@
  * parseable=false 时明确展示原因与保留的路径信息。
  */
 import Link from "next/link";
-import { ArrowLeft, FileCode2, FolderOpen } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { ArrowLeft, EyeOff, FileCode2, FolderOpen } from "lucide-react";
+import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { useWorkspaceStore } from "@/stores/workspace";
 import {
   resourceTypeLabel,
   type DiscoveredResource,
 } from "@/lib/types";
 
 export function ResourceDetail({ resource }: { resource: DiscoveredResource }) {
+  const router = useRouter();
+  const hideResource = useWorkspaceStore((s) => s.hideResource);
   const metaEntries = Object.entries(resource.metadata ?? {});
   const usage =
     (typeof resource.metadata?.usage === "string" && resource.metadata.usage.trim()
       ? resource.metadata.usage
       : null) ?? resource.description;
+
+  async function handleHide() {
+    try {
+      await hideResource(resource.id);
+      toast.success(`已隐藏 ${resource.name}（可在 Settings 恢复）`);
+      router.push("/resources");
+    } catch {
+      toast.error("隐藏失败");
+    }
+  }
+
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <Link href="/resources">
-          <Button variant="ghost" size="sm" className="mb-3 h-7 px-2 text-[12px] text-ink-2">
-            <ArrowLeft className="size-3.5" /> 返回资源列表
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <Link href="/resources">
+            <Button variant="ghost" size="sm" className="h-7 px-2 text-[12px] text-ink-2">
+              <ArrowLeft className="size-3.5" /> 返回资源列表
+            </Button>
+          </Link>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleHide}
+            className="h-7 gap-1.5 border-white/10 px-2.5 text-[12px] text-ink-2 hover:text-ink"
+          >
+            <EyeOff className="size-3.5" /> 隐藏此资源
           </Button>
-        </Link>
+        </div>
         <div className="flex flex-wrap items-center gap-2.5">
           <h1 className="text-[20px] font-semibold tracking-tight text-ink">{resource.name}</h1>
           <Badge variant="outline" className="border-white/10 text-ink-2">

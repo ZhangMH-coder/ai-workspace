@@ -57,7 +57,10 @@ import {
   fetchDiscoveryOverview as fetchDiscoveryOverviewService,
   fetchDiscoveredResources as fetchDiscoveredResourcesService,
   fetchResourceDetail as fetchResourceDetailService,
+  hideResource as hideResourceService,
   runResourceScan as runResourceScanService,
+  unhideResource as unhideResourceService,
+  unhideResourceRecord as unhideResourceRecordService,
 } from "@/lib/services/resource-discovery";
 import type {
   Agent,
@@ -204,6 +207,12 @@ interface WorkspaceState {
   runResourceScan: () => Promise<void>;
   fetchDiscoveredResources: (q?: ResourceListQuery) => Promise<void>;
   fetchResourceDetail: (id: string) => Promise<void>;
+  /** 隐藏资源（展示排除，S1.12）：按 sourcePath 记录，列表刷新由调用方负责 */
+  hideResource: (id: string) => Promise<void>;
+  /** 恢复被隐藏的资源 */
+  unhideResource: (id: string) => Promise<void>;
+  /** Settings 恢复：按隐藏记录 id 清除隐藏状态 */
+  unhideResourceRecord: (recordId: string) => Promise<void>;
 
   /** Resource Intelligence：分析状态 / 能力索引 / 洞察 / 任务匹配（SQLite 事实源，非持久化） */
   analysis: {
@@ -352,6 +361,18 @@ export const useWorkspaceStore = create<WorkspaceState>()(
             discovery: { ...s.discovery, loading: false, error: (e as Error).message },
           }));
         }
+      },
+
+      hideResource: async (id) => {
+        await hideResourceService(id);
+      },
+
+      unhideResource: async (id) => {
+        await unhideResourceService(id);
+      },
+
+      unhideResourceRecord: async (recordId) => {
+        await unhideResourceRecordService(recordId);
       },
 
 

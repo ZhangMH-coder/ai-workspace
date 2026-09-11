@@ -196,6 +196,23 @@ export const discoveredResources = sqliteTable(
   ]
 );
 
+/**
+ * 用户级资源隐藏（展示排除）。
+ *
+ * 语义：不是物理删除扫描记录（重扫会重新发现），而是用户把不想看的资源从展示中排除。
+ * 按 sourcePath 记录（而非资源 ID）：路径是稳定锚点，重扫 upsert / ID 变化都不会丢失隐藏状态。
+ * 原始 Harness 文件严格只读，本表只存"用户的展示偏好"。
+ */
+export const userHiddenResources = sqliteTable(
+  "user_hidden_resource",
+  {
+    id: text("id").primaryKey(),
+    sourcePath: text("source_path").notNull(),
+    hiddenAt: text("hidden_at").notNull(),
+  },
+  (t) => [uniqueIndex("uq_user_hidden_source_path").on(t.sourcePath)]
+);
+
 /* ---------------- Resource Intelligence（Phase 2：能力分析 / 能力索引） ----------------
  *
  * 边界原则：

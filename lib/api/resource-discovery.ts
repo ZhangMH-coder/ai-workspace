@@ -47,3 +47,36 @@ export async function fetchResourceDetail(id: string): Promise<DiscoveredResourc
   const dto = await http.get<DiscoveredResourceDTO>(`/resource-discovery/resources/${id}`);
   return toDiscoveredResource(dto);
 }
+
+/* ---------------- 用户级资源隐藏（展示排除，S1.12） ---------------- */
+
+export interface HiddenResourceInfo {
+  id: string;
+  sourcePath: string;
+  hiddenAt: string;
+}
+
+export async function hideResource(id: string): Promise<HiddenResourceInfo> {
+  const dto = await http.post<{ hidden: HiddenResourceInfo }>(`/resource-discovery/resources/${id}/hidden`);
+  return dto.hidden;
+}
+
+export async function unhideResource(id: string): Promise<{ sourcePath: string }> {
+  const dto = await http.del<{ unhidden: { sourcePath: string } }>(
+    `/resource-discovery/resources/${id}/hidden`
+  );
+  return dto.unhidden;
+}
+
+export async function listHiddenResources(): Promise<HiddenResourceInfo[]> {
+  const dto = await http.get<{ items: HiddenResourceInfo[] }>("/resource-discovery/hidden");
+  return dto.items;
+}
+
+/** Settings 恢复：按隐藏记录 id 删除（资源可能已不在索引中，仍可清除隐藏状态） */
+export async function unhideResourceRecord(recordId: string): Promise<{ sourcePath: string }> {
+  const dto = await http.del<{ unhidden: { sourcePath: string } }>(
+    `/resource-discovery/hidden/${recordId}`
+  );
+  return dto.unhidden;
+}

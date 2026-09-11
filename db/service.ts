@@ -513,6 +513,50 @@ export function getDiscoveredResource(id: string): DiscoveredResource {
   return resourceToDomain(row);
 }
 
+/* ---------------- 用户级资源隐藏（展示排除，S1.12） ----------------
+ * 语义：按 sourcePath 记录用户隐藏，列表展示过滤；原始文件零改动；
+ * 重扫 upsert / 资源 ID 变化均不丢失隐藏状态；资源真实消失后隐藏记录无害残留。
+ */
+
+export interface HiddenResourceInfo {
+  id: string;
+  sourcePath: string;
+  hiddenAt: string;
+}
+
+export function hideResource(id: string): HiddenResourceInfo {
+  const row = repo.getDiscoveredResource(id);
+  if (!row) throw new ServiceError("NOT_FOUND", "资源不存在");
+  repo.addHiddenResource(row.sourcePath);
+  return { id: row.sourcePath, sourcePath: row.sourcePath, hiddenAt: new Date().toISOString() };
+}
+
+export function unhideResource(id: string): { sourcePath: string } {
+  const row = repo.getDiscoveredResource(id);
+  if (!row) throw new ServiceError("NOT_FOUND", "资源不存在");
+  repo.removeHiddenResource(row.sourcePath);
+  return { sourcePath: row.sourcePath };
+}
+
+export function listHiddenResources(): HiddenResourceInfo[] {
+  return repo.listHiddenResources();
+}
+
+/** Settings 恢复：按隐藏记录 id 删除（资源可能已不在索引中，仍可清除隐藏状态） */
+export function unhideResourceRecord(recordId: string): { sourcePath: string } {
+  const rows = repo.listHiddenResources();
+  const hit = rows.find((r) => r.id === recordId);
+  if (!hit) throw new ServiceError("NOT_FOUND", "隐藏记录不存在");
+  repo.removeHiddenResourceById(recordId);
+  return { sourcePath: hit.sourcePath };
+}
+
+export function isResourceHidden(id: string): boolean {
+  const row = repo.getDiscoveredResource(id);
+  if (!row) return false;
+  return repo.listHiddenSourcePaths().has(row.sourcePath);
+}
+
 /* ---------------- Resource Intelligence（Phase 2：能力分析 / 能力索引） ---------------- */
 
 function analysisToDomain(row: ResourceAnalysisRow): ResourceAnalysis {

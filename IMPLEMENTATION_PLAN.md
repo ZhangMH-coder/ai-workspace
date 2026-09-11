@@ -977,3 +977,19 @@ Resource Discovery MVP —— 实现完成、全量验证通过、待审批（�
 
 ### 当前状态
 - 阶段完成；未越界；Git：待提交
+
+---
+
+## S1.15 侧边栏导航去重（Resource Capabilities 独立项移除）（2026-09-11）
+
+### 已完成
+1. **问题**：用户截图指出侧边栏「本地资源」组下 Local Resources 与 Resource Capabilities 两个平级项看起来重复（能力索引实为本地资源的从属功能，且页面顶部已有「能力索引」按钮入口）。
+2. **修复**：lib/navigation.ts 移除 Resource Capabilities 独立导航项（同时清理未用 BrainCircuit import）；保留 Local Resources / Task Intelligence；能力索引从 Local Resources 页面顶部按钮进入，URL /resources/capabilities 仍可直达。
+3. **联动正确**：isNavItemActive 已支持子路径前缀匹配，/resources/capabilities 页 TopBar 标题与侧边栏高亮自动回退到 Local Resources；Command Palette 引用同一 navGroups 自动同步。
+
+### 验证结果
+- lint 0/0、tsc 0、build 通过
+- 浏览器实测：侧边栏仅剩 Local Resources / Task Intelligence；页面内「能力索引」按钮仍在；/resources/capabilities 可访问、TopBar 显示 Local Resources、控制台 0 error
+
+### 当前状态
+- 阶段完成；未越界；Git：待提交

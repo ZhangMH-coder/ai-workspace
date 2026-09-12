@@ -178,11 +178,19 @@ SQLite（better-sqlite3 + Drizzle；WAL + foreign_keys=ON）
 - 已识别 Harness：Hermes（主力）、Doubao（105 技能）、Cursor（19 + User 1）、Codex（3）、Claude（空根）、project-agents（2，本仓库 AGENTS/CLAUDE.md）
 - 资源类型：skill 259 / plugin 4 / prompt 2 / rule 6（未解析条目均如实标记 parseable=false 并保留真实路径）
 
+## 真实 LLM 接入（S1.20）
+
+- **AI Provider 配置**：Settings → AI Provider，参考 Hermes config.yaml 字段（base_url / model / key）设计，支持填写自定义端点 / 模型 / API Key，为将来换端点准备；Key 明文存本地 SQLite（`data/` 不入 Git），读取接口只回显掩码。
+- **配置生效优先级**：手动配置（Settings 填写）> 环境变量 `LLM_API_KEY` / `LLM_BASE_URL` / `LLM_MODEL` > Hermes 自动发现（`~/.hermes/.env` 的 `HERMES_CUSTOM_OPENAI_API_KEY` + config.yaml 的 tokenrhythm 区块）> 内置默认（tokenrhythm / deepseek-v4-flash-0731）。
+- **场景 A · 任务分析 LLM 增强**：任务类型 / 摘要由 LLM 理解（`strategy=llm-assisted`），能力检索与推荐仍走 Heuristic 保证证据链可追溯；LLM 失败自动回退。
+- **场景 B · 资源详情 AI 解读**：真实 LLM 生成「一句话总结 + 能做什么 + 怎么用」Markdown。
+- **连接测试**：POST `/api/v1/ai/provider-config/test` 真实调用，返回延迟 / 模型 / 错误。
+
 ## 明确未实现（有意延后）
 
-- 真实 LLM 接入（OpenAI / DeepSeek / Anthropic 等 Provider Adapter）
+- OpenAI / DeepSeek / Anthropic 官方 Provider Adapter（当前经 Hermes tokenrhythm 端点，可在 Settings 填写任意 OpenAI 兼容端点）
 - Skill / Agent 执行、MCP 调用、Streaming
 - Harness 文件修改 / 部署（当前严格只读）
 - Capability 版本管理、Marketplace
-- Agents / Projects / Settings 业务化（骨架保留）
+- Agents / Projects 业务化（骨架保留）
 - Authentication / Multi-user / Permissions

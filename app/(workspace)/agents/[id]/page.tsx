@@ -13,6 +13,7 @@ import { PageHeader } from "@/components/shared/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatDateTime, formatDuration, formatNumber, formatPercent, formatRelativeTime, formatTokens } from "@/lib/format";
 import { modelLabel, normalizeRunStatus, runStatusMeta } from "@/lib/types";
@@ -42,6 +43,7 @@ export default function AgentDetailPage() {
 
   const [running, setRunning] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [runInput, setRunInput] = useState("");
 
   useEffect(() => {
     void hydrate();
@@ -83,12 +85,13 @@ export default function AgentDetailPage() {
   const ownRuns = agentRuns ?? [];
   const { totals } = agentStats;
 
-  async function handleRun() {
+  async function handleRun(input?: string) {
     if (running) return;
     setRunning(true);
     try {
-      const run = await runAgent(agentId);
-      toast.success(run.status === "succeeded" ? "运行完成" : "运行失败（演示）");
+      const run = await runAgent(agentId, input?.trim() || undefined);
+      await fetchAgentRuns(agentId, true); // S1.30：运行后强制重拉明细，列表与真实 Run 落库同步
+      toast.success(run.status === "succeeded" ? "运行完成" : "运行失败");
     } catch {
       toast.error("运行失败，请重试");
     } finally {
@@ -108,10 +111,6 @@ export default function AgentDetailPage() {
                 <ArrowLeft />
                 返回列表
               </Link>
-            </Button>
-            <Button onClick={handleRun} disabled={running}>
-              {running ? <Loader2 className="animate-spin" /> : <Play />}
-              {running ? "运行中…" : "运行"}
             </Button>
           </>
         }
@@ -134,11 +133,29 @@ export default function AgentDetailPage() {
             </Badge>
           </div>
 
+          {/* S1.30：真实 LLM 运行输入 */}
+          <div className="flex items-center gap-2 border-b border-border px-5 py-3">
+            <Input
+              value={runInput}
+              onChange={(e) => setRunInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") void handleRun(runInput);
+              }}
+              placeholder="给 Agent 的指令（可留空，发送默认任务）"
+              className="h-9"
+              aria-label="运行指令"
+            />
+            <Button onClick={() => void handleRun(runInput)} disabled={running} size="sm">
+              {running ? <Loader2 className="animate-spin" /> : <Play />}
+              {running ? "运行中…" : "运行"}
+            </Button>
+          </div>
+
           {ownRuns.length === 0 ? (
             <div className="flex flex-col items-center gap-2 py-12 text-center">
               <Play className="h-5 w-5 text-ink-3" />
               <p className="text-[13px] text-ink-2">还没有运行记录</p>
-              <p className="text-[12px] text-ink-3">点击右上角「运行」触发第一次运行</p>
+              <p className="text-[12px] text-ink-3">输入指令并点击「运行」触发第一次运行</p>
             </div>
           ) : (
             <div className="flex flex-col">

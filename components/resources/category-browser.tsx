@@ -102,7 +102,7 @@ export function CategoryBrowser() {
   return (
     <div className="flex flex-col gap-5">
       <p className="text-[12px] text-ink-3">
-        Hermes 技能共 {skills.length} 个 · {groups.length} 个类别
+        本机技能共 {skills.length} 个 · {groups.length} 个类别
       </p>
       {groups.map((g) => (
         <section key={g.category} className="flex flex-col gap-2.5">

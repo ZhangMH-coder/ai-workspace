@@ -33,7 +33,7 @@ export function isFinalRunStatus(s: RunLifecycleStatus): boolean {
 
 /* ================= Model 契约（P5-1 §4） ================= */
 
-export type ProviderId = "mock" | "openai" | "anthropic" | "deepseek" | "doubao";
+export type ProviderId = "mock" | "llm" | "openai" | "anthropic" | "deepseek" | "doubao";
 
 export interface RetryPolicy {
   maxAttempts: number;
@@ -66,6 +66,8 @@ export interface RuntimeRequest {
   input: string;
   modelConfig: ModelConfig;
   source: "ui" | "api";
+  /** Agent 系统提示词（真实 Provider 执行时注入 system 消息） */
+  systemPrompt?: string;
 }
 
 export interface RuntimeRule {

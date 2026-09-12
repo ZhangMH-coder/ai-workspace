@@ -525,7 +525,7 @@ Authentication / Multi-user / Permissions / 真实 LLM Provider Adapter（OpenAI
 
 ## 当前阶段
 
-Resource Discovery MVP —— 实现完成、全量验证通过、待审批（不进入资源执行 / 编辑 / 删除 / 同步 / 远程部署 / MCP 调用 / 真实 AI 集成）。
+**S1.30 Agents 真实化（方案 B）+ Hermes 文案中性化** —— 实现完成、全量验证通过、待审批（不自动进入下一阶段）。
 
 ## 本次修改内容
 
@@ -1194,3 +1194,29 @@ Resource Discovery MVP —— 实现完成、全量验证通过、待审批（�
 候选 3 完成 · 资源详情页「相关资源」推荐：GET /api/v1/resource-discovery/resources/[id]/related（真实派生，只读）——共享 ResourceCapability 能力标签优先（按共享数降序），其次同 Harness+同类型可解析资源；排除自身与用户隐藏资源；每项返回真实 reason（「共享 N 个能力标签」/「同 Harness · 同类资源」）。Repository 新增 findRelatedResources（JOIN capability 别名自关联 + 同类补充），service 新增 getRelatedResources，store 新增 relatedResources/relatedLoading + fetchRelatedResources，详情页新增 RelatedResources 区块（可点击溯源）。实测：能力最多资源（12 个标签）→ 8 条相关，shared=8/4/0 排序正确。
 候选 4 完成 · 官方端点预设补充：新增通义千问 DashScope、OpenRouter、本地 Ollama（无需 Key）、豆包 Ark 四个预设，全部 OpenAI 兼容格式 + 悬浮提示。
 - 验证：lint / tsc / build ✅；API related 实测 ✅（sandev-project-homepage 8 条同类、能力密集资源 8 条含共享排序）；浏览器实测详情页相关资源区块渲染 ✅；零 Demo 数据、原始 Harness 零修改 ✅。
+
+### S1.30 Agents 真实化（方案 B）+ Hermes 文案中性化（2026-09-12，用户「选 B，并去掉页面 Hermes 字眼」）
+**Agent 模型真实化（删除假枚举）**
+- lib/types.ts：删除 MODEL_OPTIONS / ModelId 假枚举（豆包 Pro/Lite、GPT-4o、Claude Sonnet），ModelId 改为真实模型字符串，modelLabel 直接回显模型名。
+- 新增只读端点 GET /api/v1/ai/models（service.listAvailableLLMModels → getEffectiveLLMConfig + listModels 真实拉取 /models；Mock 返回真实空态 models=null）；lib/api/ai.ts fetchAvailableModels + lib/services/ai.ts 双模式入口 + mock/ai.ts 空态实现。
+- components/agents/agent-form.tsx：模型区改为真实端点模型 chips（默认选中生效模型）+ 刷新按钮；未配置/拉取失败时手动输入兜底并引导去 Settings；初始拉取仅异步 setState（满足 eslint set-state-in-effect）。
+
+**Agent 运行真实化（去掉随机假运行）**
+- 新增 lib/runtime/llm-provider.ts：createLLMProvider({ resolveConfig })，execute 经 lib/ai/chatCompletion 真实调用当前生效 LLM 配置；未配置 Key/BaseUrl 返回可读 provider_unavailable 错误（不造假数据）；usage 真实透传；stream() 仍契约桩。
+- lib/runtime/contracts.ts：ProviderId 增加 "llm"；RuntimeRequest 增加 systemPrompt?: string。
+- db/service.ts：realRuntime 注册 llm Provider（resolveConfig 延迟解析 getEffectiveLLMConfig）；runAgent 改为 provider:"llm" + systemPrompt 注入 + 落库真实 provider/usage。
+- lib/ai/client.ts：ChatResult 增加 usage（解析 OpenAI 兼容响应 prompt/completion/total tokens）。
+- POST /api/v1/agents/[id]/runs 支持 body.input；lib/services/http+mock/agents.ts runAgent 增加 input 参数；stores/workspace.ts runAgent(agentId, input?)。
+- Agent 详情页：运行区新增「给 Agent 的指令」输入框（Enter 可提交）；运行成功后 fetchAgentRuns(agentId, true) 强制重拉明细（修 fetchAgentRuns 缓存守卫导致列表不刷新）；toast 去掉「（演示）」字样；空态文案同步更新。
+
+**Hermes 文案中性化（UI 可见描述，12+ 处）**
+- hermes-spotlight：本地运行配置 / 你的智能体人设 / 本机运行时读取的全局配置；hero-stats：本机主力资源；skill-gallery：精选本机技能；category-browser：本机技能；resource-detail：本地运行配置 + 提示改为复用本机 .env Key；llm-provider：本机自动发现 / 本机 .env / 等同本机 .env；dashboard 类型描述：本机 Profile / 本机 superpowers。
+- lib/discovery/adapters/hermes.ts usage 元数据文案中性化 + SQLite 存量 1 条同步更新。
+- 保留边界：真实 harness 名数据（badge）与真实文件原文（SOUL.md / SKILL.md 内容）属资源数据，不改（只读 + 可溯源）。
+
+**验证结果**
+- lint 0/0 ✅ / tsc ✅ / build（Real）✅；生产重启 HTTP 200 ✅。
+- API：GET /ai/models 返回 19 个真实模型（glm-5.1 / deepseek-v4-flash-0731 等），configured=true ✅；真实运行闭环 succeeded（1715ms / 57 tokens；3113ms / 35 tokens，input/output tokens 真实落库，provider=llm）✅。
+- 浏览器实测：新建页 19 个模型 chips + 刷新按钮 ✅；创建「客户支持助手」→ 详情页指令输入框 → 真实运行 → 运行历史实时刷新（2 次 · 成功率 100% · 85 tokens · 真实耗时）✅；dashboard 全站 UI Hermes=0（/resources /settings /agents /projects /task-intelligence 全 0；dashboard 仅剩 3 处真实 SOUL/SKILL 文件原文）✅；控制台 0 错误 ✅。
+- 临时测试 Agent（PowerShell 编码乱码）已从 SQLite 清除；原始 Harness 文件零修改。
+

@@ -4,7 +4,7 @@
  * 参考 Hermes 配置结构（base_url / model / key）：
  * - 展示当前生效配置来源（手动配置 > 环境变量 > Hermes 自动发现 > 内置默认）
  * - 支持填写自定义端点 / 模型 / API Key（为将来换端点准备）
- * - 连接测试为真实调用；Key 明文保存在本地 SQLite（data/ 不入 Git，等同 Hermes .env 行为）
+ * - 连接测试为真实调用；Key 明文保存在本地 SQLite（data/ 不入 Git，等同本机 .env 行为）
  */
 "use client";
 
@@ -30,7 +30,7 @@ import { USE_MOCK } from "@/lib/services/mode";
 const SOURCE_LABEL: Record<string, string> = {
   manual: "手动配置",
   env: "环境变量",
-  hermes: "Hermes 自动发现",
+  hermes: "本机自动发现",
   default: "内置默认",
 };
 
@@ -196,7 +196,7 @@ export function LlmProvider() {
   async function handleClear() {
     try {
       await clearLLMProviderConfig();
-      setSavedTip("已恢复自动发现（环境变量 / Hermes / 内置默认）");
+      setSavedTip("已恢复自动发现（环境变量 / 本机 / 内置默认）");
       setTestResult(null);
       await load();
     } catch (e) {
@@ -335,7 +335,7 @@ export function LlmProvider() {
               placeholder={
                 isManual && eff.keyConfigured
                   ? "已配置（留空则不修改）"
-                  : "粘贴 API Key（如 Hermes 的 HERMES_CUSTOM_OPENAI_API_KEY）"
+                  : "粘贴 API Key（如本机 .env 的 HERMES_CUSTOM_OPENAI_API_KEY）"
               }
               autoComplete="off"
               className="h-8 border-white/10 bg-white/[0.03] text-[13px]"

@@ -22,6 +22,8 @@ export interface ChatOptions {
 export interface ChatResult {
   text: string;
   model: string;
+  /** 真实 token 用量（OpenAI 兼容 usage；端点未返回时为 undefined） */
+  usage?: { inputTokens: number; outputTokens: number; totalTokens: number };
 }
 
 export interface ModelInfo {
@@ -131,12 +133,25 @@ export async function chatCompletion(
 
     const j = (await res.json()) as {
       choices?: { message?: { content?: string } }[];
+      usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number };
     };
     const text = j?.choices?.[0]?.message?.content;
     if (typeof text !== "string" || text.trim().length === 0) {
       throw new AiError("PARSE_ERROR", "LLM 返回内容为空");
     }
-    return { text: text.trim(), model: config.model };
+    const u = j.usage;
+    return {
+      text: text.trim(),
+      model: config.model,
+      usage:
+        u && typeof u.total_tokens === "number"
+          ? {
+              inputTokens: u.prompt_tokens ?? 0,
+              outputTokens: u.completion_tokens ?? 0,
+              totalTokens: u.total_tokens,
+            }
+          : undefined,
+    };
   } catch (e) {
     if (e instanceof AiError) throw e;
     if (e instanceof Error && e.name === "AbortError") {

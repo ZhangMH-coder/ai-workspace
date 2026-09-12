@@ -49,7 +49,7 @@ export function HeroStats({ data }: { data: HeroStatsData | null }) {
     { icon: <Boxes className="size-4" />, value: formatNumber(data.totalResources), label: "已发现真实资源" },
     { icon: <CheckCircle2 className="size-4" />, value: formatNumber(data.parseableCount), label: "成功解析" },
     { icon: <Gauge className="size-4" />, value: formatNumber(data.harnessCount), label: "Harness 框架" },
-    { icon: <Sparkles className="size-4" />, value: formatNumber(data.hermesCount), label: "Hermes 资源 · 你的主力" },
+    { icon: <Sparkles className="size-4" />, value: formatNumber(data.hermesCount), label: "本机主力资源" },
   ];
   return (
     <div className="flex flex-col gap-3">

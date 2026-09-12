@@ -4,12 +4,14 @@
 import { USE_MOCK } from "./mode";
 import {
   clearLLMProviderConfigMock,
+  fetchAvailableModelsMock,
   fetchLLMProviderConfigMock,
   saveLLMProviderConfigMock,
   testLLMProviderConfigMock,
 } from "./mock/ai";
 import {
   clearLLMProviderConfig as clearLLMProviderConfigHttp,
+  fetchAvailableModels as fetchAvailableModelsHttp,
   fetchLLMProviderConfig as fetchLLMProviderConfigHttp,
   saveLLMProviderConfig as saveLLMProviderConfigHttp,
   testLLMProviderConfig as testLLMProviderConfigHttp,
@@ -27,3 +29,7 @@ export const clearLLMProviderConfig = USE_MOCK
 export const testLLMProviderConfig = USE_MOCK
   ? testLLMProviderConfigMock
   : testLLMProviderConfigHttp;
+
+export const fetchAvailableModels = USE_MOCK
+  ? fetchAvailableModelsMock
+  : fetchAvailableModelsHttp;

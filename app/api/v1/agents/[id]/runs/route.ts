@@ -23,11 +23,12 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
   }
 }
 
-/** 触发运行（演示运行时桩：真实 AI Runtime 属以后范围；写操作真实落库） */
+/** 触发运行（S1.30 起经 Runtime 真实 LLM 执行；input 为给 Agent 的指令） */
 export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await ctx.params;
-    const run = await service.runAgent(id);
+    const body = (await req.json().catch(() => ({}))) as { input?: string };
+    const run = await service.runAgent(id, typeof body.input === "string" ? body.input : "");
     return NextResponse.json(run, { status: 201 });
   } catch (e) {
     return handleError(e);

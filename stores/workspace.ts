@@ -159,10 +159,10 @@ interface WorkspaceState {
   setTimeRange: (range: TimeRange) => void;
   /** 新建并返回新 agent（调用方用于跳转） */
   createAgent: (input: NewAgentInput) => Promise<Agent>;
-  /** 触发运行并返回新 run（调用方用于提示）；刷新窗口统计与最近明细 */
-  runAgent: (agentId: string) => Promise<AgentRun>;
-  /** 按需加载某 Agent 运行历史（明细场景，分页有界） */
-  fetchAgentRuns: (agentId: string) => Promise<void>;
+  /** 触发运行并返回新 run（调用方用于提示）；input 为给 Agent 的指令；刷新窗口统计与最近明细 */
+  runAgent: (agentId: string, input?: string) => Promise<AgentRun>;
+  /** 按需加载某 Agent 运行历史（明细场景，分页有界）；force 强制重拉（运行后同步） */
+  fetchAgentRuns: (agentId: string, force?: boolean) => Promise<void>;
   /** 按需加载某项目最近运行（明细场景） */
   fetchProjectRuns: (projectId: string) => Promise<void>;
   /** 装配一个能力到 Agent（幂等；archived 能力抛错拒绝） */
@@ -573,9 +573,9 @@ export const useWorkspaceStore = create<WorkspaceState>()(
         return agent;
       },
 
-      runAgent: async (agentId) => {
+      runAgent: async (agentId, input) => {
         const agent = get().agents.find((a) => a.id === agentId);
-        const run = await runAgentService(agentId, agent?.name ?? "Agent");
+        const run = await runAgentService(agentId, agent?.name ?? "Agent", input);
         set((state) => ({
           recentRuns: [run, ...state.recentRuns].slice(0, 10),
           agents: state.agents.map((a) =>
@@ -591,9 +591,9 @@ export const useWorkspaceStore = create<WorkspaceState>()(
         return run;
       },
 
-      fetchAgentRuns: async (agentId) => {
+      fetchAgentRuns: async (agentId, force) => {
         const cache = get().agentRunsById;
-        if (cache[agentId]) return;
+        if (cache[agentId] && !force) return;
         const runs = await fetchAgentRunsService(agentId);
         set((state) => ({
           agentRunsById: { ...state.agentRunsById, [agentId]: runs },

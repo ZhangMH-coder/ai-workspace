@@ -37,7 +37,7 @@ export function HermesSpotlight({
 }: {
   config: DiscoveredResource | null;
   profiles: DiscoveredResource[];
-  /** AI Workspace 手动配置的生效模型（如已配置；不覆盖 Hermes 自身配置，仅叠加展示） */
+  /** AI Workspace 手动配置的生效模型（如已配置；不覆盖本机自身配置，仅叠加展示） */
   manualModel?: string | null;
 }) {
   const cfg = config ? metaOf(config) : null;
@@ -56,7 +56,7 @@ export function HermesSpotlight({
                 <Cpu className="size-4" />
               </div>
               <div>
-                <p className="text-[14px] font-medium text-ink">Hermes 运行配置</p>
+                <p className="text-[14px] font-medium text-ink">本地运行配置</p>
                 <p className="text-[11px] text-ink-3">来自 config.yaml · 只读</p>
               </div>
             </div>
@@ -108,7 +108,7 @@ export function HermesSpotlight({
                 <UserRound className="size-4" />
               </div>
               <div>
-                <p className="text-[14px] font-medium text-ink">你的 Hermes 人设</p>
+                <p className="text-[14px] font-medium text-ink">你的智能体人设</p>
                 <p className="text-[11px] text-ink-3">来自 profiles/*/SOUL.md</p>
               </div>
             </div>

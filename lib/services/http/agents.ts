@@ -32,9 +32,15 @@ export async function createAgent(input: NewAgentInput): Promise<Agent> {
   return toAgent(dto);
 }
 
-/** 触发运行（服务端演示运行时桩；agentName 供 Mock 摘要使用，HTTP 实现忽略） */
-export async function runAgent(agentId: string, agentName: string): Promise<AgentRun> {
+/** 触发运行（S1.30 起服务端真实 LLM 执行；input 为给 Agent 的指令；agentName 供 Mock 摘要使用，HTTP 实现忽略） */
+export async function runAgent(
+  agentId: string,
+  agentName: string,
+  input?: string
+): Promise<AgentRun> {
   void agentName; // 服务端生成摘要，无需客户端名称
-  const dto = await http.post<AgentRunDTO>(`/agents/${encodeURIComponent(agentId)}/runs`);
+  const dto = await http.post<AgentRunDTO>(`/agents/${encodeURIComponent(agentId)}/runs`, {
+    input: input ?? "",
+  });
   return toAgentRun(dto);
 }

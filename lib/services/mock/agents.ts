@@ -92,7 +92,7 @@ export async function createAgent(input: NewAgentInput): Promise<Agent> {
  * 执行链与 Real 同构：Service/MockService → Runtime.execute → MockProvider.execute
  * → RuntimeResult → 组装 Run → pushRun（Mock 内存数据层）
  */
-export async function runAgent(agentId: string, agentName: string): Promise<AgentRun> {
+export async function runAgent(agentId: string, agentName: string, input?: string): Promise<AgentRun> {
   await delay(RUN_LATENCY_MS);
   const startedAt = Date.now();
   const runId = uid("run");
@@ -101,7 +101,7 @@ export async function runAgent(agentId: string, agentName: string): Promise<Agen
   const result = await mockRuntime.execute({
     runId,
     agentId,
-    input: "",
+    input: input ?? "",
     modelConfig: { ...DEFAULT_MODEL_CONFIG, model: agent?.model ?? "doubao-pro" },
     source: "ui",
   });

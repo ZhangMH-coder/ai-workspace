@@ -18,6 +18,7 @@ import { canTransition } from "@/lib/runtime/contracts";
 import type { CapabilitySource, RunLifecycleStatus, RuntimeRequest } from "@/lib/runtime/contracts";
 import { createRuntime, createProviderRegistry } from "@/lib/runtime/runtime";
 import { mockProvider } from "@/lib/runtime/mock-provider";
+import { createLLMProvider } from "@/lib/runtime/llm-provider";
 import { runDiscoveryScan } from "@/lib/discovery/scanner";
 import { ADAPTERS } from "@/lib/discovery/registry";
 import { computeInputFingerprint, computeMetaHash } from "@/lib/analysis/fingerprint";
@@ -131,10 +132,13 @@ const realCapabilitySource: CapabilitySource = {
   },
 };
 
-/** P5-2 唯一 Provider 注册表（mock）；未来 Adapter 在此注册 */
+/** Provider 注册表：mock（演示/回滚）+ llm（S1.30 真实执行，配置经 getEffectiveLLMConfig 延迟解析） */
 const realRuntime = createRuntime({
   source: realCapabilitySource,
-  providers: createProviderRegistry({ mock: mockProvider }),
+  providers: createProviderRegistry({
+    mock: mockProvider,
+    llm: createLLMProvider({ resolveConfig: () => getEffectiveLLMConfig().config }),
+  }),
 });
 
 /**
@@ -189,8 +193,16 @@ export async function runAgent(agentId: string, input?: string) {
     runId,
     agentId,
     input: input ?? "",
-    modelConfig: { provider: "mock", model: agent.model, temperature: 0.7, maxTokens: 4096, timeoutMs: 120_000, retry: { maxAttempts: 2, backoffMs: 1_000 } },
+    modelConfig: {
+      provider: "llm",
+      model: agent.model,
+      temperature: 0.7,
+      maxTokens: 4096,
+      timeoutMs: 120_000,
+      retry: { maxAttempts: 2, backoffMs: 1_000 },
+    },
     source: "ui",
+    systemPrompt: agent.systemPrompt,
   };
   const result = await realRuntime.execute(req);
 
@@ -209,7 +221,7 @@ export async function runAgent(agentId: string, input?: string) {
     tokensUsed: result.usage.totalTokens,
     finishedAt: finished,
     model: agent.model,
-    provider: "mock",
+    provider: "llm",
     inputTokens: result.usage.inputTokens,
     outputTokens: result.usage.outputTokens,
     errorCode: result.error?.code,
@@ -1222,6 +1234,20 @@ export interface TestLLMResult {
 }
 
 /** 测试连接：用当前生效配置真实调用一次 LLM（短消息），返回延迟与结果 */
+/** 可用模型列表（S1.30：Agent 创建表单等拉取真实端点模型；未配置返回 null 由前端引导） */
+export async function listAvailableLLMModels(): Promise<{
+  models: string[] | null;
+  model: string;
+  configured: boolean;
+}> {
+  const effective = getEffectiveLLMConfig();
+  if (!isLLMConfigured(effective.config)) {
+    return { models: null, model: effective.config.model, configured: false };
+  }
+  const models = await listModels(effective.config);
+  return { models, model: effective.config.model, configured: true };
+}
+
 export async function testLLMProviderConfig(): Promise<TestLLMResult> {
   const effective = getEffectiveLLMConfig();
   if (!isLLMConfigured(effective.config)) {

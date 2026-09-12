@@ -29,18 +29,11 @@ export function normalizeRunStatus(status: string): RunStatus {
   return "failed";
 }
 
-/** 演示可选模型（后续可扩展为真实模型目录） */
-export type ModelId = "doubao-pro" | "doubao-lite" | "gpt-4o" | "claude-sonnet";
+/** 模型标识：真实 Provider 模型名（S1.30 起由 Settings AI Provider / 端点拉取，不再硬编码演示枚举） */
+export type ModelId = string;
 
-export const MODEL_OPTIONS: { id: ModelId; label: string; hint: string }[] = [
-  { id: "doubao-pro", label: "豆包 Pro", hint: "通用推理，长任务" },
-  { id: "doubao-lite", label: "豆包 Lite", hint: "轻量快速，低成本" },
-  { id: "gpt-4o", label: "GPT-4o", hint: "多模态通用" },
-  { id: "claude-sonnet", label: "Claude Sonnet", hint: "长文本与代码" },
-];
-
-export function modelLabel(id: ModelId): string {
-  return MODEL_OPTIONS.find((m) => m.id === id)?.label ?? id;
+export function modelLabel(model: string): string {
+  return model;
 }
 
 /* ---------- Capability 领域模型（Phase 3） ----------

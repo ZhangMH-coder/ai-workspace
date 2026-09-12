@@ -1,5 +1,5 @@
 /**
- * 展示首页 — 精选 Hermes 技能画廊（真实数据）
+ * 展示首页 — 精选本机技能画廊（真实数据）
  *
  * 支持：按技能类别切换 + 卡片悬停预览完整说明 + 复制使用方式（去对应 Harness 用）。
  */
@@ -50,7 +50,7 @@ export function SkillGallery({ skills }: { skills: DiscoveredResource[] }) {
   return (
     <div>
       <div className="mb-3 flex items-center justify-between">
-        <p className="text-[13px] font-medium text-ink">精选 Hermes 技能</p>
+        <p className="text-[13px] font-medium text-ink">精选本机技能</p>
         <Link href="/resources?harness=hermes" className="text-[12px] text-ink-3 hover:text-primary">
           查看全部 →
         </Link>

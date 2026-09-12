@@ -50,3 +50,12 @@ export async function testLLMProviderConfigMock(): Promise<TestLLMResultDTO> {
     error: "Mock 模式不接入真实 LLM，无法测试连接",
   };
 }
+
+/** 可用模型列表（Mock：真实空态，不伪造模型目录） */
+export async function fetchAvailableModelsMock(): Promise<{
+  models: null;
+  model: string;
+  configured: false;
+}> {
+  return { models: null, model: "", configured: false };
+}

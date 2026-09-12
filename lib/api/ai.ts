@@ -48,3 +48,12 @@ export const clearLLMProviderConfig = () =>
 
 export const testLLMProviderConfig = () =>
   http.post<TestLLMResultDTO>("/ai/provider-config/test");
+
+/** 可用模型列表（S1.30：真实拉取当前生效端点的 /models；未配置时 models=null） */
+export interface AvailableModelsDTO {
+  models: string[] | null;
+  model: string;
+  configured: boolean;
+}
+
+export const fetchAvailableModels = () => http.get<AvailableModelsDTO>("/ai/models");

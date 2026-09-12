@@ -210,7 +210,7 @@ function scanMainConfig(hermesHome: string): DiscoveredRaw[] {
       baseUrl,
       modelCount,
       models,
-      usage: summary ? `Hermes 运行时读取的全局配置：${summary}。` : null,
+      usage: summary ? `本机运行时读取的全局配置：${summary}。` : null,
     },
     lastModified: lastModified(cfg),
   });

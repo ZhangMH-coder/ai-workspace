@@ -23,9 +23,9 @@ import type { DiscoveredResource, ResourceType } from "@/lib/types";
 
 const TYPE_CARD_DEFS: { type: ResourceType; label: string; description: string }[] = [
   { type: "skill", label: "技能 Skills", description: "可直接调用的能力指令包，来自各 Harness 的 SKILL.md" },
-  { type: "prompt", label: "人设 / Prompt", description: "Hermes Profile 的灵魂设定（SOUL.md）与提示词资源" },
+  { type: "prompt", label: "人设 / Prompt", description: "本机 Profile 的灵魂设定（SOUL.md）与提示词资源" },
   { type: "rule", label: "规则 Rules", description: "配置与约束：模型、Provider、项目规则文件" },
-  { type: "plugin", label: "插件 Plugins", description: "可扩展能力包，如 Hermes superpowers" },
+  { type: "plugin", label: "插件 Plugins", description: "可扩展能力包，如本机 superpowers" },
 ];
 
 export default function DashboardPage() {

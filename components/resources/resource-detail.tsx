@@ -346,7 +346,7 @@ function HermesConfigDetail({ metadata }: { metadata: Record<string, unknown> })
   return (
     <div className="flex flex-col gap-3 rounded-xl border border-white/10 bg-white/[0.03] p-4">
       <p className="text-[11px] font-medium uppercase tracking-wide text-ink-3">
-        Hermes 运行配置（来自 config.yaml）
+        本地运行配置（来自 config.yaml）
       </p>
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
         {defaultModel ? (
@@ -449,7 +449,7 @@ function AiInterpretSection({ resource }: { resource: DiscoveredResource }) {
           : "";
       if (code === "LLM_NOT_CONFIGURED") {
         setError(
-          "未配置 LLM API Key：请到 Settings → AI Provider 填写，或设置环境变量 LLM_API_KEY（可复用 Hermes 的 HERMES_CUSTOM_OPENAI_API_KEY）后重启服务。"
+          "未配置 LLM API Key：请到 Settings → AI Provider 填写，或设置环境变量 LLM_API_KEY（可复用本机 .env 中的 HERMES_CUSTOM_OPENAI_API_KEY）后重启服务。"
         );
       } else {
         setError(e instanceof Error ? e.message : "AI 解读失败，请稍后重试");

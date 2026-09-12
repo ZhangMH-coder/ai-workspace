@@ -302,6 +302,13 @@ html[data-theme='light'] .bg-white\/\[0\.0[0-9]\] {
 html[data-theme='light'] .border-white\/10 {
   border-color: rgba(0, 0, 0, 0.1);
 }
+/* 浅色主题：深色底输入区/代码块补偿为浅灰底（遮罩 bg-black/10 不受影响） */
+html[data-theme='light'] .bg-black\/30 {
+  background-color: rgba(0, 0, 0, 0.06);
+}
+html[data-theme='light'] .bg-black\/20 {
+  background-color: rgba(0, 0, 0, 0.04);
+}
 
 /* 玻璃效果关闭时：侧边栏 / 顶栏恢复实色（S1.24） */
 html[data-glass='off'] aside,

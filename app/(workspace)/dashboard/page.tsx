@@ -34,23 +34,32 @@ export default function DashboardPage() {
   const [skills, setSkills] = useState<DiscoveredResource[]>([]);
   const [scanning, setScanning] = useState(false);
 
+  const loadAll = async () => {
+    const [ov, pr, cf, sk] = await Promise.all([
+      fetchDiscoveryOverview(),
+      fetchDiscoveredResources({ type: "prompt", pageSize: 10 }),
+      fetchDiscoveredResources({ type: "rule", harness: "hermes", pageSize: 10 }),
+      fetchDiscoveredResources({ harness: "hermes", type: "skill", parseable: true, pageSize: 8 }),
+    ]);
+    setOverview(ov);
+    setProfiles(pr.items);
+    setConfigs(cf.items);
+    setSkills(sk.items);
+  };
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const [ov, pr, cf, sk] = await Promise.all([
-        fetchDiscoveryOverview(),
-        fetchDiscoveredResources({ type: "prompt", pageSize: 10 }),
-        fetchDiscoveredResources({ type: "rule", harness: "hermes", pageSize: 10 }),
-        fetchDiscoveredResources({ harness: "hermes", type: "skill", parseable: true, pageSize: 8 }),
-      ]);
+      await loadAll();
       if (cancelled) return;
-      setOverview(ov);
-      setProfiles(pr.items);
-      setConfigs(cf.items);
-      setSkills(sk.items);
     })();
+    const onRescan = () => {
+      void loadAll();
+    };
+    window.addEventListener("aiw:rescan", onRescan);
     return () => {
       cancelled = true;
+      window.removeEventListener("aiw:rescan", onRescan);
     };
   }, []);
 
@@ -58,16 +67,7 @@ export default function DashboardPage() {
     setScanning(true);
     try {
       await runResourceScan();
-      const [ov, pr, cf, sk] = await Promise.all([
-        fetchDiscoveryOverview(),
-        fetchDiscoveredResources({ type: "prompt", pageSize: 10 }),
-        fetchDiscoveredResources({ type: "rule", harness: "hermes", pageSize: 10 }),
-        fetchDiscoveredResources({ harness: "hermes", type: "skill", parseable: true, pageSize: 8 }),
-      ]);
-      setOverview(ov);
-      setProfiles(pr.items);
-      setConfigs(cf.items);
-      setSkills(sk.items);
+      await loadAll();
     } finally {
       setScanning(false);
     }

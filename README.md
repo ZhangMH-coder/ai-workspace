@@ -186,6 +186,25 @@ SQLite（better-sqlite3 + Drizzle；WAL + foreign_keys=ON）
 - **场景 B · 资源详情 AI 解读**：真实 LLM 生成「一句话总结 + 能做什么 + 怎么用」Markdown。
 - **连接测试**：POST `/api/v1/ai/provider-config/test` 真实调用，返回延迟 / 模型 / 错误。
 
+## 技能使用建议（S1.21–S1.22）
+
+- **Task Intelligence「最近分析」→ 技能使用建议**：每次分析产出能力命中的技能卡片，每张卡片给一条**预设问题**（「帮我用「技能」：目的」格式），点击即把预设问题填入任务输入框，方便直接触发该技能。
+- **资源详情页「如何使用」**：把 AI 解读整理为结构化「一句话总结 / 能做什么 / 怎么用」，可溯源到 sourcePath。
+- **首页技能画廊**：真实技能卡片 + 一键复制（把预设问题复制到剪贴板）。
+
+## 外观与主题（S1.23–S1.25）
+
+设置 → 外观，完整复刻 GlassTodo 的外观/背景体系（纯客户端 UI 偏好，与领域数据无关）：
+
+| 组 | 内容 |
+| --- | --- |
+| 外观 | 主题四套（默认深紫 / 暖色 / 冷色 / 浅色，仅换 token 值）、玻璃效果开关、减少动效开关 |
+| 背景 | 背景模式（纯色 / 流体渐变 / 壁纸）、壁纸多图上传（IndexedDB 存储压缩图）、显示方式（平铺/铺满/完整）、位置九宫格、动画壁纸（Ken Burns）、多图轮播、壁纸透明度、色调 / 颜色深浅 / 背景亮度 / 玻璃模糊度 / 磨砂度 滑块 |
+
+- **全页面贯穿**：玻璃效果开启时，侧边栏、顶栏、大面积卡片均为半透明毛玻璃，壁纸/流体背景贯穿整个页面；关闭时恢复实色。
+- **持久化**：外观偏好存 localStorage（key `aiw-appearance`，仅 UI 偏好，不含领域数据）；壁纸图片二进制存 IndexedDB；两者刷新后均保留。
+- **主题机制**：`html[data-theme]` 覆盖 CSS token（--background / --primary / --surface-1 等），背景层由 `AppearanceLayer` 统一渲染。
+
 ## 明确未实现（有意延后）
 
 - OpenAI / DeepSeek / Anthropic 官方 Provider Adapter（当前经 Hermes tokenrhythm 端点，可在 Settings 填写任意 OpenAI 兼容端点）

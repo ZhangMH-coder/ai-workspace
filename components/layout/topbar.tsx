@@ -1,11 +1,13 @@
 "use client";
 
+import { useState } from "react";
 import { usePathname } from "next/navigation";
 import {
   Bell,
   BellOff,
   LogOut,
   Menu,
+  RefreshCw,
   Search,
   Settings2,
   UserRound,
@@ -24,6 +26,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Kbd } from "@/components/ui/kbd";
 import { allNavItems, isNavItemActive } from "@/lib/navigation";
+import { runResourceScan } from "@/lib/services/resource-discovery";
 
 type TopBarProps = {
   onMenuClick: () => void;
@@ -52,13 +55,46 @@ export function TopBar({ onMenuClick, onCommandOpen }: TopBarProps) {
         </h1>
       </div>
 
-      {/* 右侧：命令面板 + 通知 + 账户 */}
+      {/* 右侧：重新扫描 + 命令面板 + 通知 + 账户 */}
       <div className="flex shrink-0 items-center gap-1">
+        <RescanButton />
         <CommandTrigger onOpen={onCommandOpen} />
         <NotificationMenu />
         <AccountMenu />
       </div>
     </header>
+  );
+}
+
+function RescanButton() {
+  const [scanning, setScanning] = useState(false);
+
+  const onScan = async () => {
+    if (scanning) return;
+    setScanning(true);
+    try {
+      await runResourceScan();
+      toast.success("重新扫描完成，数据已更新");
+      window.dispatchEvent(new Event("aiw:rescan"));
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "重新扫描失败");
+    } finally {
+      setScanning(false);
+    }
+  };
+
+  return (
+    <Button
+      variant="ghost"
+      size="icon-sm"
+      className="shrink-0 text-ink-3 hover:text-ink"
+      onClick={onScan}
+      disabled={scanning}
+      aria-label="重新扫描本机资源"
+      title="重新扫描本机资源"
+    >
+      <RefreshCw className={`h-4 w-4 ${scanning ? "animate-spin" : ""}`} />
+    </Button>
   );
 }
 

@@ -34,6 +34,15 @@ const SOURCE_LABEL: Record<string, string> = {
   default: "内置默认",
 };
 
+/** 官方端点预设（OpenAI 兼容格式，仅填 base_url，模型 / Key 由用户填写） */
+const OFFICIAL_ENDPOINTS = [
+  { key: "openai", name: "OpenAI", baseUrl: "https://api.openai.com/v1" },
+  { key: "deepseek", name: "DeepSeek", baseUrl: "https://api.deepseek.com/v1" },
+  { key: "anthropic", name: "Anthropic", baseUrl: "https://api.anthropic.com/v1" },
+  { key: "moonshot", name: "Kimi", baseUrl: "https://api.moonshot.cn/v1" },
+  { key: "zhipu", name: "智谱", baseUrl: "https://open.bigmodel.cn/api/paas/v4" },
+];
+
 function SourceBadge({ source }: { source: string }) {
   const color =
     source === "manual"
@@ -220,6 +229,39 @@ export function LlmProvider() {
 
         {/* 手动配置表单（参考 Hermes：base_url / model / key） */}
         <div className="flex flex-col gap-3">
+          {/* 官方 / 自定义端点快捷选择 */}
+          <div className="flex flex-col gap-1.5">
+            <label className="text-[11px] text-ink-2">连接方式（官方端点一键填入，也可自定义）</label>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {OFFICIAL_ENDPOINTS.map((o) => (
+                <button
+                  key={o.key}
+                  type="button"
+                  onClick={() => setBaseUrl(o.baseUrl)}
+                  className={`h-7 rounded-lg border px-2.5 text-[12px] transition-colors ${
+                    baseUrl.trim() === o.baseUrl
+                      ? "border-primary/40 bg-primary/10 text-primary"
+                      : "border-white/10 bg-white/[0.03] text-ink-2 hover:border-white/20 hover:text-ink"
+                  }`}
+                  title={`${o.name}：${o.baseUrl}`}
+                >
+                  {o.name}
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={() => setBaseUrl("")}
+                className={`h-7 rounded-lg border px-2.5 text-[12px] transition-colors ${
+                  baseUrl.trim() !== "" &&
+                  !OFFICIAL_ENDPOINTS.some((o) => o.baseUrl === baseUrl.trim())
+                    ? "border-primary/40 bg-primary/10 text-primary"
+                    : "border-white/10 bg-white/[0.03] text-ink-2 hover:border-white/20 hover:text-ink"
+                }`}
+              >
+                自定义
+              </button>
+            </div>
+          </div>
           <div className="flex flex-col gap-1.5">
             <label className="text-[11px] text-ink-2">Base URL（自定义 / 官方连接）</label>
             <Input

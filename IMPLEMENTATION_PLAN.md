@@ -1160,3 +1160,13 @@ Resource Discovery MVP —— 实现完成、全量验证通过、待审批（�
 - 移动端抽屉（SheetContent）改 bg-background/80 + backdrop-blur-2xl；命令面板 Command 改 bg-popover/90 + backdrop-blur-xl。
 - 玻璃效果关闭时所有卡片 / 抽屉恢复实色。
 - 验证：浏览器实测卡片 oklab(…/0.72) + blur(16px)；glass off 实色 rgb(16,16,20) 无 blur；壁纸整页渲染正常；lint/tsc/build ✅。
+
+### S1.26 完善收尾（2026-09-12，用户确认按建议顺序完善）
+- README 同步：新增「技能使用建议（S1.21–S1.22）」「外观与主题（S1.23–S1.25）」两小节。
+- 顶栏新增「重新扫描」按钮（RefreshCw 图标，右侧首位）：调用 runResourceScan，成功后 toast + dispatch `aiw:rescan` 事件，Dashboard 监听事件自动重拉数据；扫描中旋转动画。
+- 浅色主题修复：bg-black/30、bg-black/20 深色底（输入框/代码块）在 light 下补偿为浅灰底 rgba(0,0,0,0.06/0.04)；遮罩 bg-black/10 不受影响。
+- AI Provider 连接页：新增官方端点快捷选择（OpenAI / DeepSeek / Anthropic / Kimi / 智谱 + 自定义），一键填入 base_url，仍由用户填 Key / 模型。
+- 技能画廊确认已具备分类切换 + 悬停预览 + 复制（S1.22 已实现，未重复开发）。
+- 壁纸亮色对比度：实测 70% 底色 + blur 下标题/按钮/文字清晰可读，机制有效无需改动。
+- 移动端巡检：resources / settings / dashboard 窄屏（634px）均正常渲染，无布局破坏。
+- 验证：lint / tsc / build ✅；生产重启 HTTP 200 ✅；浏览器实测顶栏刷新按钮渲染、亮壁纸可读、settings Provider 端点按钮渲染 ✅。

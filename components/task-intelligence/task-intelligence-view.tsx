@@ -218,35 +218,35 @@ export function TaskIntelligenceView() {
                 role="switch"
                 aria-checked={aiEnhanced}
                 onClick={() => setAiEnhanced((v) => !v)}
-                className="flex h-7 items-center gap-1.5 rounded-md border border-white/[0.08] px-2 text-[11px] text-ink-2 transition-colors hover:border-white/20 hover:text-ink"
+                className="flex h-8 items-center gap-1.5 rounded-md border border-white/[0.08] px-2.5 text-[11px] text-ink-2 transition-colors hover:border-white/20 hover:text-ink"
                 title="开启时用当前 AI Provider 增强任务类型/摘要推断；未配置 Key 时自动回退启发式"
               >
                 <span
-                  className={`relative h-3.5 w-6 rounded-full transition-colors ${
+                  className={`relative h-4 w-7 shrink-0 rounded-full transition-colors ${
                     aiEnhanced ? "bg-violet-500/60" : "bg-white/10"
                   }`}
                 >
                   <span
-                    className={`absolute top-0.5 size-2.5 rounded-full bg-white transition-transform ${
-                      aiEnhanced ? "translate-x-3" : "translate-x-0.5"
+                    className={`absolute top-1/2 size-3 -translate-y-1/2 rounded-full bg-white shadow transition-transform ${
+                      aiEnhanced ? "translate-x-[14px]" : "translate-x-[2px]"
                     }`}
                   />
                 </span>
                 AI 增强
               </button>
-              <div className="flex flex-wrap items-center gap-1.5">
-                <span className="text-[10px] text-ink-3">示例：</span>
-                {SAMPLE_TASKS.map((t) => (
-                  <button
-                    key={t}
-                    type="button"
-                    onClick={() => setTask(t)}
-                    className="rounded-md border border-white/[0.08] px-2 py-1 text-[10px] text-ink-2 transition-colors hover:border-violet-400/30 hover:text-violet-200"
-                  >
-                    {t}
-                  </button>
-                ))}
-              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-[10px] text-ink-3">示例：</span>
+              {SAMPLE_TASKS.map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setTask(t)}
+                  className="h-7 rounded-md border border-white/[0.08] px-2 text-[10.5px] text-ink-2 transition-colors hover:border-violet-400/30 hover:text-violet-200"
+                >
+                  {t}
+                </button>
+              ))}
             </div>
           </form>
         </CardContent>

@@ -1243,3 +1243,9 @@ Authentication / Multi-user / Permissions / 真实 LLM Provider Adapter（OpenAI
 4. **技能画廊打磨**（components/dashboard/showcase/skill-gallery.tsx）：分类 Tab 增加真实计数（全部 · 8 / software-development · 3 …）；active Tab 用 framer-motion layoutId 滑条指示 + aria-pressed；grid 以 category 为 key，切换分类时卡片重放入场动画。
 - 验证：lint ✅ / tsc ✅ / build（Real）✅ / 浏览器实机 ✅（模型分组 7 组 19 个 + 搜索 kimi 过滤出 2 个；失败 run 展开显示「Provider 不可用 + code + 错误消息」；related 每条带真实使用建议且与 API 同源；画廊分类切换只显示对应分类真实技能）。新增验证用 Agent（模型 s1-33-not-exist-model）及其真实失败 run 保留在演示库，属真实数据。
 
+
+### S1.34 任务分析输入区控件修复（用户截图指出）
+- components/task-intelligence/task-intelligence-view.tsx：按钮/开关/示例三组控件此前挤在同一行且高度参差（h-8 / h-7 / 约 22px），窄屏换行混乱；现拆为两行：第一行「分析任务 + AI 增强开关」，第二行「示例 chips」（统一 h-7）。
+- 开关打磨：轨道 h-4 w-7、滑块 size-3 用 top-1/2 -translate-y-1/2 精确垂直居中，开关位移对齐（开 14px / 关 2px），不再偏上。
+- 验证：lint ✅ / tsc ✅ / build ✅ / 浏览器实机 ✅（第一行按钮+开关、第二行示例，视觉对齐）。
+

@@ -5,6 +5,7 @@ export {
   clearLLMProviderConfig,
   fetchAvailableModels,
   fetchLLMProviderConfig,
+  polishSystemPrompt,
   saveLLMProviderConfig,
   testLLMProviderConfig,
 } from "@/lib/api/ai";

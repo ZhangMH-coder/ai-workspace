@@ -7,6 +7,7 @@
 import { NextResponse } from "next/server";
 import { ZodError, z } from "zod";
 import { HTTP_STATUS_BY_CODE, type ApiErrorBody } from "@/lib/api/errors";
+import { AiError } from "@/lib/ai/errors";
 import { ServiceError } from "@/db/service";
 
 export function toApiErrorBody(
@@ -42,6 +43,10 @@ export function handleError(e: unknown): NextResponse<ApiErrorBody> {
     return NextResponse.json(toApiErrorBody("CONFLICT", "数据冲突：资源已存在或状态不允许"), {
       status: 409,
     });
+  }
+  // LLM 调用错误（API_ERROR/TIMEOUT/NETWORK/PARSE_ERROR 等）→ 502 + 真实原因透传，不吞成笼统 500
+  if (e instanceof AiError) {
+    return NextResponse.json(toApiErrorBody("INTERNAL_ERROR", e.message), { status: 502 });
   }
   console.error("[api] unexpected error:", e);
   return NextResponse.json(toApiErrorBody("INTERNAL_ERROR", "服务器内部错误"), { status: 500 });

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 import {
   LogOut,
   PanelLeftClose,
@@ -12,7 +13,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -32,6 +33,8 @@ import {
   navGroups,
   type NavItem,
 } from "@/lib/navigation";
+import { getProfile } from "@/lib/services/profile";
+import type { ProfileDTO } from "@/lib/services/profile";
 
 type SidebarProps = {
   collapsed: boolean;
@@ -216,7 +219,38 @@ function NavLink({
   );
 }
 
+const AVATAR_GRADIENTS: Record<string, string> = {
+  violet: "from-violet-500/70 to-indigo-600/70",
+  indigo: "from-indigo-500/70 to-blue-600/70",
+  emerald: "from-emerald-500/70 to-teal-600/70",
+  sky: "from-sky-500/70 to-cyan-600/70",
+  amber: "from-amber-500/70 to-orange-600/70",
+  rose: "from-rose-500/70 to-pink-600/70",
+};
+
 function UserMenu({ collapsed }: { collapsed: boolean }) {
+  const [profile, setProfile] = useState<ProfileDTO | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    getProfile()
+      .then((p) => {
+        if (!cancelled) setProfile(p);
+      })
+      .catch(() => {
+        // 拉取失败保持空态：头像回退「我」，不显示任何假身份
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const displayName = profile?.user.displayName?.trim() || profile?.machine.username || "我";
+  const fallbackChar = displayName.charAt(0).toUpperCase();
+  const gradient =
+    AVATAR_GRADIENTS[profile?.user.avatarColor ?? ""] ?? AVATAR_GRADIENTS.violet;
+  const subtitle = profile?.user.title?.trim() || "本机用户";
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -228,18 +262,27 @@ function UserMenu({ collapsed }: { collapsed: boolean }) {
           aria-label="账户菜单"
         >
           <Avatar className="size-7 shrink-0">
-            <AvatarFallback className="bg-gradient-to-br from-violet-500/70 to-indigo-600/70 text-[11px] font-medium text-white">
-              林
-            </AvatarFallback>
+            {profile?.user.avatarUrl ? (
+              <AvatarImage src={profile.user.avatarUrl} alt="头像" />
+            ) : (
+              <AvatarFallback
+                className={cn(
+                  "bg-gradient-to-br text-[11px] font-medium text-white",
+                  gradient,
+                )}
+              >
+                {fallbackChar}
+              </AvatarFallback>
+            )}
           </Avatar>
           {!collapsed && (
             <>
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-[13px] font-medium leading-tight text-ink">
-                  林晓
+                  {displayName}
                 </span>
                 <span className="block truncate text-[11px] leading-tight text-ink-3">
-                  Owner · Acme AI
+                  {subtitle}
                 </span>
               </span>
               <Settings2 className="h-3.5 w-3.5 shrink-0 text-ink-3" />
@@ -253,22 +296,28 @@ function UserMenu({ collapsed }: { collapsed: boolean }) {
         className="w-56"
       >
         <DropdownMenuLabel>
-          <div className="text-[13px] font-medium text-ink">林晓</div>
-          <div className="text-[12px] text-ink-3">linxiao@acme.ai</div>
+          <div className="text-[13px] font-medium text-ink">{displayName}</div>
+          <div className="text-[12px] text-ink-3">
+            {profile?.machine.hostname ?? "本机"} · {profile?.machine.username ?? ""}
+          </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onSelect={() => toast("演示环境：个人资料页将在后续阶段开放")}>
-          <UserRound className="h-4 w-4" />
-          个人资料
+        <DropdownMenuItem asChild>
+          <Link href="/profile">
+            <UserRound className="h-4 w-4" />
+            个人资料
+          </Link>
         </DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => toast("演示环境：偏好设置页将在后续阶段开放")}>
-          <Settings2 className="h-4 w-4" />
-          偏好设置
+        <DropdownMenuItem asChild>
+          <Link href="/settings">
+            <Settings2 className="h-4 w-4" />
+            偏好设置
+          </Link>
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem
           variant="destructive"
-          onSelect={() => toast("演示环境，暂不支持退出登录")}
+          onSelect={() => toast("本地单用户模式，无需退出登录")}
         >
           <LogOut className="h-4 w-4" />
           退出登录

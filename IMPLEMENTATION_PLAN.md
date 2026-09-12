@@ -29,10 +29,15 @@
 | 2026-09-09 | v1.7 | **Phase 3 — Task Intelligence MVP（任务理解与能力编排）** | 把「资源能力索引」升级为「任务理解层」：六组件流水线 Task → TaskParser（通用领域词典类型识别）→ TaskDecomposer（类型模板 + 附加意图拆解）→ RequirementExtractor（能力需求，isInferred 固定 true）→ CapabilityRetriever（复用现有打分公式 + 真实用户任务反向匹配 + other 类型仅反向信号）→ Reranker（跨需求合并/同资源去重/证据质量分级/最低推荐分 0.5 如实过滤）→ Assembler（RecommendationPlan，仅「选什么」不执行，lib/runtime 契约零改动）；新表 `task_analysis`（历史 + fingerprint + isCurrent，唯一键 task+inputFingerprint+analyzerVersion）+ `task_requirement`（isInferred）+ `resource_recommendation`（只引用 resource_capability.id，evidenceRef/sourcePath 真实来源快照，追溯链完整）；migration 0004；API `POST /api/v1/task-intelligence/analyze`（幂等复用）+ GET analyses/[id] + GET analyses；DTO/mappers/client + Mock 真实空态双模式；Store taskIntelligence 区块 + `/task-intelligence` 页面（输入 → 拆解/需求（推断徽标）→ 推荐卡片（score/理由/证据行）+ 历史列表）+ 导航「Task Intelligence」；**修检索噪声**：中文 2-gram 停用词、模板词反向匹配虚高（kwHits 改基于真实用户任务）、other 类型关闭正向匹配；验收场景「写一篇小红书文案」8 条 #1=1、「数据周报并整理成表格」8 条 #1=0.94（含数据整理子任务）、「今天天气怎么样」如实 0 推荐空态；lint 0/0、tsc、db:check、build（Real+Mock）、API 冒烟（样例/幂等/空态/追溯/事实推断分离）、145/128/487 零回归 | ✅ 已完成，待审批 |
 | 2026-09-10 | v1.8 | **Phase 4 — Capability Planning MVP（任务计划：排序/依赖/校验/回退）**
 | 2026-09-10 | v1.10 | **S1 首战 — 新增 Hermes Harness Adapter（用户主战场真实资源）** | ① 新增 `lib/discovery/adapters/hermes.ts`：探测 `HOME/.hermes`，递归发现 skills 全部 135 个真实 SKILL.md（兼容 两层/单层分类即技能/三层 三种结构，修复 `computer-use` 被全局跳过名单误伤的问题——Hermes 内该目录是真实技能，改用自定义遍历仅跳隐藏目录）+ 2 个插件（superpowers 已解析、agency-agents 目录无 manifest 如实标记未解析）；② 新增 `fs-utils.extractUsage`：从 SKILL.md 正文确定性提取一行「如何使用」，Hermes/Doubao/Cursor 三类 SKILL.md 技能均带 usage；③ 前端资源列表行显示用法摘要、资源详情新增「如何使用」卡片（usage 兜底 description）；④ 实测入库：Hermes 137（135 技能 + 2 插件），资源总数 145→282，可解析 248→264；⑤ 验证：幂等扫描 282 不变、135 个 Hermes 文件扫描前后 SHA-1 完全一致（只读）、lint 0/0、tsc、db:check、build（Real+Mock）、页面 200、API hermes=137 全绿 | ✅ S1 Hermes 适配完成，待审批进入后续阶段 | | 产品方向收敛为「本机真实 AI 资源工作台」：① `lib/mock-data/seed.ts` 六组演示数据（seedAgents/seedCapabilityDefinitions/seedAgentCapabilities/seedProjects/seedProjectAgents/seedRuns）全部置空，导出名保留（mock 引用方零改动，Mock 模式真实空态）；② `db/seed.ts` 重写为仅 `clearAll()`（清空 agent/capability_definition/agent_capability/project/project_agent/agent_run 六张演示业务表），`runSeed()` 兼容返回空计数；`db/init.ts` 不再种演示数据（migrate only）；`db/reset.ts` = 清空演示业务数据、保留真实资源；③ 实测清空数据库假记录：6 表归 0，真实资源线零回归（145 资源 / 128 可解析 / 487 当前能力标签）；④ 删除冗余文件：docs/previews 截图 40+、docs 工程化方案/Capability 架构设计/V1-Review/P4-1 旧文档（保留 P5-1 Runtime 契约文档与新增 ROADMAP-Real-Resources.md）、start-*.log、tsconfig.tsbuildinfo；⑤ 页面保留（agents/projects/capabilities/settings 骨架展示空态），Dashboard 已连接真实资源概览数据；lint 0/0 / tsc / db:check / build（Real+Mock）/ 8 页面 200 / API 空态与资源概览核对全绿 | ✅ S0 完成，待审批进入 S1 | | 把扁平推荐升级为「可验证任务计划」：七组件流水线 RecommendationPlan → PlanNormalizer（按需求重建 Retriever 候选集，恢复被 Reranker 丢弃的次优候选）→ StepOrderer（类别先验稳定拓扑排序，无先验保持并列）→ DependencyInferer（类别先验 + 文本信号，边仅当 from<to 构造性 DAG，无证据不强行建边）→ PrimarySelector（主选 + 回退链 ≤3，真实 score）→ PlanValidator（确定性：环/悬空→invalid，unmet/重复/低置信→partial）→ TaskPlan；新表 `task_plan`（valid/partial/invalid/failed + validation JSON 快照，一分析一当前计划）+ `plan_step`（primary FK resource_capability 只引用 + alternatives JSON + 推断 outputDescription/expectedInput + isInferred）+ `plan_dependency`（from/to FK + type + 推断 reason）；migration 0005；PlannerProvider 与 AnalysisProvider 同模式（planner-heuristic-v1 唯一实现 + planner-llm-v1 契约桩不注册）；API `POST /api/v1/task-intelligence/plan`（幂等）+ GET plans/[id] + GET analyses/[id]/plan（404=未生成）；DTO/mappers/client + Mock 真实空态双模式；Store plan 区块 + 任务分析页「任务计划」区块（状态徽标/校验 issues/依赖链/步骤流/回退链折叠）；验收：validator 四类问题矩阵全过、「写一篇小红书文案」2 步骤 0 依赖（并列不强行）+ 3 条真实回退候选、「数据周报并整理成表格」3 步骤 3 条 data_flow（文本信号）+ lark-base 重复如实 warning、幂等同 id、追溯 primary→capId→evidenceRef→sourcePath 完整、推断/事实字段分离落库、145/128/487 + 3 analyses 零回归、**lib/runtime 契约零改动（git diff 证明）**、Harness 零修改、lint 0/0/tsc/db:check/build（Real+Mock）/API/页面全过 | ✅ 已完成，待审批 |
+| 2026-09-12 | v1.11 | **S1.43 清理 S1.33 时代残留演示 Agent 数据（Agents 页左下角乱码卡片）** | 根因：agent 表残留 2 条 S1.33 时代演示记录（name 存乱码 ?????? Agent、model s1-33-not-exist-model 的测试数据 + 1 条对应 failed run），而 seed 策略早已改为「不再种任何演示数据」，属历史遗留未清；处理：执行 
+pm run db:reset（clearAll 仅清 6 张演示业务表），agent / agent_run / capability_definition / agent_capability / project / project_agent 全部归 0，真实资源线零影响（discovered_resource 254 / resource_capability 3334 / resource_analysis 865 / harness_scan 198 / task_analysis 35 / task_plan 3 全保留）；Agents 页面恢复真实空态「还没有 Agent」；lint / tsc / build / 页面实测全绿 | ✅ 已完成（本次修复） |
+| 2026-09-12 | v1.12 | **S1.44 新建 Agent 表单「系统提示词专业润色」** | 后端 `db/service.ts` 新增 `polishSystemPrompt`（真实 LLM chat/completions：专业提示词工程师 System Prompt，只输出润色正文、保持原意、语言一致、空/无意义输入如实拒绝不伪造；未配 Key 抛 LLM_NOT_CONFIGURED）；新端点 `POST /api/v1/ai/polish-prompt`（zod 校验 prompt≤4000）；`lib/api/ai.ts` + `lib/services/ai.ts` 暴露 `polishSystemPrompt`；`agent-form.tsx` 系统提示词区新增「专业润色」按钮（Wand2 图标、空输入禁用、润色中 loading、成功回填并显示模型、LLM_NOT_CONFIGURED/VALIDATION 按 code 提示）；**handleError 新增 AiError 分支**（LLM API_ERROR/TIMEOUT/NETWORK → 502 + 真实原因透传，不再吞成笼统 500）；验证：空输入 400、正常输入 200 返回结构化专业提示词（deepseek-v4-flash-0731）、lint/tsc/build/生产页面（/agents/new 按钮渲染）全绿 | 2026-09-12 | v1.13 | **S1.45 个人资料页（真实身份 + 本机环境事实）** | 新增 `user_profile` 表（单行 default：displayName/title/bio/avatarColor/updatedAt）+ migration 0009；`GET/PUT /api/v1/profile`：GET 返回用户自定义信息 + 本机真实事实（os.userInfo/hostname/platform/DB 路径与大小/LLM 生效配置/资源与扫描计数），PUT 仅保存自定义展示字段（zod 校验、avatarColor 枚举、空串=清空）；新页面 `/profile`（个人信息可编辑卡：头像配色 6 色 + 昵称/职位/简介 + 保存；本机环境事实只读卡）；**消除硬编码假身份**：Sidebar UserMenu / TopBar AccountMenu 改为 fetch `/api/v1/profile` 显示真实用户名与主机名，「个人资料/偏好设置」从 toast 占位改为跳转 /profile、/settings；命令面板「工作区」假切换（Acme AI/个人空间）改为只读「本机工作区」；验证：db:migrate/db:check 通过、GET 200 真实数据（Administrator/DESKTOP-J8HRMN8/win32 x64/254 资源/198 扫描）、PUT 保存与清空 200、非法配色 400、lint/tsc/build/生产 /profile 页面渲染全绿 | ✅ 已完成（本次交付） |
+| 2026-09-12 | v1.14 | **S1.46 头像本地上传** | `user_profile` 新增 `avatar_path` 列（migration 0010，DB 只存 data/avatars/ 相对路径）；新端点 `POST/DELETE/GET /api/v1/profile/avatar`：上传（dataURL → MIME/大小校验 png|jpeg|webp ≤2MB → 写 data/avatars/<uuid>.<ext> → 替换时删旧文件）、移除（删文件+清引用）、读取（文件流 + Content-Type + 私有缓存）；`getProfile` 返回 `avatarUrl`（带版本号防缓存）；`ProfileForm` 支持点击头像/按钮上传（前端类型+大小预检、上传中 loading、成功回显、移除按钮）；Sidebar UserMenu / TopBar AccountMenu 头像支持显示上传图片（无图回退渐变+首字符）；路径安全：文件操作限定 avatars 目录内（startsWith 校验防穿越）；验证：migration/db:check 通过、非法类型 400、上传 200 且 GET 200 image/png、移除 200、移除后 404、avatarUrl 置空、lint/tsc/build/生产页面全绿 | ✅ 已完成（本次交付） |
+| ✅ 已完成（本次交付） |
 
 ## 当前阶段
 
-**S1 首战 — Hermes Harness Adapter（用户主战场真实资源入库）**（已完成；**不自动进入下一阶段**，待审批）
+**S1.46 头像本地上传**（已完成；上传/移除/读取全链路真实落盘；**不自动进入下一阶段**，待审批）
 
 ---
 
@@ -1330,3 +1335,61 @@ Authentication / Multi-user / Permissions / 真实 LLM Provider Adapter（OpenAI
 - 验证：tsc ✅ / lint ✅ / build ✅ / 生产实测 DOM 测量类型徽标与 Harness 列边界不重叠 ✅ / 无页面级 console 错误（favicon 404 为历史既有、非本次改动）✅。
 - 已知问题：无新增。
 
+
+
+---
+
+### S1.43 清理 S1.33 时代残留演示 Agent 数据（Agents 页左下角乱码卡片）
+
+- 背景：用户在 Agents 页左下角发现一张异常卡片——名称显示乱码、模型为 s1-33-not-exist-model、0.0% 成功率。定位：该数据来自 S1.33 阶段（当时仍为演示数据策略）写入 SQLite 的历史残留，并非当前代码生成：seed 策略早已（S0）改为「不再种任何演示数据」，但历史库未清，导致刷新后仍显示。
+- 数据核查（SQLite 直查）：gent 表 2 条——「客户支持助手」（deepseek-v4-flash-0731）与「?????? Agent」（name 存的就是乱码字符、model s1-33-not-exist-model、createdAt 2026-09-12T07:37）；gent_run 表 8 条（其中 1 条 failed run 属于该测试 Agent）；gent_capability / project_agent 均无关联。
+- 处理：执行 
+pm run db:reset（仅清空 6 张演示业务表，真实资源线不动）。
+- 清空结果：agent 0 / agent_run 0 / capability_definition 0 / agent_capability 0 / project 0 / project_agent 0；真实资源线完整保留：discovered_resource 254 / resource_capability 3334 / resource_analysis 865 / harness_scan 198 / task_analysis 35 / task_plan 3。
+- 页面验证：/agents 恢复真实空态「还没有 Agent · 创建第一个智能体，开始你的 AI 工作流」，乱码卡片与 s1-33-not-exist-model 消失。
+- 验证：lint ✅ / tsc ✅ / build ✅ / 生产页面实测 ✅。
+- 已知问题：无新增（早前已确认的悬浮控件为豆包浏览器注入、非项目代码，与本修复无关）。
+
+
+---
+
+### S1.44 新建 Agent 表单「系统提示词专业润色」
+
+- 背景：用户在新建 Agent 时希望系统提示词能一键润色为专业版本。
+- 实现：
+  - 后端 `db/service.ts` 新增 `polishSystemPrompt(prompt)`：走真实 LLM（OpenAI 兼容 chat/completions，复用 `chatCompletion` + `getEffectiveLLMConfig` 优先级链）；System Prompt 为「资深提示词工程师」——只输出润色后正文、结构清晰（角色/职责/边界/流程/输出规范）、保持原意不臆造、语言与原文一致、空或无效输入如实拒绝（不伪造）；未配 Key 抛 `LLM_NOT_CONFIGURED`；输入为空抛 `VALIDATION_ERROR`；LLM 未返回有效结果如实报错。
+  - 新端点 `POST /api/v1/ai/polish-prompt`：zod 校验 `{prompt≤4000}`，统一 `handleError`。
+  - 前端 `components/agents/agent-form.tsx`：系统提示词 Textarea 下方新增「专业润色」按钮（Wand2 图标；空输入禁用；润色中显示 spinner +「润色中…」；成功回填润色结果并提示「已用 {model} 润色完成」；失败按 code 分支：LLM_NOT_CONFIGURED → 引导去 Settings → AI Provider，VALIDATION → 提示先输入，其余展示真实原因）。
+  - `lib/api/server.ts handleError` 增强：`AiError`（LLM API_ERROR/TIMEOUT/NETWORK/PARSE_ERROR）→ HTTP 502 + 真实 message 透传，不再落入笼统 500「服务器内部错误」。
+- 验证：API 冒烟——空输入 `{"prompt":"  "}` → 400 VALIDATION_ERROR「系统提示词为空」；正常输入「你是数据分析师，帮我写周报」→ 200 返回结构化专业提示词（角色定位/职责范围/工作流程/输出规范，deepseek-v4-flash-0731）；lint ✅ / tsc ✅ / build ✅ / 生产重启 /agents/new 页面按钮渲染 ✅。
+- 已知问题：上游 LLM 端点偶发 503（限流/服务不可用）时会返回 502 + 具体错误文案，属外部依赖行为，非本项目缺陷。
+
+
+---
+
+### S1.45 个人资料页（真实身份 + 本机环境事实）
+
+- 背景：Sidebar 底部用户菜单「个人资料」此前是 toast 占位；且用户区头像/昵称/邮箱（林晓 / linxiao@acme.ai / Owner · Acme AI）为硬编码假数据，违反「零演示数据」原则。
+- 实现：
+  - `db/schema.ts` 新增 `user_profile` 单行表（id="default"），`drizzle/0009_user_profile.sql` + journal 追加；`db/repository.ts` 新增 `getUserProfileRow` / `upsertUserProfile` / `countHarnessScans`。
+  - `db/service.ts` 新增 `getProfile()`（DB 自定义信息 + 本机真实事实：os.userInfo/hostname/platform/release、DB 路径与大小、LLM 生效配置 source/model/configured、资源 254 / 扫描 198 计数）与 `saveProfile()`（avatarColor 枚举校验）。
+  - 新端点 `GET/PUT /api/v1/profile`；`lib/api/profile.ts` + `lib/services/profile.ts` 客户端。
+  - 新页面 `/profile`：`ProfileForm`（client）——头像 6 色渐变可换、昵称（留空回退本机用户名）/职位/简介可编辑、保存；本机环境事实卡（server 渲染只读）。
+  - 消除硬编码假身份：Sidebar `UserMenu` 与 TopBar `AccountMenu` 改为 fetch profile（真实用户名/主机名），「个人资料」「偏好设置」改为跳转 /profile、/settings；命令面板移除 Acme AI/个人空间假工作区切换，改为只读「本机工作区」。
+- 验证：db:migrate ✅ / db:check ✅ / GET 200（Administrator、DESKTOP-J8HRMN8、win32 x64、4.95MB、254 资源、198 扫描）✅ / PUT 保存与清空 200 ✅ / 非法配色 400 VALIDATION_ERROR ✅ / lint ✅ / tsc ✅ / build ✅ / 生产 /profile 页面渲染 ✅。
+- 已知问题：无。
+
+
+---
+
+### S1.46 头像本地上传
+
+- 背景：S1.45 个人资料页头像仅支持渐变配色 + 首字符，用户要求支持本地上传真实图片。
+- 实现：
+  - `db/schema.ts` `user_profile` 新增 `avatar_path`（migration 0010）；DB 只存 `data/avatars/` 相对路径，图片本体落文件系统（项目根 `data/avatars/`）。
+  - `db/service.ts`：`uploadAvatar(dataUrl)`（正则解析 MIME → png|jpeg|webp 白名单、≤2MB、UUID 文件名、替换时删除旧文件、路径穿越防护——`deleteAvatarFileSafe` 限定 avatars 目录内）、`clearAvatar()`（删文件 + 清引用）、`getAvatarFile()`（供图片端点）；`getProfile` 返回 `avatarUrl`（`/api/v1/profile/avatar?v=<updatedAt>` 防缓存）。
+  - 新端点 `POST/DELETE/GET /api/v1/profile/avatar`：上传/移除/读取（NextResponse 二进制流 + Content-Type + `Cache-Control: private, max-age=3600`；无头像 GET 404）。
+  - `ProfileForm`：头像 hover 遮罩 +「上传头像」「移除」按钮 + 隐藏 file input（accept png/jpeg/webp）；前端类型/大小预检、上传中 loading、成功 toast 回显；无图时保留 6 色渐变 + 首字符回退。
+  - Sidebar / TopBar 用户头像支持显示上传图片（有图显示 AvatarImage，无图回退渐变首字符）。
+- 验证：db:migrate ✅ / db:check ✅ / 非法类型 400「头像格式不支持」✅ / 上传 200 + avatarUrl ✅ / GET 头像 200 image/png ✅ / 移除 200 + avatarUrl null ✅ / 移除后 GET 404 ✅ / avatars 目录文件随移除清理 ✅ / lint ✅ / tsc ✅ / build ✅ / 生产 /profile 页面「上传头像」渲染 ✅。
+- 已知问题：无。

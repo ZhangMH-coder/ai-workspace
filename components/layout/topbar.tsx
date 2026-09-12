@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import Link from "next/link";
+import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import {
   Bell,
@@ -14,7 +15,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -26,6 +27,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Kbd } from "@/components/ui/kbd";
 import { allNavItems, isNavItemActive } from "@/lib/navigation";
+import { getProfile } from "@/lib/services/profile";
+import type { ProfileDTO } from "@/lib/services/profile";
 import { runResourceScan } from "@/lib/services/resource-discovery";
 
 type TopBarProps = {
@@ -151,6 +154,25 @@ function NotificationMenu() {
 }
 
 function AccountMenu() {
+  const [profile, setProfile] = useState<ProfileDTO | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    getProfile()
+      .then((p) => {
+        if (!cancelled) setProfile(p);
+      })
+      .catch(() => {
+        // 拉取失败保持空态，不显示假身份
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const displayName = profile?.user.displayName?.trim() || profile?.machine.username || "我";
+  const fallbackChar = displayName.charAt(0).toUpperCase();
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -159,30 +181,40 @@ function AccountMenu() {
           aria-label="账户菜单"
         >
           <Avatar className="size-7">
-            <AvatarFallback className="bg-gradient-to-br from-violet-500/70 to-indigo-600/70 text-[11px] font-medium text-white">
-              林
-            </AvatarFallback>
+            {profile?.user.avatarUrl ? (
+              <AvatarImage src={profile.user.avatarUrl} alt="头像" />
+            ) : (
+              <AvatarFallback className="bg-gradient-to-br from-violet-500/70 to-indigo-600/70 text-[11px] font-medium text-white">
+                {fallbackChar}
+              </AvatarFallback>
+            )}
           </Avatar>
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-56">
         <DropdownMenuLabel>
-          <div className="text-[13px] font-medium text-ink">林晓</div>
-          <div className="text-[12px] text-ink-3">linxiao@acme.ai</div>
+          <div className="text-[13px] font-medium text-ink">{displayName}</div>
+          <div className="text-[12px] text-ink-3">
+            {profile?.machine.hostname ?? "本机"} · {profile?.machine.username ?? ""}
+          </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onSelect={() => toast("演示环境：个人资料页将在后续阶段开放")}>
-          <UserRound className="h-4 w-4" />
-          个人资料
+        <DropdownMenuItem asChild>
+          <Link href="/profile">
+            <UserRound className="h-4 w-4" />
+            个人资料
+          </Link>
         </DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => toast("演示环境：偏好设置页将在后续阶段开放")}>
-          <Settings2 className="h-4 w-4" />
-          偏好设置
+        <DropdownMenuItem asChild>
+          <Link href="/settings">
+            <Settings2 className="h-4 w-4" />
+            偏好设置
+          </Link>
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem
           variant="destructive"
-          onSelect={() => toast("演示环境，暂不支持退出登录")}
+          onSelect={() => toast("本地单用户模式，无需退出登录")}
         >
           <LogOut className="h-4 w-4" />
           退出登录

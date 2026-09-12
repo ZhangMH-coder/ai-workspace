@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Bot, Loader2, RefreshCw, Search } from "lucide-react";
+import { Bot, Loader2, RefreshCw, Search, Wand2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import type { ModelId } from "@/lib/types";
-import { fetchAvailableModels } from "@/lib/services/ai";
+import { fetchAvailableModels, polishSystemPrompt } from "@/lib/services/ai";
 import { useWorkspaceStore } from "@/stores/workspace";
 
 /** S1.33：按模型名前缀推断厂商分组（真实模型列表的展示层归类，不修改数据） */
@@ -56,6 +56,10 @@ export function AgentForm() {
   const [description, setDescription] = useState("");
   const [systemPrompt, setSystemPrompt] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  // S1.44：系统提示词专业润色
+  const [polishing, setPolishing] = useState(false);
+  const [polishTip, setPolishTip] = useState<string | null>(null);
+  const [polishError, setPolishError] = useState<string | null>(null);
 
   // S1.30：模型列表来自真实 Provider 端点（Settings → AI Provider），不硬编码假模型
   const [models, setModels] = useState<string[] | null>(null);
@@ -115,6 +119,38 @@ export function AgentForm() {
   }, []);
 
   const canSubmit = name.trim().length > 0 && !submitting && model.trim().length > 0;
+
+  /** S1.44：调用当前 LLM 润色系统提示词；未配 Key 按 code 如实提示，不伪造 */
+  async function handlePolish() {
+    const trimmed = systemPrompt.trim();
+    if (!trimmed) {
+      setPolishError("请先输入系统提示词草稿，再点击润色");
+      return;
+    }
+    if (polishing) return;
+    setPolishing(true);
+    setPolishTip(null);
+    setPolishError(null);
+    try {
+      const res = await polishSystemPrompt(trimmed);
+      setSystemPrompt(res.polished);
+      setPolishTip(`已用 ${res.model} 润色完成`);
+    } catch (e) {
+      const code =
+        typeof e === "object" && e !== null && "code" in e
+          ? String((e as { code: unknown }).code)
+          : "";
+      if (code === "LLM_NOT_CONFIGURED") {
+        setPolishError("未配置 LLM API Key：请到 Settings → AI Provider 填写后重试");
+      } else if (code === "VALIDATION_ERROR") {
+        setPolishError("系统提示词为空，请先输入内容");
+      } else {
+        setPolishError(e instanceof Error ? e.message : "润色失败，请稍后重试");
+      }
+    } finally {
+      setPolishing(false);
+    }
+  }
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -261,7 +297,29 @@ export function AgentForm() {
               placeholder="可选：定义角色、行为边界与输出规范"
               className="min-h-[96px] resize-y"
             />
-            <p className="text-[12px] text-ink-3">不填写时使用默认提示词</p>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-[12px] text-ink-3">不填写时使用默认提示词</p>
+              <button
+                type="button"
+                onClick={() => void handlePolish()}
+                disabled={polishing || !systemPrompt.trim()}
+                className="flex h-7 items-center gap-1.5 rounded-md border border-white/10 px-2.5 text-[12px] text-ink-2 transition-colors hover:border-primary/30 hover:text-primary disabled:cursor-not-allowed disabled:opacity-40"
+                aria-label="用 AI 润色系统提示词"
+              >
+                {polishing ? (
+                  <Loader2 className="size-3 animate-spin" />
+                ) : (
+                  <Wand2 className="size-3" />
+                )}
+                {polishing ? "润色中…" : "专业润色"}
+              </button>
+            </div>
+            {polishTip ? (
+              <p className="text-[12px] text-emerald-300">{polishTip}</p>
+            ) : null}
+            {polishError ? (
+              <p className="text-[12px] text-warning">{polishError}</p>
+            ) : null}
           </div>
         </div>
       </Card>

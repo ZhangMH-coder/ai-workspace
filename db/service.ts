@@ -12,6 +12,9 @@
  * - 时间窗口：服务端只接受显式 from/to，纯执行（前端唯一窗口实现）
  */
 import { randomUUID } from "node:crypto";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import * as repo from "./repository";
 import { clearAll, runSeed } from "./seed";
 import { canTransition } from "@/lib/runtime/contracts";
@@ -1174,6 +1177,56 @@ export async function interpretResource(id: string): Promise<ResourceInterpretRe
   return { summary, whatItDoes, howToUse, rawMarkdown, model, interpretedAt: new Date().toISOString() };
 }
 
+/* ---------------- 系统提示词润色（S1.44：新建 Agent 表单） ---------------- */
+
+/** 专业提示词工程师 System Prompt：只输出润色后的正文，不做解释 */
+const POLISH_SYSTEM_PROMPT = `你是资深 AI 提示词工程师（Prompt Engineer）。请把用户给出的系统提示词草稿润色为专业、完整、可直接用于 AI Agent 的 system prompt。
+
+输出要求：
+1. 只输出润色后的提示词正文，不要任何解释、前言、标记或代码块包装；
+2. 结构清晰、语义完整：包含角色定位、职责范围、行为边界、工作流程（如适用）、输出规范（如适用）；
+3. 保持原意，不臆造用户没有表达的能力；可补全缺失的必要约束（如：不编造信息、遇到不确定时如何处理）；
+4. 语言与原文一致（中文草稿输出中文）；
+5. 如原文为空或只有无意义字符，如实说明「无法润色」，不要生成虚假内容。`;
+
+export interface PolishPromptResult {
+  polished: string;
+  model: string;
+  polishedAt: string;
+}
+
+/** 润色系统提示词：走真实 LLM（OpenAI 兼容 chat/completions）；未配置 Key 如实报错，不伪造 */
+export async function polishSystemPrompt(prompt: string): Promise<PolishPromptResult> {
+  const trimmed = prompt.trim();
+  if (!trimmed) {
+    throw new ServiceError("VALIDATION_ERROR", "系统提示词为空，无法润色");
+  }
+  const effective = getEffectiveLLMConfig();
+  if (!isLLMConfigured(effective.config)) {
+    throw new ServiceError(
+      "LLM_NOT_CONFIGURED",
+      "未配置 LLM API Key（可在 Settings → AI Provider 中填写，或通过环境变量 / Hermes 自动发现）"
+    );
+  }
+  const res = await chatCompletion(
+    {
+      temperature: 0.3,
+      maxTokens: 1600,
+      timeoutMs: 30_000,
+      messages: [
+        { role: "system", content: POLISH_SYSTEM_PROMPT },
+        { role: "user", content: trimmed },
+      ],
+    },
+    effective.config
+  );
+  const polished = res.text.trim();
+  if (!polished || polished === "无法润色") {
+    throw new ServiceError("INTERNAL_ERROR", "LLM 未能返回润色结果，请检查提示词内容后重试");
+  }
+  return { polished, model: res.model, polishedAt: new Date().toISOString() };
+}
+
 /* ---------------- LLM Provider 配置（S1.20：Settings 手动配置 / 官方连接） ---------------- */
 
 export type LLMConfigSource = "manual" | "env" | "hermes" | "default";
@@ -1324,9 +1377,201 @@ export function getLLMProviderConfigView() {
   };
 }
 
+/* ---------------- 用户资料（S1.45） ---------------- */
+
+export interface ProfileUser {
+  displayName: string | null;
+  title: string | null;
+  bio: string | null;
+  avatarColor: string | null;
+  /** 本地上传头像的可访问 URL（无头像时为 null） */
+  avatarUrl: string | null;
+  updatedAt: string;
+}
+
+/** 本机真实事实信息（只读派生，不落库；消除硬编码假身份） */
+export interface MachineInfo {
+  username: string;
+  hostname: string;
+  platform: string;
+  osRelease: string;
+  dbPath: string;
+  dbSizeBytes: number;
+  llmSource: LLMConfigSource;
+  llmModel: string;
+  llmConfigured: boolean;
+  resourcesTotal: number;
+  harnessScansTotal: number;
+}
+
+export interface ProfileView {
+  user: ProfileUser;
+  machine: MachineInfo;
+}
+
+const AVATAR_COLORS = ["violet", "indigo", "emerald", "sky", "amber", "rose"];
+
+/** 头像存储目录（相对项目根 data/avatars/）；DB 只存相对路径 avatars/<uuid>.<ext> */
+const AVATAR_DIR = path.join(process.cwd(), "data", "avatars");
+
+function avatarUrlOf(row: { avatarPath: string | null; updatedAt: string } | undefined): string | null {
+  if (!row?.avatarPath) return null;
+  const v = encodeURIComponent(row.updatedAt);
+  return `/api/v1/profile/avatar?v=${v}`;
+}
+
+/** 读取用户资料（DB 自定义信息 + 本机真实事实，合并返回） */
+export function getProfile(): ProfileView {
+  const row = repo.getUserProfileRow();
+  const effective = getEffectiveLLMConfig();
+  const dbPath =
+    process.env.DATABASE_URL ?? path.join(process.cwd(), "data", "ai-workspace.db");
+  let dbSizeBytes = 0;
+  try {
+    dbSizeBytes = fs.statSync(dbPath).size;
+  } catch {
+    dbSizeBytes = 0;
+  }
+  return {
+    user: {
+      displayName: row?.displayName ?? null,
+      title: row?.title ?? null,
+      bio: row?.bio ?? null,
+      avatarColor: row?.avatarColor ?? null,
+      avatarUrl: avatarUrlOf(row),
+      updatedAt: row?.updatedAt ?? new Date(0).toISOString(),
+    },
+    machine: {
+      username: os.userInfo().username || "local",
+      hostname: os.hostname(),
+      platform: `${os.platform()} ${os.arch()}`,
+      osRelease: os.release(),
+      dbPath,
+      dbSizeBytes,
+      llmSource: effective.source,
+      llmModel: effective.config.model,
+      llmConfigured: isLLMConfigured(effective.config),
+      resourcesTotal: repo.countDiscoveredResources(),
+      harnessScansTotal: repo.countHarnessScans(),
+    },
+  };
+}
+
+export interface SaveProfileInput {
+  displayName?: string | null;
+  title?: string | null;
+  bio?: string | null;
+  avatarColor?: string | null;
+}
+
+/** 保存用户自定义展示信息（走 Repository，页面不直接碰领域数据） */
+export function saveProfile(input: SaveProfileInput): ProfileUser {
+  if (input.avatarColor !== undefined && input.avatarColor !== null) {
+    if (!AVATAR_COLORS.includes(input.avatarColor)) {
+      throw new ServiceError("VALIDATION_ERROR", `不支持的头像配色: ${input.avatarColor}`);
+    }
+  }
+  repo.upsertUserProfile(input);
+  const row = repo.getUserProfileRow();
+  return {
+    displayName: row?.displayName ?? null,
+    title: row?.title ?? null,
+    bio: row?.bio ?? null,
+    avatarColor: row?.avatarColor ?? null,
+    avatarUrl: avatarUrlOf(row),
+    updatedAt: row?.updatedAt ?? new Date(0).toISOString(),
+  };
+}
+
+/* ---------------- 头像上传 / 移除（S1.46） ---------------- */
+
+const ALLOWED_AVATAR_MIME: Record<string, string> = {
+  "image/png": ".png",
+  "image/jpeg": ".jpg",
+  "image/webp": ".webp",
+};
+
+const MAX_AVATAR_BYTES = 2 * 1024 * 1024; // 2MB
+
+/** 删除旧头像文件（存在且位于 avatars 目录内才删，防止路径穿越） */
+function deleteAvatarFileSafe(relativePath: string | null | undefined) {
+  if (!relativePath) return;
+  const resolved = path.resolve(process.cwd(), "data", relativePath);
+  const avatarsRoot = path.resolve(AVATAR_DIR);
+  if (!resolved.startsWith(avatarsRoot + path.sep)) return;
+  try {
+    fs.unlinkSync(resolved);
+  } catch {
+    // 文件不存在等忽略
+  }
+}
+
+export interface AvatarUploadResult {
+  avatarUrl: string;
+}
+
+/** 上传头像：接收 dataURL → 校验 MIME/大小 → 写 data/avatars/<uuid>.<ext> → DB 记录相对路径 → 返回可访问 URL */
+export function uploadAvatar(dataUrl: string): AvatarUploadResult {
+  const match = /^data:(image\/(?:png|jpeg|webp));base64,([\s\S]+)$/.exec(dataUrl.trim());
+  if (!match) {
+    throw new ServiceError(
+      "VALIDATION_ERROR",
+      "头像格式不支持（仅支持 PNG / JPEG / WebP）"
+    );
+  }
+  const mime = match[1];
+  const ext = ALLOWED_AVATAR_MIME[mime];
+  if (!ext) {
+    throw new ServiceError("VALIDATION_ERROR", "头像格式不支持（仅支持 PNG / JPEG / WebP）");
+  }
+  const bytes = Buffer.from(match[2], "base64");
+  if (bytes.length === 0) {
+    throw new ServiceError("VALIDATION_ERROR", "头像内容为空");
+  }
+  if (bytes.length > MAX_AVATAR_BYTES) {
+    throw new ServiceError("VALIDATION_ERROR", "头像不能超过 2MB");
+  }
+
+  fs.mkdirSync(AVATAR_DIR, { recursive: true });
+  const filename = `${uuid()}${ext}`;
+  const relativePath = `avatars/${filename}`;
+  fs.writeFileSync(path.join(AVATAR_DIR, filename), bytes);
+
+  // 替换头像：删除旧文件
+  const prev = repo.getUserProfileRow();
+  deleteAvatarFileSafe(prev?.avatarPath);
+
+  repo.upsertUserProfile({ avatarPath: relativePath });
+  const row = repo.getUserProfileRow();
+  const avatarUrl = avatarUrlOf(row);
+  if (!avatarUrl) {
+    throw new ServiceError("INTERNAL_ERROR", "头像保存后读取失败");
+  }
+  return { avatarUrl };
+}
+
+/** 移除头像：删除文件并清空 DB 引用 */
+export function clearAvatar(): { avatarUrl: null } {
+  const prev = repo.getUserProfileRow();
+  deleteAvatarFileSafe(prev?.avatarPath);
+  repo.upsertUserProfile({ avatarPath: null });
+  return { avatarUrl: null };
+}
+
+/** 读取当前头像文件（供图片端点返回；无头像返回 null） */
+export function getAvatarFile(): { absolutePath: string; mime: string } | null {
+  const row = repo.getUserProfileRow();
+  if (!row?.avatarPath) return null;
+  const resolved = path.resolve(process.cwd(), "data", row.avatarPath);
+  const avatarsRoot = path.resolve(AVATAR_DIR);
+  if (!resolved.startsWith(avatarsRoot + path.sep) || !fs.existsSync(resolved)) return null;
+  const ext = path.extname(resolved).toLowerCase();
+  const mime = ext === ".png" ? "image/png" : ext === ".webp" ? "image/webp" : "image/jpeg";
+  return { absolutePath: resolved, mime };
+}
+
 /** 查询单次任务分析（含需求与推荐） */
-export function getTaskAnalysis(id: string): RecommendationPlan | null {
-  const r = repo.getTaskAnalysisResult(id);
+export function getTaskAnalysis(id: string): RecommendationPlan | null {  const r = repo.getTaskAnalysisResult(id);
   return r ? taskResultToPlan(r) : null;
 }
 

@@ -525,6 +525,22 @@ export const llmProviderConfigs = sqliteTable(
   }
 );
 
+/** 用户资料（单行，id 固定 "default"；仅存用户自定义展示信息，本机事实信息由 service 实时派生） */
+export const userProfiles = sqliteTable("user_profile", {
+  id: text("id").primaryKey(),
+  /** 展示昵称（可空：回退为本机用户名） */
+  displayName: text("display_name"),
+  /** 职位 / 角色描述 */
+  title: text("title"),
+  /** 个人简介 */
+  bio: text("bio"),
+  /** 头像渐变配色 key（violet/indigo/emerald/sky/amber/rose；有头像时忽略） */
+  avatarColor: text("avatar_color"),
+  /** 本地上传头像相对路径（data/ 下），如 avatars/<uuid>.png；null = 未上传 */
+  avatarPath: text("avatar_path"),
+  updatedAt: text("updated_at").notNull(),
+});
+
 export type AgentRow = typeof agents.$inferSelect;
 export type AgentRunRow = typeof agentRuns.$inferSelect;
 export type CapabilityDefinitionRow = typeof capabilityDefinitions.$inferSelect;
@@ -543,3 +559,4 @@ export type TaskPlanRow = typeof taskPlans.$inferSelect;
 export type PlanStepRow = typeof planSteps.$inferSelect;
 export type PlanDependencyRow = typeof planDependencies.$inferSelect;
 export type LlmProviderConfigRow = typeof llmProviderConfigs.$inferSelect;
+export type UserProfileRow = typeof userProfiles.$inferSelect;

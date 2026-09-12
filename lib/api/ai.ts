@@ -57,3 +57,13 @@ export interface AvailableModelsDTO {
 }
 
 export const fetchAvailableModels = () => http.get<AvailableModelsDTO>("/ai/models");
+
+/** 系统提示词润色（S1.44）：返回润色后正文 + 模型 + 时间 */
+export interface PolishPromptDTO {
+  polished: string;
+  model: string;
+  polishedAt: string;
+}
+
+export const polishSystemPrompt = (prompt: string) =>
+  http.post<PolishPromptDTO>("/ai/polish-prompt", { prompt });

@@ -30,6 +30,7 @@ import {
   taskPlans,
   taskRequirements,
   userHiddenResources,
+  userProfiles,
   planSteps,
 } from "./schema";
 
@@ -604,6 +605,10 @@ export function countDiscoveredResources() {
   return db.select({ n: count() }).from(discoveredResources).get()?.n ?? 0;
 }
 
+export function countHarnessScans() {
+  return db.select({ n: count() }).from(harnessScans).get()?.n ?? 0;
+}
+
 export function listDistinctHarnessResources() {
   return db
     .select({ harnessId: discoveredResources.harnessId, n: count() })
@@ -1157,4 +1162,54 @@ export function upsertLLMProviderConfig(input: SaveLLMProviderInput) {
 /** 清除手动配置（恢复自动发现） */
 export function clearLLMProviderConfig() {
   db.delete(llmProviderConfigs).where(eq(llmProviderConfigs.id, "default")).run();
+}
+
+/* ---------------- 用户资料（S1.45） ---------------- */
+
+/** 单行用户资料（id 固定 "default"） */
+export function getUserProfileRow() {
+  return db.select().from(userProfiles).where(eq(userProfiles.id, "default")).get();
+}
+
+export interface SaveUserProfileInput {
+  displayName?: string | null;
+  title?: string | null;
+  bio?: string | null;
+  avatarColor?: string | null;
+  avatarPath?: string | null;
+}
+
+/** 保存用户自定义展示信息（未传字段不修改；传 null / 空串表示清空） */
+export function upsertUserProfile(input: SaveUserProfileInput) {
+  const existing = getUserProfileRow();
+  const now = new Date().toISOString();
+  const patch: SaveUserProfileInput = {};
+  if (input.displayName !== undefined) patch.displayName = input.displayName?.trim() || null;
+  if (input.title !== undefined) patch.title = input.title?.trim() || null;
+  if (input.bio !== undefined) patch.bio = input.bio?.trim() || null;
+  if (input.avatarColor !== undefined) patch.avatarColor = input.avatarColor?.trim() || null;
+  if (input.avatarPath !== undefined) patch.avatarPath = input.avatarPath?.trim() || null;
+
+  if (!existing) {
+    db.insert(userProfiles)
+      .values({
+        id: "default",
+        displayName: patch.displayName ?? null,
+        title: patch.title ?? null,
+        bio: patch.bio ?? null,
+        avatarColor: patch.avatarColor ?? null,
+        avatarPath: patch.avatarPath ?? null,
+        updatedAt: now,
+      })
+      .run();
+    return;
+  }
+
+  const set: Record<string, unknown> = { updatedAt: now };
+  if (input.displayName !== undefined) set.displayName = patch.displayName ?? null;
+  if (input.title !== undefined) set.title = patch.title ?? null;
+  if (input.bio !== undefined) set.bio = patch.bio ?? null;
+  if (input.avatarColor !== undefined) set.avatarColor = patch.avatarColor ?? null;
+  if (input.avatarPath !== undefined) set.avatarPath = patch.avatarPath ?? null;
+  db.update(userProfiles).set(set).where(eq(userProfiles.id, "default")).run();
 }

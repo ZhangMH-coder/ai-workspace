@@ -1,8 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { Building2, UserRound } from "lucide-react";
-import { toast } from "sonner";
+import { Building2 } from "lucide-react";
 
 import {
   Command,
@@ -57,14 +56,10 @@ export function CommandPalette({
           </CommandGroup>
           <CommandSeparator />
           <CommandGroup heading="工作区">
-            <CommandItem value="Acme AI 工作区" onSelect={() => toast("已切换至 Acme AI（演示）")}>
+            <CommandItem value="本机工作区" onSelect={() => onOpenChange(false)}>
               <Building2 className="text-ink-3" />
-              <span>Acme AI</span>
-              <span className="ml-auto text-xs text-ink-3">当前</span>
-            </CommandItem>
-            <CommandItem value="个人空间 工作区" onSelect={() => toast("已切换至个人空间（演示）")}>
-              <UserRound className="text-ink-3" />
-              <span>个人空间</span>
+              <span>本机工作区</span>
+              <span className="ml-auto text-xs text-ink-3">当前 · 唯一</span>
             </CommandItem>
           </CommandGroup>
         </CommandList>

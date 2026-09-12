@@ -1323,3 +1323,10 @@ Authentication / Multi-user / Permissions / 真实 LLM Provider Adapter（OpenAI
 - 验证：lint ✅ / tsc ✅ / build ✅ / 生产 API 实测 ✅（reused:false 确认新计算）/ 回归 ✅ / 原始文件零修改 ✅。
 - 已知问题：描述长度差异导致的 forward 分差仍是启发式天花板（简洁但精准的 Hermes 描述在模板词多的任务下可能排 7-8 名）；不做硬编码修正，后续可接 LLM 语义匹配治本。
 
+
+### S1.42 资源列表类型/Harness 列宽修复（徽标粘连）
+- 问题：资源列表「类型」列 Badge 与「Harness」列文字粘连（如「Prompt 提示词ermes 赫尔墨斯」）——类型列 w-16(64px) 放不下「Prompt 提示词」等长标签，溢出挤入下一列。
+- 修改：components/resources/resource-table.tsx——类型列 w-16→w-24(96px) 且 Badge 加 max-w-full truncate 兜底；Harness 列 w-28→w-36(144px) 且加 title 完整文本提示；表头同步加宽。
+- 验证：tsc ✅ / lint ✅ / build ✅ / 生产实测 DOM 测量类型徽标与 Harness 列边界不重叠 ✅ / 无页面级 console 错误（favicon 404 为历史既有、非本次改动）✅。
+- 已知问题：无新增。
+

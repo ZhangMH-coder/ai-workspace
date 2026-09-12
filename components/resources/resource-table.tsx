@@ -122,8 +122,8 @@ export function ResourceTable({ initialHarness }: { initialHarness?: string }) {
       <div className="overflow-hidden rounded-xl border border-white/10 bg-white/[0.02]">
         <div className="flex items-center gap-3 border-b border-white/[0.06] px-4 py-2 text-[11px] font-medium uppercase tracking-wide text-ink-3">
           <span className="w-1/4">资源</span>
-          <span className="w-16">类型</span>
-          <span className="w-28">Harness</span>
+          <span className="w-24">类型</span>
+          <span className="w-36">Harness</span>
           <span className="hidden flex-1 md:block">来源路径</span>
           <span className="w-24 text-right">状态</span>
         </div>
@@ -213,12 +213,15 @@ function ResourceRow({
             {usageOf(resource)}
           </p>
         </div>
-        <div className="w-16">
-          <Badge variant="outline" className="border-white/10 text-[11px] font-normal text-ink-2">
+        <div className="w-24 min-w-0">
+          <Badge
+            variant="outline"
+            className="max-w-full truncate border-white/10 text-[11px] font-normal text-ink-2"
+          >
             {resourceTypeLabel(resource.type)}
           </Badge>
         </div>
-        <div className="w-28 truncate text-[12px] text-ink-2">{resource.source}</div>
+        <div className="w-36 truncate text-[12px] text-ink-2" title={resource.source}>{resource.source}</div>
         <div className="hidden min-w-0 flex-1 md:block">
           <p className="truncate font-mono text-[11px] text-ink-3">{resource.sourcePath}</p>
         </div>

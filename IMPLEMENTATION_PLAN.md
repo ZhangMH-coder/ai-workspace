@@ -525,7 +525,7 @@ Authentication / Multi-user / Permissions / 真实 LLM Provider Adapter（OpenAI
 
 ## 当前阶段
 
-**S1.31 Agent 运行真实输出展示** —— 实现完成、全量验证通过、待审批（不自动进入下一阶段）。
+**S1.32 移除 Cursor 残留资源（扫描停用 + 索引清理）** —— 实现完成、全量验证通过、待审批（不自动进入下一阶段）。
 
 ## 本次修改内容
 
@@ -1227,4 +1227,11 @@ Authentication / Multi-user / Permissions / 真实 LLM Provider Adapter（OpenAI
 - Agent 详情页运行历史每行可点击展开（ChevronDown 旋转 + aria-expanded），展开显示完整输出（pre 等宽、max-h-64 滚动、长文本换行）；旧记录无输出时如实提示「S1.31 之前的旧记录」。
 - **修复验证环境根因**：此前多次「改代码后 API 无效果」为 3000 端口被旧 next start 进程（pid 15980）占用、新进程 EADDRINUSE 所致（kill 过滤未匹配 `"next" start` 带引号命令行）；本次精确按端口/pid 清理后新 build 生效。
 - 验证：lint 0/0 ✅ / tsc ✅ / build（清 .next 干净构建）✅；API 真实运行 3 次均 output 落库（如「您好，我是客户支持助手，随时为您高效解答问题。」36 tokens，provider=llm，input 22 / output 14）✅；tsx 直调源码确认链路（对照定位到旧进程）✅；浏览器实测展开 aria-expanded=true + 输出文本可见 ✅；原始 Harness 零修改 ✅。
+
+
+### S1.32 移除 Cursor 残留（用户「cursor 相关的路径删了，是残余，现在没用过了」）
+- lib/discovery/registry.ts：cursor / cursor-user 适配器从注册表移除（注释说明用户已停用 Cursor；adapter 文件保留，未来恢复时重新注册即可）。此后重新扫描不再探测 `.cursor` / `AppData\Roaming\Cursor\User`。
+- 清理 SQLite 索引：DELETE discovered_resource where harness_id in ('cursor','cursor-user')（20 条：cursor 19 + cursor-user 1），外键级联清除 resource_analysis 38 条、resource_capability 129 条；resource_recommendation 无引用（预检 0）。
+- 重新扫描（产品自身 scan 接口）刷新 harness_scans 快照：overview 不再包含 Cursor / Cursor User；资源总数 272 → 252（hermes 140 / doubao-skills 106 / codex 3 / project-agents 2 / claude 0）。
+- 验证：lint 0/0 ✅ / tsc ✅ / build（清 .next 干净构建）✅ / API overview 无 cursor ✅ / 浏览器 /settings 无 Cursor、/resources 无 cursor harness（唯一 1 处「Cursor」为 hermes-skill-install 真实 SKILL.md 正文中的生态描述，属资源数据保留）✅ / 原始 Harness 文件零修改 ✅。
 

@@ -1136,3 +1136,9 @@ Resource Discovery MVP —— 实现完成、全量验证通过、待审批（�
 - 用户截图指出「技能使用建议」仍显示 usage/描述原文（如 sheet 的强制前置条件、doubao-pdf 英文说明），不是「预设问题」。
 - 修正：presetQuestion 改为基于真实 description 第一句生成「帮我用「技能名」：目的」可提问指令（剔除 本技能/用于/负责/帮助 等引导词，英文描述回退技能名模板，短 usage 兜底）；真实数据验证输出自然（如「帮我用「ppt」技能：飞书幻灯片：创建和编辑幻灯片」）。
 - lint/tsc/build ✅；生产重启 HTTP 200。
+
+### S1.23 主题功能（2026-09-12，模仿 GlassTodo token 化范式）
+- 设置页新增「外观 · 主题」：默认（深紫）/ 暖色（暖棕玻璃）/ 冷色（冷蓝玻璃）/ 浅色 四套预设，分段按钮即时切换。
+- 机制：html[data-theme] 覆盖 globals.css 的 .dark token 值（主题=换 token）；layout 内联脚本 hydration 前从 localStorage('aiw-theme') 恢复防闪烁；localStorage 仅存 UI 偏好。
+- 浅色主题下对 187 处 border-white/bg-white 硬编码做全局补偿 CSS（半透明黑），避免完全隐形。
+- 验证：lint ✅ / tsc ✅ / build ✅；生产重启 HTTP 200；构建 CSS 确认含 data-theme=warm/cool/light 规则。

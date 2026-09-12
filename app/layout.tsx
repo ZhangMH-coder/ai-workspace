@@ -18,7 +18,15 @@ export default function RootLayout({
       lang="zh-CN"
       className={`dark ${GeistSans.variable} ${GeistMono.variable} antialiased`}
     >
-      <body className="min-h-svh bg-background text-foreground">{children}</body>
+      <body className="min-h-svh bg-background text-foreground">
+        {/* 主题防闪烁：hydration 前从 localStorage 恢复 data-theme（仅 UI 偏好） */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `try{var t=localStorage.getItem("aiw-theme");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}`,
+          }}
+        />
+        {children}
+      </body>
     </html>
   );
 }

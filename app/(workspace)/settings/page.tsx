@@ -3,6 +3,7 @@ import path from "node:path";
 
 import { Settings } from "lucide-react";
 
+import { AppearanceSection } from "@/components/settings/appearance-section";
 import { EnvInfo } from "@/components/settings/env-info";
 import { HarnessDirectories } from "@/components/settings/harness-directories";
 import { HiddenResources } from "@/components/settings/hidden-resources";
@@ -51,6 +52,11 @@ export default function SettingsPage() {
           <ResourceStats />
         </CardContent>
       </Card>
+
+      <section className="flex flex-col gap-2">
+        <h2 className="text-[13px] font-semibold text-ink">外观</h2>
+        <AppearanceSection />
+      </section>
 
       <section className="flex flex-col gap-2">
         <h2 className="text-[13px] font-semibold text-ink">AI Provider</h2>

@@ -181,3 +181,124 @@
     background: rgba(255, 255, 255, 0.2);
   }
 }
+
+/* ═══ AI Workspace 主题扩展（模仿 GlassTodo token 化范式：主题 = 换 token 值）═══
+ * html[data-theme] 覆盖 .dark 已定义变量（选择器同权，后定义胜出）。
+ * default=当前深紫（不写覆盖，沿用 .dark）；warm=暖棕玻璃；cool=冷蓝玻璃；light=浅色。
+ * 设置页「外观 → 主题」切换，保存在 localStorage（仅 UI 偏好）。
+ */
+html[data-theme='warm'] {
+  color-scheme: dark;
+  --background: #12100d;
+  --foreground: #f5f0e8;
+  --card: #1a1712;
+  --card-foreground: #f5f0e8;
+  --popover: #221e17;
+  --popover-foreground: #f5f0e8;
+  --primary: #e1b98f;
+  --primary-foreground: #1a1410;
+  --secondary: #241f18;
+  --secondary-foreground: #ece3d4;
+  --muted: #201b15;
+  --muted-foreground: #a89b88;
+  --accent: #2a241c;
+  --accent-foreground: #f5f0e8;
+  --destructive: #e46a5f;
+  --border: #3a3127;
+  --input: #3a3127;
+  --ring: #e1b98f;
+  --surface-1: #17130f;
+  --surface-2: #1d1813;
+  --surface-3: #241e17;
+  --ink: #f5f0e8;
+  --ink-2: #c9bda9;
+  --ink-3: #8a7d6a;
+  --brand: #e1b98f;
+  --brand-2: #d9a86b;
+  --brand-soft: rgba(225, 185, 143, 0.14);
+  --success: #6ec77f;
+  --warning: #e0a83f;
+  --danger: #e46a5f;
+  --info: #6fb4d8;
+}
+
+html[data-theme='cool'] {
+  color-scheme: dark;
+  --background: #0c1014;
+  --foreground: #e6eef4;
+  --card: #11161b;
+  --card-foreground: #e6eef4;
+  --popover: #161c22;
+  --popover-foreground: #e6eef4;
+  --primary: #8bc8ea;
+  --primary-foreground: #0c141c;
+  --secondary: #161c22;
+  --secondary-foreground: #d6e2ea;
+  --muted: #141a20;
+  --muted-foreground: #8ba0b0;
+  --accent: #1a222a;
+  --accent-foreground: #e6eef4;
+  --destructive: #e07070;
+  --border: #24313c;
+  --input: #24313c;
+  --ring: #8bc8ea;
+  --surface-1: #10151a;
+  --surface-2: #141b21;
+  --surface-3: #192128;
+  --ink: #e6eef4;
+  --ink-2: #b6c6d2;
+  --ink-3: #75899a;
+  --brand: #8bc8ea;
+  --brand-2: #6fb2dc;
+  --brand-soft: rgba(139, 200, 234, 0.14);
+  --success: #6fc98a;
+  --warning: #e0b34f;
+  --danger: #e07070;
+  --info: #6fa8e0;
+}
+
+html[data-theme='light'] {
+  color-scheme: light;
+  --background: #f7f7f8;
+  --foreground: #18181b;
+  --card: #ffffff;
+  --card-foreground: #18181b;
+  --popover: #ffffff;
+  --popover-foreground: #18181b;
+  --primary: #7c4de0;
+  --primary-foreground: #ffffff;
+  --secondary: #f0f0f2;
+  --secondary-foreground: #3f3f46;
+  --muted: #f0f0f2;
+  --muted-foreground: #71717a;
+  --accent: #f0f0f2;
+  --accent-foreground: #18181b;
+  --destructive: #dc2626;
+  --border: #e4e4e7;
+  --input: #e4e4e7;
+  --ring: #8b5cf6;
+  --surface-1: #ffffff;
+  --surface-2: #f4f4f5;
+  --surface-3: #ececef;
+  --ink: #18181b;
+  --ink-2: #52525b;
+  --ink-3: #a1a1aa;
+  --brand: #8b5cf6;
+  --brand-2: #6366f1;
+  --brand-soft: rgba(139, 92, 246, 0.1);
+  --success: #16a34a;
+  --warning: #d97706;
+  --danger: #dc2626;
+  --info: #0284c7;
+}
+
+/* 浅色主题下：部分组件用白透明度硬编码边框/底（深色设计遗留），用半透明黑补偿，避免完全隐形 */
+html[data-theme='light'] .border-white\/\[0\.0[0-9]\] {
+  border-color: rgba(0, 0, 0, 0.08);
+}
+html[data-theme='light'] .bg-white\/\[0\.0[0-9]\] {
+  background-color: rgba(0, 0, 0, 0.025);
+}
+html[data-theme='light'] .border-white\/10 {
+  border-color: rgba(0, 0, 0, 0.1);
+}

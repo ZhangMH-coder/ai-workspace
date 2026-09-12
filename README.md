@@ -62,7 +62,7 @@ npm run dev
 # 打开 http://localhost:3000
 ```
 
-首次进入 `/resources` 页为「尚未扫描」空态，点击「扫描本机资源」按钮即触发扫描——扫描的是**运行者自己电脑**上的真实 Harness 目录。无远程服务器、数据只存本地库。
+首次进入 `/resources` 页为「尚未扫描」空态，点击「扫描本机资源」按钮即触发扫描——扫描的是**运行者自己电脑**上的真实 Harness 目录。扫描动作自动附带能力索引：对发现到的 Skill / Agent / Rule 等真实文件，将描述转换为可检索的能力标签（`resource_analysis` / `resource_capability`），无需手动触发分析命令。转换只写索引表，**原始 Harness 文件全程只读、零修改**；重复扫描幂等（指纹未变自动跳过）。无远程服务器、数据只存本地库。
 
 ## SQLite 初始化（migration / seed / reset）
 

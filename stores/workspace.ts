@@ -70,6 +70,7 @@ import type {
   CapabilityDefinition,
   DiscoveredResource,
   DiscoveryOverview,
+  RunScanResult,
   NewAgentInput,
   NewCapabilityInput,
   NewProjectInput,
@@ -207,7 +208,7 @@ interface WorkspaceState {
   };
   fetchDiscoveryOverview: () => Promise<void>;
   /** 重新扫描本机真实 Harness 资源（只读；幂等 upsert 索引） */
-  runResourceScan: () => Promise<void>;
+  runResourceScan: () => Promise<RunScanResult | void>;
   fetchDiscoveredResources: (q?: ResourceListQuery) => Promise<void>;
   fetchResourceDetail: (id: string) => Promise<void>;
   fetchRelatedResources: (id: string) => Promise<void>;
@@ -338,10 +339,12 @@ export const useWorkspaceStore = create<WorkspaceState>()(
           } else {
             set((s) => ({ discovery: { ...s.discovery, scanning: false } }));
           }
+          return result;
         } catch (e) {
           set((s) => ({
             discovery: { ...s.discovery, scanning: false, error: (e as Error).message },
           }));
+          throw e;
         }
       },
 

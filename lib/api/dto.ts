@@ -174,6 +174,7 @@ export interface RunScanResultDTO {
   scanRun: ScanRunDTO | null;
   harnesses: HarnessScanSummaryDTO[];
   resources: DiscoveredResourceDTO[];
+  analysis?: { processed: number; skipped: number; analyzed: number; failed: number } | null;
 }
 
 /* ---------------- Resource Intelligence（Phase 2） ---------------- */

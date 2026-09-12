@@ -22,7 +22,7 @@ export async function fetchDiscoveryOverview(): Promise<DiscoveryOverview> {
 }
 
 export async function runResourceScan(): Promise<RunScanResult> {
-  return { scanRun: null, harnesses: [], resources: [] };
+  return { scanRun: null, harnesses: [], resources: [], analysis: { processed: 0, skipped: 0, analyzed: 0, failed: 0 } };
 }
 
 export async function fetchDiscoveredResources(): Promise<{ items: DiscoveredResource[]; total: number }> {

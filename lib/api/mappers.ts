@@ -223,6 +223,7 @@ export function toRunScanResult(d: RunScanResultDTO): RunScanResult {
     scanRun: d.scanRun ? toScanRun(d.scanRun) : null,
     harnesses: (d.harnesses ?? []).map(toHarnessScanSummary),
     resources: (d.resources ?? []).map(toDiscoveredResource),
+    analysis: d.analysis ?? null,
   };
 }
 

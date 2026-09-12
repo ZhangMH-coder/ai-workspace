@@ -54,9 +54,15 @@ export default function ResourcesPage() {
 
   async function handleScan() {
     try {
-      await runScan();
+      const result = await runScan();
       await fetchOverview();
-      toast.success("扫描完成：已更新本机资源索引");
+      const analyzed = result?.analysis?.analyzed ?? 0;
+      const total = result?.resources?.length ?? 0;
+      toast.success(
+        analyzed > 0
+          ? `扫描完成：发现 ${total} 个真实资源，自动索引 ${analyzed} 个能力`
+          : `扫描完成：已更新本机资源索引（发现 ${total} 个资源）`,
+      );
     } catch {
       toast.error("扫描失败，请查看错误信息");
     }

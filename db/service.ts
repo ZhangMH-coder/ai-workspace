@@ -518,10 +518,16 @@ export function runResourceScan(): RunScanResult {
   // 旧索引不得残留，保证索引与真实文件系统一致）。
   repo.deleteDiscoveredResourcesNotInScan(scanId);
 
+  // 自动能力索引：扫描即转换——对新增/变化资源执行启发式分析（能力描述 → 可索引标签）。
+  // 幂等：指纹（sourcePath+mtime+metaHash）与 analyzerVersion 未变则跳过；
+  // 原始 Harness 文件全程只读，转换只写 resource_analysis / resource_capability 索引表。
+  const analysis = runIncrementalAnalysis();
+
   return {
     scanRun: scanRunToDomain(repo.getScanRun(scanId))!,
     harnesses: harnessSummaries,
     resources,
+    analysis,
   };
 }
 

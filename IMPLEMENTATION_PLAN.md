@@ -1286,3 +1286,15 @@ Authentication / Multi-user / Permissions / 真实 LLM Provider Adapter（OpenAI
 - 验证：lint ✅ / tsc ✅ / build ✅ / API 200 ✅ / 索引质量核查 ✅ / doubao 回归 ✅。
 - 已知问题：Hermes 的 audio-transcription 等技能在中文任务下仍可能排不进前列——评分以中文词命中为主、模板词噪声仍存在、中英跨语言匹配是启发式天花板（待 LLM 语义匹配或后续评分调优）。
 
+
+### S1.39 扫描即自动能力索引（开箱即用闭环）
+- 背景：用户指出「转换不应只在特定命令时发生」——其他人使用本项目时，扫描动作本身就必须自动把技能描述转为可索引能力，且不影响原始 skill 内容。
+- 修改（服务端闭环）：
+  - db/service.ts `runResourceScan()` 末尾自动调用 `runIncrementalAnalysis()`——扫描即转换：新环境 / 新资源扫描后直接产出可检索能力标签，无需手动触发分析；
+  - 幂等：指纹（sourcePath+mtime+metaHash）+ analyzerVersion 未变自动跳过；原始 Harness 文件全程只读；
+  - 类型链同步：RunScanResult（lib/types.ts）+ RunScanResultDTO + toRunScanResult + Mock 空态加 `analysis` 字段（向后兼容）；
+  - 前端反馈：store `runResourceScan` 返回扫描结果，资源页扫描成功 toast 显示「发现 N 个真实资源，自动索引 M 个能力」；
+  - README 同步「扫描自动附带能力索引、原始文件零修改」说明。
+- 验证：lint ✅ / tsc ✅ / build ✅；生产实测 POST /api/v1/resource-discovery/scan → scanRun completed、252 资源、7 harnesses、analysis {processed:2, skipped:250, analyzed:0, failed:2}（S1.38 已全量跑过故多数跳过，符合幂等预期）；原始 Harness 文件零修改。
+- 已知问题：无新增；既有 2 个不可解析资源（failed=2）为历史已知。
+

@@ -348,11 +348,13 @@ export interface DiscoveryOverview {
   lastScannedAt: string | null;
 }
 
-/** 一次扫描的完整结果（POST /scan 返回） */
+/** 一次扫描的完整结果（POST /scan 返回；含扫描后的自动能力索引摘要） */
 export interface RunScanResult {
   scanRun: ScanRun | null;
   harnesses: HarnessScanSummary[];
   resources: DiscoveredResource[];
+  /** 扫描后自动执行的能力索引（分析）结果；老后端无此字段时为空 */
+  analysis?: AnalysisRunResult | null;
 }
 
 /* ---------------- Resource Intelligence（Phase 2：能力分析 / 能力索引） ---------------- */

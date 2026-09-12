@@ -68,7 +68,7 @@ npm run dev
 
 数据文件：`data/ai-workspace.db`（目录不存在会自动创建；可用环境变量 `DATABASE_URL` 覆盖路径）。
 
-环境变量（全部可选）：参见 `.env.example`（`DATABASE_URL` 数据路径、`NEXT_PUBLIC_USE_MOCK` 模式开关）。
+环境变量（全部可选）：参见 `.env.example`（`DATABASE_URL` 数据路径）。
 
 | 命令 | 职责 | 何时使用 |
 | --- | --- | --- |
@@ -80,24 +80,12 @@ npm run dev
 
 > 扫描结果（`discovered_resources` 等真实资源表）**不属于**业务表，`db:reset` 不清空；如需重扫直接点页面「重新扫描」。
 
-## Real / Mock 双模式
-
-- **Real（默认）**：SQLite 为事实数据源，资源扫描结果真实落库，刷新从数据库恢复。
-- **Mock**：编译期开关，前端走内存空态（**不伪造扫描结果**），作为回滚通道：
-
-```powershell
-# PowerShell
-$env:NEXT_PUBLIC_USE_MOCK='1'
-npm run build
-npm run start
-```
-
-> Mock 为编译期环境变量，切换模式必须重新 `build`。Mock 模式下资源页为真实空态（「尚未扫描」），不允许伪造数据。
+> `db:seed` 与 `db:reset` 脚本语义等价：清空演示业务表（agent / capability / project / run），**不种任何数据**；真实资源线不受影响。
 
 ## 构建
 
 ```bash
-npm run build          # 生产构建（Real 模式）
+npm run build          # 生产构建
 npm run lint           # ESLint（0 error / 0 warning 为标准）
 npx tsc --noEmit       # TypeScript 类型检查
 npm run ci             # 本地等价质量门禁：lint + tsc + build
@@ -124,7 +112,6 @@ docker compose logs -f ai-workspace
 - **数据库持久化**：宿主 `./data` 目录绑定挂载至容器 `/app/data`（`DATABASE_URL=/app/data/ai-workspace.db`），容器重建 / 重启后数据保留。
 - **启动流程**：容器 `CMD` = `npm run db:init && npm run start`。
 - **数据文件位置**：宿主 `./data/ai-workspace.db` ↔ 容器 `/app/data/ai-workspace.db`。
-- **Mock 模式容器**：`docker-compose.yml` 中设 `NEXT_PUBLIC_USE_MOCK=1` 后 `docker compose build`。
 
 ## 数据文件位置
 

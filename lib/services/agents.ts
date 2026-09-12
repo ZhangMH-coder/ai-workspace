@@ -1,11 +1,9 @@
 /**
- * Agents Service — 入口（双模式：Mock / HTTP）
+ * Agents Service — 入口（仅 Real：HTTP + SQLite）
  */
-import * as mock from "./mock/agents";
-import * as http from "./http/agents";
-import { USE_MOCK } from "./mode";
-
-export const fetchAgents = USE_MOCK ? mock.fetchAgents : http.fetchAgents;
-export const fetchAgentRuns = USE_MOCK ? mock.fetchAgentRuns : http.fetchAgentRuns;
-export const createAgent = USE_MOCK ? mock.createAgent : http.createAgent;
-export const runAgent = USE_MOCK ? mock.runAgent : http.runAgent;
+export {
+  fetchAgents,
+  fetchAgentRuns,
+  createAgent,
+  runAgent,
+} from "./http/agents";

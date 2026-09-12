@@ -45,9 +45,7 @@ export function EnvInfo({
           </Badge>
         </div>
         <p className="text-[11px] leading-relaxed text-ink-3">
-          {mode === "real"
-            ? "读写走 Drizzle + better-sqlite3（服务端）"
-            : "NEXT_PUBLIC_USE_MOCK=1 编译期回退，用于构建验证"}
+          读写走 Drizzle + better-sqlite3（服务端）
         </p>
       </div>
 

@@ -25,7 +25,6 @@ import {
   saveLLMProviderConfig,
   testLLMProviderConfig,
 } from "@/lib/services/ai";
-import { USE_MOCK } from "@/lib/services/mode";
 
 const SOURCE_LABEL: Record<string, string> = {
   manual: "手动配置",
@@ -232,12 +231,6 @@ export function LlmProvider() {
         </CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-4 px-4 pb-4">
-        {USE_MOCK && (
-          <p className="rounded-lg border border-amber-400/20 bg-amber-500/5 px-3 py-2 text-[12px] text-amber-200/90">
-            Mock 模式：不接入真实 LLM，配置仅作展示。
-          </p>
-        )}
-
         {/* 当前生效配置 */}
         <div className="flex flex-col gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3">
           <div className="flex items-center justify-between gap-2">
@@ -349,7 +342,7 @@ export function LlmProvider() {
             size="sm"
             variant="outline"
             onClick={() => void handleSave()}
-            disabled={saving || USE_MOCK}
+            disabled={saving}
             className="h-8 gap-1.5 border-white/10 text-[12px]"
           >
             {saving ? <Loader2 className="size-3 animate-spin" /> : <Save className="size-3" />}
@@ -359,7 +352,7 @@ export function LlmProvider() {
             size="sm"
             variant="outline"
             onClick={() => void handleTest()}
-            disabled={testing || USE_MOCK}
+            disabled={testing}
             className="h-8 gap-1.5 border-white/10 text-[12px]"
           >
             {testing ? <Loader2 className="size-3 animate-spin" /> : <PlugZap className="size-3" />}
@@ -370,7 +363,6 @@ export function LlmProvider() {
               size="sm"
               variant="ghost"
               onClick={() => void handleClear()}
-              disabled={USE_MOCK}
               className="h-8 gap-1.5 text-[12px] text-ink-2 hover:text-ink"
             >
               <RotateCcw className="size-3" /> 恢复自动发现

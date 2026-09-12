@@ -2,7 +2,7 @@
  * AI Runtime 契约（P5-1 设计 → P5-2 落地）
  *
  * 本文件只定义类型与纯函数，不包含任何执行逻辑。
- * 分层约束：UI / Store / Service 不得直接引用 Provider 实现（mock-provider 等）；
+ * 分层约束：UI / Store / Service 不得直接引用 Provider 实现；
  * 只允许通过 Runtime（lib/runtime/runtime.ts）接口消费。
  */
 import type { AgentRun } from "@/lib/types";
@@ -33,7 +33,7 @@ export function isFinalRunStatus(s: RunLifecycleStatus): boolean {
 
 /* ================= Model 契约（P5-1 §4） ================= */
 
-export type ProviderId = "mock" | "llm" | "openai" | "anthropic" | "deepseek" | "doubao";
+export type ProviderId = "llm" | "openai" | "anthropic" | "deepseek" | "doubao";
 
 export interface RetryPolicy {
   maxAttempts: number;
@@ -50,7 +50,7 @@ export interface ModelConfig {
 }
 
 export const DEFAULT_MODEL_CONFIG: ModelConfig = {
-  provider: "mock",
+  provider: "llm",
   model: "doubao-pro",
   temperature: 0.7,
   maxTokens: 4096,

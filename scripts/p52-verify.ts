@@ -1,9 +1,8 @@
 /**
- * P5-2 验证脚本（验收 A/B/D）
+ * P5-2 验证脚本（验收 A/B，D 因 Mock 执行链移除而废止）
  *
  * A. Run 状态机：合法 / 非法迁移断言
  * B. CapabilityLoader：enabled / disabled / archived 三场景
- * D. 完整 Mock Runtime 执行链：Runtime.execute → MockProvider.execute → RuntimeResult
  *
  * 运行：npx tsx scripts/p52-verify.ts
  * 失败以非零退出码结束。
@@ -12,8 +11,6 @@ import assert from "node:assert/strict";
 import { canTransition, isFinalRunStatus } from "../lib/runtime/contracts";
 import { buildExecutionContext } from "../lib/runtime/capability-loader";
 import type { CapabilitySource } from "../lib/runtime/contracts";
-import { mockProvider } from "../lib/runtime/mock-provider";
-import { createProviderRegistry, createRuntime } from "../lib/runtime/runtime";
 
 let passed = 0;
 function ok(name: string) {
@@ -109,38 +106,10 @@ assert.equal(bCtx2.rules.length, 0);
 assert.ok(bCtx2.systemPrompt.includes("基座系统提示"));
 ok("全部装配归档时：能力区为空，仍保留基座提示");
 
-/* ---------------- D. 完整 Mock Runtime 执行链 ---------------- */
-console.log("D. Mock Runtime 执行链");
+/* ---------------- D. 已废止：Mock Runtime 执行链随虚拟数据删除移除 ---------------- */
+console.log("（D 已废止：MockProvider 执行链随虚拟演示数据删除移除）");
 
-const dRuntime = createRuntime({
-  source: {
-    getAgent() {
-      return { id: "a1", name: "测试 Agent", systemPrompt: "你是测试助手", model: "doubao-pro" };
-    },
-    listAssemblies() {
-      return [{ capabilityId: "r1", enabled: true, type: "rule", name: "规则一", description: "描述", lifecycle: "active" }];
-    },
-  },
-  providers: createProviderRegistry({ mock: mockProvider }),
-});
-
-const dResult = await dRuntime.execute({
-  runId: "run-test-1",
-  agentId: "a1",
-  input: "执行一次测试",
-  modelConfig: { provider: "mock", model: "doubao-pro", temperature: 0.7, maxTokens: 4096, timeoutMs: 120_000, retry: { maxAttempts: 2, backoffMs: 1_000 } },
-  source: "ui",
-});
-
-assert.equal(dResult.status, "succeeded", "MockProvider 恒成功");
-assert.ok((dResult.usage.totalTokens ?? 0) > 0, "usage.totalTokens 应 > 0");
-assert.ok(dResult.durationMs > 0, "durationMs 应 > 0");
-assert.ok(dResult.summary.includes("测试 Agent"), "summary 应含 Agent 名称");
-assert.equal(dResult.error, undefined, "成功路径无 error");
-ok("Runtime.execute → MockProvider.execute → RuntimeResult（succeeded + usage + duration + summary）");
-
-// Provider 解耦检查：Service/UI 侧不得直接引用 MockProvider 实现（mockProvider 仅注册于 Runtime 注册表）
-console.log("\n全部通过 ✓");
+/* 全部通过 */
 console.log(`passed: ${passed}`);
 }
 

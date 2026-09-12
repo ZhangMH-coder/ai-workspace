@@ -17,7 +17,6 @@ import { clearAll, runSeed } from "./seed";
 import { canTransition } from "@/lib/runtime/contracts";
 import type { CapabilitySource, RunLifecycleStatus, RuntimeRequest } from "@/lib/runtime/contracts";
 import { createRuntime, createProviderRegistry } from "@/lib/runtime/runtime";
-import { mockProvider } from "@/lib/runtime/mock-provider";
 import { createLLMProvider } from "@/lib/runtime/llm-provider";
 import { runDiscoveryScan } from "@/lib/discovery/scanner";
 import { ADAPTERS } from "@/lib/discovery/registry";
@@ -132,11 +131,10 @@ const realCapabilitySource: CapabilitySource = {
   },
 };
 
-/** Provider 注册表：mock（演示/回滚）+ llm（S1.30 真实执行，配置经 getEffectiveLLMConfig 延迟解析） */
+/** Provider 注册表：llm（S1.30 真实执行，配置经 getEffectiveLLMConfig 延迟解析） */
 const realRuntime = createRuntime({
   source: realCapabilitySource,
   providers: createProviderRegistry({
-    mock: mockProvider,
     llm: createLLMProvider({ resolveConfig: () => getEffectiveLLMConfig().config }),
   }),
 });

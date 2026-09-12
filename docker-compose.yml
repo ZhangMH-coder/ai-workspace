@@ -13,8 +13,6 @@ services:
     environment:
       # SQLite 事实源位置（持久化卷挂载点）
       - DATABASE_URL=/app/data/ai-workspace.db
-      # 0 = Real 模式（SQLite 权威数据源）；1 = Mock 模式（内存演示，不落库）
-      - NEXT_PUBLIC_USE_MOCK=0
     volumes:
       # 数据库文件持久化目录（宿主相对路径，重启保留）
       - ./data:/app/data

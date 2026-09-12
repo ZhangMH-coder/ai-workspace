@@ -19,7 +19,7 @@ import type {
   TokenUsage,
 } from "./contracts";
 
-/** Provider 注册表：P5-2 唯一注册项为 mock；未来 Adapter 在此注册（禁止散落硬编码） */
+/** Provider 注册表：Adapter 在此注册（禁止散落硬编码） */
 export interface ProviderRegistry {
   resolve(providerId: ProviderId): RuntimeProvider;
 }

@@ -21,7 +21,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useWorkspaceStore } from "@/stores/workspace";
-import { __USE_MOCK__ } from "@/lib/services/mode";
 import { resourceTypeLabel, type ResourceType } from "@/lib/types";
 
 export default function ResourcesPage() {
@@ -117,8 +116,8 @@ export default function ResourcesPage() {
           ))}
         </div>
       ) : scanRun === null ? (
-        /* 未扫描 / Mock / 未发现 → 结构化空态（不伪造） */
-        <EmptyDiscovery mode={__USE_MOCK__ ? "mock" : "never-scanned"} locations={null} />
+        /* 未扫描 / 未发现 → 结构化空态（不伪造） */
+        <EmptyDiscovery mode="never-scanned" locations={null} />
       ) : (
         <div className="flex flex-col gap-5">
           {/* 统计条 */}

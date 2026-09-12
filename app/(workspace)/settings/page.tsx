@@ -11,7 +11,6 @@ import { LlmProvider } from "@/components/settings/llm-provider";
 import { ResourceStats } from "@/components/settings/resource-stats";
 import { PageHeader } from "@/components/shared/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { USE_MOCK } from "@/lib/services/mode";
 
 export const dynamic = "force-dynamic";
 
@@ -34,7 +33,7 @@ export default function SettingsPage() {
 
       <section className="flex flex-col gap-2">
         <h2 className="text-[13px] font-semibold text-ink">本机环境</h2>
-        <EnvInfo mode={USE_MOCK ? "mock" : "real"} dbPath={dbPath} dbSizeBytes={dbSizeBytes} />
+        <EnvInfo mode="real" dbPath={dbPath} dbSizeBytes={dbSizeBytes} />
       </section>
 
       <section className="flex flex-col gap-2">

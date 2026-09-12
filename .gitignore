@@ -47,3 +47,6 @@ data/
 .obsidian/
 .tmp-*
 
+
+# QA skill 产物（含本地路径，不入库）
+qa-results/

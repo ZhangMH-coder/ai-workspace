@@ -1149,3 +1149,8 @@ Resource Discovery MVP —— 实现完成、全量验证通过、待审批（�
 - workspace 布局内容容器 relative z-10 透明化，背景层 fixed z-0 透出；流体渐变复用 GlassTodo 的 hsl(--bg-hue) 多层 radial+linear 公式。
 - 防闪脚本改读 aiw-appearance（兼容旧 aiw-theme）。
 - 验证：lint/tsc/build ✅；浏览器实测：流体渐变生效、色调滑块联动、壁纸真实图片渲染为全站背景、IndexedDB 持久化、硬导航主题恢复、外观/背景全控件渲染。
+
+### S1.24b 界面框架毛玻璃化（2026-09-12，用户反馈后补充）
+- 侧边栏 / 顶栏由不透明 bg-background 改为 bg-background/70 + backdrop-blur-xl：壁纸 / 流体背景可贯穿整个页面，不止内容区。
+- 「玻璃效果」开关语义扩展：关闭时 aside / header 恢复实色（globals.css data-glass=off 规则）。
+- 验证：浏览器实测壁纸下顶栏/侧边栏 70% 透明 + blur(24px)；glass off 时实色 rgb(10,10,12) 无 blur；内容卡片照常显示在壁纸上。

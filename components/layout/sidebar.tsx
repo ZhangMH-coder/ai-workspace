@@ -51,7 +51,7 @@ export function Sidebar({
       {/* 桌面端：固定侧边栏，支持折叠 */}
       <aside
         className={cn(
-          "hidden shrink-0 flex-col border-r border-border bg-background transition-[width] duration-300 ease-out lg:flex",
+          "hidden shrink-0 flex-col border-r border-border bg-background/70 backdrop-blur-xl transition-[width] duration-300 ease-out lg:flex",
           collapsed ? "w-[76px]" : "w-[248px]",
         )}
       >

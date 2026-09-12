@@ -303,6 +303,14 @@ html[data-theme='light'] .border-white\/10 {
   border-color: rgba(0, 0, 0, 0.1);
 }
 
+/* 玻璃效果关闭时：侧边栏 / 顶栏恢复实色（S1.24） */
+html[data-glass='off'] aside,
+html[data-glass='off'] header {
+  background-color: var(--background);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
 
 /* ═══ 外观背景层（S1.24，复刻 GlassTodo 背景体系）═══
  * 背景层 fixed z-0，内容容器 relative z-10（见 workspace layout）。

@@ -35,7 +35,7 @@ export function TopBar({ onMenuClick, onCommandOpen }: TopBarProps) {
   const current = allNavItems.find((item) => isNavItemActive(item, pathname));
 
   return (
-    <header className="flex h-16 shrink-0 items-center justify-between gap-3 border-b border-border bg-background px-4 sm:px-6">
+    <header className="flex h-16 shrink-0 items-center justify-between gap-3 border-b border-border bg-background/70 px-4 backdrop-blur-xl sm:px-6">
       {/* 左侧：移动端菜单 + 工作区 + 当前页面 */}
       <div className="flex min-w-0 items-center gap-1.5">
         <Button

@@ -27,18 +27,25 @@ function getUsage(r: DiscoveredResource): string {
   return typeof u === "string" ? u.trim() : "";
 }
 
-/** 预设问题：优先真实 usage（触发方式），否则基于真实 description 转成任务指令 */
+/** 预设问题：基于真实 description 生成「帮我用「技能名」：目的」可提问指令；
+ *  英文/说明型描述回退为技能名模板；短 usage（如触发指令）兜底 */
 function presetQuestion(r: DiscoveredResource): string {
-  const usage = getUsage(r);
-  if (usage) return usage;
   const d = r.description?.trim();
+  let purpose = "";
   if (d) {
-    const cleaned = d
-      .replace(/^(用于|负责|面向|帮助|可以|能够|支持|为|给)[：:，,、\s]*/, "")
-      .replace(/^的/, "")
+    let first = d.split(/[。\n\r]/)[0].replace(/^[：:，,、\s]+/, "").trim();
+    first = first
+      .replace(/^(本技能|本 Skill|本skill|本工具|该工具|此技能|本文档|本文|本指南|本文是|本文件|这个|该|用于|负责|面向|帮助|可以|能够|支持|将|This guide|This skill|This is)/i, "")
+      .replace(/^[的、，,：:\s]+/, "")
       .trim();
-    if (cleaned) return `帮我${cleaned}`;
+    const latin = (first.match(/[a-zA-Z]/g) || []).length;
+    if (first.length > 0 && latin / Math.max(first.length, 1) < 0.4) {
+      purpose = first.length > 42 ? first.slice(0, 42) + "…" : first;
+    }
   }
+  if (purpose) return `帮我用「${r.name}」技能：${purpose}`;
+  const usage = getUsage(r);
+  if (usage && usage.length <= 60) return usage;
   return `帮我使用「${r.name}」技能完成相关任务`;
 }
 

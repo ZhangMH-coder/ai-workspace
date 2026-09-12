@@ -32,7 +32,7 @@ export default function WorkspaceLayout({
 
   return (
     <TooltipProvider delayDuration={400}>
-      <div className="flex h-svh overflow-hidden bg-background">
+      <div className="relative z-10 flex h-svh overflow-hidden">
         {/* 无障碍：键盘用户跳过导航直达主内容 */}
         <a
           href="#main-content"

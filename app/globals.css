@@ -302,3 +302,86 @@ html[data-theme='light'] .bg-white\/\[0\.0[0-9]\] {
 html[data-theme='light'] .border-white\/10 {
   border-color: rgba(0, 0, 0, 0.1);
 }
+
+
+/* ═══ 外观背景层（S1.24，复刻 GlassTodo 背景体系）═══
+ * 背景层 fixed z-0，内容容器 relative z-10（见 workspace layout）。
+ * 变量由 AppearanceLayer 写入：--bg-hue / --bg-sat / --bg-brightness / --glass-blur / --glass-frost。
+ */
+
+/* 流体渐变背景 */
+.app-bg-fluid {
+  background-size: 100% 100%;
+  animation: app-bg-drift 36s ease-in-out infinite alternate;
+}
+@keyframes app-bg-drift {
+  0% { transform: scale(1) translate(0, 0); }
+  100% { transform: scale(1.06) translate(-1.2%, 1%) rotate(0.3deg); }
+}
+
+/* 壁纸背景 */
+.app-bg-wallpaper img {
+  display: block;
+}
+.app-wp-tile {
+  background-repeat: repeat;
+  object-fit: unset;
+  background-size: auto;
+  background-position: center;
+}
+/* Ken Burns 缓慢推拉 */
+.app-wp-kb {
+  animation: app-wp-kb 24s ease-in-out infinite alternate;
+}
+@keyframes app-wp-kb {
+  0% { transform: scale(1) translate(0, 0); }
+  100% { transform: scale(1.08) translate(-1%, 1%); }
+}
+
+/* 玻璃效果：卡片毛玻璃（半透明卡片 + backdrop-blur） */
+html[data-glass='on'] [class*="bg-white/"] {
+  -webkit-backdrop-filter: blur(var(--glass-blur, 16px));
+  backdrop-filter: blur(var(--glass-blur, 16px));
+}
+html[data-glass='on'] [class*="bg-surface-"] {
+  -webkit-backdrop-filter: blur(var(--glass-blur, 16px));
+  backdrop-filter: blur(var(--glass-blur, 16px));
+}
+
+/* 减少动效：关闭背景漂移 / Ken Burns / CSS 动画过渡 */
+html[data-motion='reduced'] .app-bg-fluid,
+html[data-motion='reduced'] .app-wp-kb {
+  animation: none !important;
+}
+html[data-motion='reduced'] *,
+html[data-motion='reduced'] *::before,
+html[data-motion='reduced'] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}
+
+/* 滑块统一（range 在深色/浅色主题下均可见） */
+input[type='range'] {
+  accent-color: var(--brand, #8b5cf6);
+}
+input[type='range']::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 9999px;
+  background: var(--brand, #8b5cf6);
+  border: 2px solid rgba(255, 255, 255, 0.85);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+  cursor: pointer;
+}
+input[type='range']::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border-radius: 9999px;
+  background: var(--brand, #8b5cf6);
+  border: 2px solid rgba(255, 255, 255, 0.85);
+  cursor: pointer;
+}

@@ -1142,3 +1142,10 @@ Resource Discovery MVP —— 实现完成、全量验证通过、待审批（�
 - 机制：html[data-theme] 覆盖 globals.css 的 .dark token 值（主题=换 token）；layout 内联脚本 hydration 前从 localStorage('aiw-theme') 恢复防闪烁；localStorage 仅存 UI 偏好。
 - 浅色主题下对 187 处 border-white/bg-white 硬编码做全局补偿 CSS（半透明黑），避免完全隐形。
 - 验证：lint ✅ / tsc ✅ / build ✅；生产重启 HTTP 200；构建 CSS 确认含 data-theme=warm/cool/light 规则。
+
+### S1.24 外观体系完整化（2026-09-12，复刻 GlassTodo 外观/背景）
+- 设置页「外观」拆为两组：外观（主题四套 + 玻璃效果 + 减少动效）+ 背景（纯色/流体/壁纸、多图壁纸 IndexedDB 存储、显示方式/位置九宫格、Ken Burns、多图轮播、壁纸透明度、色调/颜色深浅/背景亮度/玻璃模糊度/磨砂度 滑块）。
+- 新增 useAppearance（Zustand persist，localStorage 仅存 UI 偏好）+ AppearanceLayer（应用 data-theme/data-bg/data-glass/data-motion + CSS 变量，渲染流体/壁纸/雾化背景层）+ lib/wallpaper-db.ts（IndexedDB 存压缩壁纸，canvas 最长边 1600/JPEG 0.85）。
+- workspace 布局内容容器 relative z-10 透明化，背景层 fixed z-0 透出；流体渐变复用 GlassTodo 的 hsl(--bg-hue) 多层 radial+linear 公式。
+- 防闪脚本改读 aiw-appearance（兼容旧 aiw-theme）。
+- 验证：lint/tsc/build ✅；浏览器实测：流体渐变生效、色调滑块联动、壁纸真实图片渲染为全站背景、IndexedDB 持久化、硬导航主题恢复、外观/背景全控件渲染。

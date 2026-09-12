@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
+import { AppearanceLayer } from "@/components/app/appearance-layer";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -22,10 +23,11 @@ export default function RootLayout({
         {/* 主题防闪烁：hydration 前从 localStorage 恢复 data-theme（仅 UI 偏好） */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `try{var t=localStorage.getItem("aiw-theme");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}`,
+            __html: `try{var a=JSON.parse(localStorage.getItem("aiw-appearance")||"null");var t=(a&&a.state&&a.state.theme)||localStorage.getItem("aiw-theme");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}`,
           }}
         />
         {children}
+        <AppearanceLayer />
       </body>
     </html>
   );

@@ -34,7 +34,7 @@ import {
 import { discoverStaticConfig, isLLMConfigured, maskKey, DEFAULT_BASE_URL, DEFAULT_MODEL } from "@/lib/ai/config";
 import { llmUnderstandTask } from "@/lib/ai/task-understand";
 import { interpretResourceText } from "@/lib/ai/interpret-resource";
-import { chatCompletion } from "@/lib/ai/client";
+import { chatCompletion, listModels } from "@/lib/ai/client";
 import type { LLMConfig } from "@/lib/ai/config";
 import { randomUUID as uuid } from "node:crypto";
 import { heuristicPlanner, PLANNER_VERSION } from "@/lib/task-planning";
@@ -1178,6 +1178,8 @@ export interface TestLLMResult {
   model: string;
   source: LLMConfigSource;
   error?: string;
+  /** 连接成功后顺带拉取的端点可用模型列表；端点不支持 /models 或失败时为 null */
+  models?: string[] | null;
 }
 
 /** 测试连接：用当前生效配置真实调用一次 LLM（短消息），返回延迟与结果 */
@@ -1206,11 +1208,13 @@ export async function testLLMProviderConfig(): Promise<TestLLMResult> {
       },
       effective.config
     );
+    const models = await listModels(effective.config);
     return {
       ok: true,
       latencyMs: Date.now() - started,
       model: res.model,
       source: effective.source,
+      models,
     };
   } catch (e) {
     return {

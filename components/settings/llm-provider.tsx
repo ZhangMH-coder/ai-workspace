@@ -43,6 +43,48 @@ const OFFICIAL_ENDPOINTS = [
   { key: "zhipu", name: "智谱", baseUrl: "https://open.bigmodel.cn/api/paas/v4" },
 ];
 
+/** 测试连接成功后：可用模型选择（端点返回 /models 时展示；否则提示手动输入） */
+function ModelPicker({
+  models,
+  currentModel,
+  onPick,
+}: {
+  models: string[] | null;
+  currentModel: string;
+  onPick: (model: string) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-1.5 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2.5">
+      <p className="text-[11px] font-medium text-ink-2">
+        可用模型（点击选择，自动填入上方 Model 输入框）
+      </p>
+      {models && models.length > 0 ? (
+        <div className="flex max-h-[150px] flex-wrap gap-1.5 overflow-y-auto">
+          {models.map((m) => (
+            <button
+              key={m}
+              type="button"
+              onClick={() => onPick(m)}
+              className={`h-6 rounded-md border px-2 font-mono text-[11px] transition-colors ${
+                currentModel.trim() === m
+                  ? "border-primary/40 bg-primary/10 text-primary"
+                  : "border-white/10 bg-white/[0.03] text-ink-2 hover:border-white/25 hover:text-ink"
+              }`}
+              title={`选择 ${m}`}
+            >
+              {m}
+            </button>
+          ))}
+        </div>
+      ) : (
+        <p className="text-[11px] text-ink-3">
+          该端点未返回模型列表（可能不支持 /models），可直接在上方 Model 输入框手动填写。
+        </p>
+      )}
+    </div>
+  );
+}
+
 function SourceBadge({ source }: { source: string }) {
   const color =
     source === "manual"
@@ -335,17 +377,29 @@ export function LlmProvider() {
         {/* 提示 / 测试结果 / 错误 */}
         {savedTip && <p className="text-[12px] text-emerald-300">{savedTip}</p>}
         {testResult && (
-          <p
-            className={`rounded-lg border px-3 py-2 text-[12px] ${
-              testResult.ok
-                ? "border-emerald-400/20 bg-emerald-500/5 text-emerald-300"
-                : "border-red-400/20 bg-red-500/5 text-red-300"
-            }`}
-          >
-            {testResult.ok
-              ? `连接成功 · ${testResult.latencyMs}ms · ${testResult.model}`
-              : `连接失败：${testResult.error ?? "未知错误"}`}
-          </p>
+          <div className="flex flex-col gap-2">
+            <p
+              className={`rounded-lg border px-3 py-2 text-[12px] ${
+                testResult.ok
+                  ? "border-emerald-400/20 bg-emerald-500/5 text-emerald-300"
+                  : "border-red-400/20 bg-red-500/5 text-red-300"
+              }`}
+            >
+              {testResult.ok
+                ? `连接成功 · ${testResult.latencyMs}ms · ${testResult.model}`
+                : `连接失败：${testResult.error ?? "未知错误"}`}
+            </p>
+            {testResult.ok && (
+              <ModelPicker
+                models={testResult.models ?? null}
+                currentModel={model}
+                onPick={(m) => {
+                  setModel(m);
+                  setSavedTip(`已选择模型：${m}`);
+                }}
+              />
+            )}
+          </div>
         )}
         {error && !testResult && (
           <p className="rounded-lg border border-red-400/20 bg-red-500/5 px-3 py-2 text-[12px] text-red-300">

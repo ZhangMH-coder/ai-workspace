@@ -24,6 +24,56 @@ export interface ChatResult {
   model: string;
 }
 
+export interface ModelInfo {
+  id: string;
+  ownedBy?: string;
+}
+
+/** 非对话模型关键词（拉取模型列表时过滤，避免把 embedding/图片/语音模型塞进选择器） */
+const NON_CHAT_MODEL_HINTS = [
+  "embedding",
+  "image",
+  "audio",
+  "tts",
+  "realtime",
+  "whisper",
+  "moderation",
+  "dall-e",
+];
+
+/**
+ * 拉取端点可用模型列表（OpenAI 兼容 GET /models）。
+ * 失败返回 null（不抛错）：模型列表拉取失败不应破坏连接测试结果，前端可提示手动输入。
+ */
+export async function listModels(
+  config: LLMConfig,
+  timeoutMs = 8_000
+): Promise<string[] | null> {
+  if (!config.apiKey.trim() || !config.baseUrl.trim()) return null;
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const res = await fetch(`${config.baseUrl.replace(/\/+$/, "")}/models`, {
+      method: "GET",
+      headers: { Authorization: `Bearer ${config.apiKey.trim()}` },
+      signal: controller.signal,
+    });
+    if (!res.ok) return null;
+    const j = (await res.json()) as { data?: { id?: string; owned_by?: string }[] };
+    const ids = (j?.data ?? [])
+      .map((m) => m?.id)
+      .filter((id): id is string => typeof id === "string" && id.trim().length > 0)
+      .filter((id) => !NON_CHAT_MODEL_HINTS.some((h) => id.toLowerCase().includes(h)));
+    return ids.length > 0 ? ids : null;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export async function chatCompletion(
   opts: ChatOptions,
   config: LLMConfig

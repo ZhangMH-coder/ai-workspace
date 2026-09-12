@@ -33,6 +33,8 @@ export interface TestLLMResultDTO {
   model: string;
   source: LlmConfigSource;
   error?: string;
+  /** 端点可用模型列表（连接成功后顺带拉取；失败为 null） */
+  models?: string[] | null;
 }
 
 export const fetchLLMProviderConfig = () =>

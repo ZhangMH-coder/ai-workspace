@@ -1170,3 +1170,9 @@ Resource Discovery MVP —— 实现完成、全量验证通过、待审批（�
 - 壁纸亮色对比度：实测 70% 底色 + blur 下标题/按钮/文字清晰可读，机制有效无需改动。
 - 移动端巡检：resources / settings / dashboard 窄屏（634px）均正常渲染，无布局破坏。
 - 验证：lint / tsc / build ✅；生产重启 HTTP 200 ✅；浏览器实测顶栏刷新按钮渲染、亮壁纸可读、settings Provider 端点按钮渲染 ✅。
+
+### S1.27 可用模型列表（2026-09-12，用户需求：测试连接后刷新可用模型并可选择）
+- lib/ai/client.ts 新增 listModels()：OpenAI 兼容 GET /models，Bearer 鉴权，过滤非对话模型（embedding/image/tts 等），失败返回 null 不抛错。
+- 连接测试接口扩展：测试成功后顺带拉取端点模型列表，TestLLMResult / TestLLMResultDTO 增加 models?: string[] | null。
+- Settings AI Provider：测试连接成功后显示「可用模型」选择区（点击模型自动填入 Model 输入框 + 提示已选择）；端点不支持 /models 时提示手动输入。
+- 验证：真实 Hermes tokenrhythm 端点测试 ok=true，拉取 19 个模型（glm-5.1 / minimax-m2.7 / kimi-k2.6 / qwen3.7-max 等）；浏览器实测「测试连接」→ 连接成功 1595ms → 可用模型列表渲染；lint / tsc / build ✅。

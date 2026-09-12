@@ -1274,3 +1274,15 @@ Authentication / Multi-user / Permissions / 真实 LLM Provider Adapter（OpenAI
 - 实测：态A「写一篇小红书文案」→4 技能卡带预置问题；态B「帮我预约明天下午的牙医」→automation-assistant 建议+创建提示词+SKILL.md 草案展开正常；不创建文件、不调外部 Harness、不接真实 LLM。
 - 验证：lint ✅ / tsc ✅ / build ✅ / API 200 ✅ / 生产浏览器三态实测 ✅。
 
+
+### S1.38 其他 Harness 能力描述完善化 + 噪声清除（用户提出「推荐全是豆包技能」）
+- 背景：Task Intelligence 推荐几乎全来自 doubao-skills。数据核查：Hermes 实际被扫描（140 资源、548 能力标签）但排不上榜——根因是能力描述质量不均（部分 frontmatter 描述短/缺失）且章节标题噪声混入（"1. Confirm format (optional)"、"WeChat .silk voice messages (Windows)"），中文任务词命中吃亏。
+- 分析器增强（lib/analysis/heuristic.ts，id heuristic-v1 → v3）：
+  - 主能力描述兜底：description 为空/无意义/过短（<15 语义字符）时，从 SKILL.md 正文预览提取首个有意义段落（中文段优先），产出完整中文描述；
+  - 完整的中文短描述（如「音频转文字:把语音消息和音频文件转写成文本」）不再判弱、予以保留（避免被英文正文覆盖）；
+  - 标题噪声过滤：序号开头（"1. "、"0. "）、文件扩展名（.silk/.md/.json）、路径分隔符标题一律跳过；
+  - 全部 harness 同一套规则公平重索引（fingerprint 幂等，v3 全量重跑：252 处理 / 250 成功 / 2 失败）。
+- 实际效果：序号开头噪声标签归零；Hermes 能力描述与豆包同标准（如「Apple 备忘录(仅苹果电脑):通过 memo 命令创建、搜索、编辑备忘录」）；doubao 关键技能描述零回归；capability 总数 970 → 963（噪声清除所致）。
+- 验证：lint ✅ / tsc ✅ / build ✅ / API 200 ✅ / 索引质量核查 ✅ / doubao 回归 ✅。
+- 已知问题：Hermes 的 audio-transcription 等技能在中文任务下仍可能排不进前列——评分以中文词命中为主、模板词噪声仍存在、中英跨语言匹配是启发式天花板（待 LLM 语义匹配或后续评分调优）。
+

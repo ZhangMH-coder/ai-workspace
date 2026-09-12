@@ -154,17 +154,59 @@ function truncate(text: string, max: number): string {
   return text.length > max ? text.slice(0, max - 1) + "…" : text;
 }
 
-/** 从 description 提取主能力（frontmatter 或扫描器摘要，证据 #description） */
+/**
+ * 从正文预览提取「首个有意义段落」作为主能力描述兜底
+ * （description 缺失或过短时使用，产出与豆包同级别的完整描述）。
+ * bodyPreview 已压缩空白（换行→空格），按句子标点分段；
+ * 去掉标题残留（#）、列表符号等噪声前缀。
+ * 优先中文段落（Hermes 等正文常为英文，中文描述比英文更利于索引匹配）。
+ */
+function extractFirstMeaningfulParagraph(body: string, minLen = 20): string {
+  const parts = body
+    .split(/[。！？!?；;]\s*/)
+    .map((s) => s.replace(/^[#>\-*0-9.\s]+/, "").trim())
+    .filter((s) => s.length >= minLen);
+  if (parts.length === 0) return "";
+  const zh = parts.find((s) => /[\u4e00-\u9fa5]/.test(s));
+  const first = zh ?? parts[0];
+  return truncate(first.replace(/\s+/g, " ").trim(), 120);
+}
+
+/** 语义长度（去符号后） */
+function semanticLength(text: string): number {
+  return text.replace(/[\s>|\-_#*`"'()（）\[\]【】:：,，.。]/g, "").length;
+}
+
+/**
+ * 主描述不完善的判定：空 / 无意义 / 过短（<15 语义字符）。
+ * 完整的中文短描述（如 Hermes「音频转文字:把语音消息…」）不算弱，予以保留。
+ */
+function isWeakDescription(desc: string): boolean {
+  return !desc || !isMeaningfulText(desc) || semanticLength(desc) < 15;
+}
+
+/** 从 description 提取主能力；描述不完善时用正文首段兜底（证据 #description / #body-preview） */
 function capabilityFromDescription(input: AnalysisInput): CapabilityResult | null {
   const desc = (input.resource.description || "").trim();
-  if (!desc || !isMeaningfulText(desc)) return null;
-  const snippet = truncate(desc, 240);
+  let text = desc;
+  let evidenceRef = "SKILL.md#description";
+  let snippetSource = desc;
+  if (isWeakDescription(desc)) {
+    const bodyPara = extractFirstMeaningfulParagraph(input.document.bodyPreview);
+    if (bodyPara) {
+      text = bodyPara;
+      evidenceRef = "SKILL.md#body-preview";
+      snippetSource = bodyPara;
+    }
+  }
+  if (!text || !isMeaningfulText(text)) return null;
+  const snippet = truncate(snippetSource.replace(/\s+/g, " ").trim(), 240);
   return {
-    capability: truncate(desc.replace(/\s+/g, " ").trim(), 120),
-    category: classifyCategory(desc),
-    keywords: extractKeywords(desc),
+    capability: truncate(text.replace(/\s+/g, " ").trim(), 120),
+    category: classifyCategory(text),
+    keywords: extractKeywords(text),
     confidence: 0.72,
-    evidenceRef: "SKILL.md#description",
+    evidenceRef,
     evidenceSnippet: snippet,
     executionHint: makeExecutionHint(input.resource.type, input.resource.name),
   };
@@ -172,6 +214,14 @@ function capabilityFromDescription(input: AnalysisInput): CapabilityResult | nul
 
 /** 否定 / 边界 / 限制类标题（不是能力，跳过） */
 const NEGATIVE_HEADING = /(不适用|边界|注意|禁止|不要|勿|风险|限制|回退|fallback|constraint|warning|limitations?)/i;
+
+/**
+ * 标题噪声过滤：
+ * - 序号开头（"1. Confirm format" / "0. 定位"）→ 步骤/小节标题，不是能力
+ * - 文件扩展名（.silk / .md / .json 等）→ 文件名噪声
+ * - 含路径分隔符 / Windows 路径 → 文件名噪声
+ */
+const NOISE_HEADING = /^\d+[.、．)）]|[.]\s*(silk|md|markdown|json|toml|yaml|yml|txt|py|js|ts)\b|[\\/][A-Za-z0-9_ .-]+[\\/]|[A-Za-z]:\\/i;
 
 /** 从正文标题提取补充能力（章节有动作/主题语义时，证据 #heading） */
 function capabilitiesFromHeadings(input: AnalysisInput): CapabilityResult[] {
@@ -181,6 +231,7 @@ function capabilitiesFromHeadings(input: AnalysisInput): CapabilityResult[] {
     if (!clean || GENERIC_HEADINGS.has(clean)) continue;
     if (clean.length < 2 || clean.length > 40) continue;
     if (NEGATIVE_HEADING.test(clean)) continue;
+    if (NOISE_HEADING.test(clean)) continue;
     const category = classifyCategory(clean);
     out.push({
       capability: truncate(clean, 60),
@@ -215,7 +266,7 @@ function capabilityFromType(input: AnalysisInput): CapabilityResult[] {
 }
 
 export const heuristicAnalyzer: AnalysisProvider = {
-  id: "heuristic-v1",
+  id: "heuristic-v3",
   strategy: "heuristic",
   analyze(input: AnalysisInput): AnalysisOutcome {
     const capabilities: CapabilityResult[] = [];

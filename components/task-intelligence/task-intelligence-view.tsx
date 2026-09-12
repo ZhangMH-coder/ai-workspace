@@ -7,19 +7,19 @@
  * 低相关任务如实展示空态；Mock 模式不伪造分析结果。
  */
 "use client";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
-import { ArrowRight, BrainCircuit, Loader2, Sparkles, Workflow } from "lucide-react";
+import { BrainCircuit, Loader2, Sparkles, Workflow } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
 import { useWorkspaceStore } from "@/stores/workspace";
 import { taskTypeLabel, type Recommendation, type RecommendationPlan } from "@/lib/task-intelligence";
 import { capabilityCategoryLabel } from "@/lib/types";
 import { PlanSection } from "./plan-section";
+import { SkillSuggestions } from "./skill-suggestions";
 
 const SAMPLE_TASKS = ["写一篇小红书文案", "帮我做一份数据周报并整理成表格", "总结一下这份会议纪要"];
 
@@ -159,60 +159,11 @@ function PlanResult({ plan }: { plan: RecommendationPlan }) {
   );
 }
 
-function HistoryList() {
-  const history = useWorkspaceStore((s) => s.taskIntelligence.history);
-  const fetchHistory = useWorkspaceStore((s) => s.fetchTaskAnalysisHistory);
-  const loading = useWorkspaceStore((s) => s.taskIntelligence.loading);
-
-  useEffect(() => {
-    void fetchHistory();
-  }, [fetchHistory]);
-
-  if (loading && history.length === 0) {
-    return <Skeleton className="h-24 w-full rounded-xl bg-white/[0.04]" />;
-  }
-  if (history.length === 0) {
-    return (
-      <div className="rounded-xl border border-dashed border-white/[0.1] px-4 py-6 text-center text-[12px] text-ink-3">
-        暂无任务分析历史
-      </div>
-    );
-  }
-  return (
-    <div className="flex flex-col gap-2">
-      {history.slice(0, 5).map((h) => (
-        <div
-          key={h.id}
-          className="flex flex-wrap items-center gap-2 rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-2"
-        >
-          <span className="text-[12px] text-ink-1">{h.task}</span>
-          <Badge variant="outline" className="text-[10px]">
-            {h.taskType ? taskTypeLabel(h.taskType as RecommendationPlan["taskType"]) : "—"}
-          </Badge>
-          <Badge
-            className={
-              h.status === "analyzed"
-                ? "bg-emerald-400/10 text-emerald-300"
-                : "bg-danger/10 text-danger"
-            }
-          >
-            {h.status}
-          </Badge>
-          <span className="ml-auto font-mono text-[10px] text-ink-3">
-            {h.createdAt.slice(0, 16).replace("T", " ")}
-          </span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 export function TaskIntelligenceView() {
   const current = useWorkspaceStore((s) => s.taskIntelligence.current);
   const analyzing = useWorkspaceStore((s) => s.taskIntelligence.analyzing);
   const error = useWorkspaceStore((s) => s.taskIntelligence.error);
   const analyzeTask = useWorkspaceStore((s) => s.analyzeTask);
-  const fetchHistory = useWorkspaceStore((s) => s.fetchTaskAnalysisHistory);
   const [task, setTask] = useState("");
 
   async function handleAnalyze(e: React.FormEvent) {
@@ -222,7 +173,6 @@ export function TaskIntelligenceView() {
     try {
       await analyzeTask(t);
       toast.success("任务分析完成");
-      void fetchHistory();
     } catch (err) {
       toast.error((err as Error).message || "任务分析失败");
     }
@@ -283,18 +233,8 @@ export function TaskIntelligenceView() {
       {/* 结果 */}
       {current ? <PlanResult plan={current} /> : null}
 
-      {/* 历史 */}
-      <Card className="border-white/[0.08] bg-white/[0.02]">
-        <CardHeader className="pb-2 pt-4">
-          <CardTitle className="flex items-center gap-2 text-[13px] font-medium text-ink-1">
-            最近分析
-            <ArrowRight className="size-3 text-ink-3" />
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-4 pt-1">
-          <HistoryList />
-        </CardContent>
-      </Card>
+      {/* 技能使用建议（S1.21：替换原「最近分析」） */}
+      <SkillSuggestions />
     </div>
   );
 }

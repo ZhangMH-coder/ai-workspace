@@ -1090,3 +1090,23 @@ Resource Discovery MVP —— 实现完成、全量验证通过、待审批（�
 
 ### 当前状态
 - 阶段完成；未越界；未修改原始 Harness 文件；Git：待提交
+
+---
+
+## S1.21 Task Intelligence 页「技能使用建议」替换「最近分析」（2026-09-12）
+
+### 已完成
+1. 新增 `components/task-intelligence/skill-suggestions.tsx`：从真实技能资源取数（`fetchDiscoveredResources({type:"skill", parseable:true, pageSize:30})`，实际 258 个真实技能），按 resourceId 去重（Set），优先挑选带 usage 元数据的技能，最多展示 6 条。
+2. 卡片交互：点击卡片跳转 `/resources/[id]` 查看真实来源；「复制使用方式」按钮把 `【技能名】使用方式：<usage|description>` 复制到剪贴板，用户可粘贴到对应 Harness（如 Hermes）使用 —— 仅指引不执行，符合只读边界；复制后按钮临时变「已复制 ✓」。
+3. 状态齐备：loading（骨架加载文案）/ error（如实显示）/ 空态（暂无可用技能建议）。
+4. Task Intelligence 页：删除 HistoryList 组件与「最近分析」Card，替换为 `<SkillSuggestions />`；清理失效 import（useEffect/Skeleton/ArrowRight）与 handleAnalyze 中的 fetchHistory 调用；store 历史字段保留（persist 兼容，未清理属有意保留）。
+
+### 验证结果
+- lint ✅ 0 错误 / tsc ✅ / build ✅（14 条路由全过）
+- 生产服务重启后 /task-intelligence HTTP 200；SSR 含「技能使用建议」✅、不含「最近分析」✅
+- API 冒烟 ✅：type=skill&parseable=true 返回 total=258（真实数据），示例 5 条均带 usage 元数据
+- 浏览器自动化通道仍不可用（环境限制），页面交互以 API + SSR 覆盖
+- 原始 Harness 文件零修改
+
+### 当前状态
+- 阶段完成；未越界；Git 待提交（push 仍受代理未运行阻塞：commit 834878d / 331dfb0 待推送）

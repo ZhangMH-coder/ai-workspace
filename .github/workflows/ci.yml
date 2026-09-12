@@ -6,7 +6,7 @@ on:
 
 jobs:
   quality:
-    name: lint · tsc · db · build
+    name: lint · test · tsc · db · build
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -24,6 +24,10 @@ jobs:
 
       - name: Lint
         run: npm run lint
+
+      # 纯函数确定性逻辑回归（解析/检索/重排/计划校验/指纹）
+      - name: Unit tests (vitest)
+        run: npm test
 
       - name: TypeScript check
         run: npx tsc --noEmit

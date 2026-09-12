@@ -1298,3 +1298,13 @@ Authentication / Multi-user / Permissions / 真实 LLM Provider Adapter（OpenAI
 - 验证：lint ✅ / tsc ✅ / build ✅；生产实测 POST /api/v1/resource-discovery/scan → scanRun completed、252 资源、7 harnesses、analysis {processed:2, skipped:250, analyzed:0, failed:2}（S1.38 已全量跑过故多数跳过，符合幂等预期）；原始 Harness 文件零修改。
 - 已知问题：无新增；既有 2 个不可解析资源（failed=2）为历史已知。
 
+
+### S1.40 扫描自动索引状态展示（资源页 + 能力索引页）
+- 背景：S1.39 后「扫描即自动索引」已闭环，但刷新后没有持久可见的索引统计入口。
+- 修改：
+  - 资源页统计条新增「能力标签」卡：显示真实能力标签数（963）+ 上次自动索引时间（lastRunAt，来自 SQLite 聚合，刷新不丢），hint「扫描即自动索引」；
+  - 能力索引页「分析器版本」卡新增 hint：上次分析时间 + 「扫描即自动索引」说明；
+  - 全链路复用既有 getAnalysisStatus → AnalysisStatusDTO → toAnalysisStatusSummary（无新增 API / 表 / 字段）。
+- 验证：lint ✅ / tsc ✅ / build ✅；生产实测 GET /api/v1/resource-analysis/status → {totalResources:252, analyzed:250, failed:2, capabilityCount:963, lastRunAt:…, analyzerVersion:heuristic-v3}；resources 页 200 ✅。
+- 已知问题：无新增。
+

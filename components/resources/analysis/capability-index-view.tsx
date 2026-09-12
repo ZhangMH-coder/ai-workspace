@@ -79,7 +79,16 @@ export function CapabilityIndexView() {
           <Stat label="已分析" value={status?.analyzed ?? 0} tone="ok" />
           <Stat label="失败" value={status?.failed ?? 0} tone={status?.failed ? "bad" : undefined} />
           <Stat label="能力标签" value={status?.capabilityCount ?? 0} />
-          <Stat label="分析器版本" value={status?.analyzerVersion ?? "—"} small />
+          <Stat
+            label="分析器版本"
+            value={status?.analyzerVersion ?? "—"}
+            small
+            hint={
+              status?.lastRunAt
+                ? `上次分析 ${formatAgo(status.lastRunAt)}（扫描即自动索引）`
+                : "尚未运行（扫描时自动索引）"
+            }
+          />
         </div>
         <Button onClick={handleRun} disabled={running} className="h-8 gap-1.5 text-[12px]">
           <Sparkles className="size-3.5" />
@@ -167,11 +176,13 @@ function Stat({
   value,
   tone,
   small,
+  hint,
 }: {
   label: string;
   value: number | string;
   tone?: "ok" | "bad";
   small?: boolean;
+  hint?: string;
 }) {
   const color =
     tone === "ok" ? "text-success" : tone === "bad" ? "text-danger" : "text-ink";
@@ -181,8 +192,17 @@ function Stat({
       <p className={`${small ? "text-[15px]" : "text-[22px]"} font-semibold leading-none tracking-tight ${color}`}>
         {value}
       </p>
+      {hint ? <p className="text-[10px] leading-snug text-ink-3">{hint}</p> : null}
     </div>
   );
+}
+
+function formatAgo(iso: string): string {
+  const ms = Date.now() - new Date(iso).getTime();
+  if (ms < 60_000) return "刚刚";
+  if (ms < 3_600_000) return `${Math.floor(ms / 60_000)} 分钟前`;
+  if (ms < 86_400_000) return `${Math.floor(ms / 3_600_000)} 小时前`;
+  return new Date(iso).toLocaleString();
 }
 
 function CategorySection({ entry }: { entry: CapabilityIndexEntry }) {

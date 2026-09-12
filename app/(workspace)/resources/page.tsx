@@ -33,6 +33,8 @@ export default function ResourcesPage() {
   const error = useWorkspaceStore((s) => s.discovery.error);
   const fetchOverview = useWorkspaceStore((s) => s.fetchDiscoveryOverview);
   const runScan = useWorkspaceStore((s) => s.runResourceScan);
+  const analysisStatus = useWorkspaceStore((s) => s.analysis.status);
+  const fetchAnalysisStatus = useWorkspaceStore((s) => s.fetchAnalysisStatus);
   const [view, setView] = useState<"list" | "category">("list");
   const [initialHarness] = useState<string | undefined>(() => {
     if (typeof window === "undefined") return undefined;
@@ -40,8 +42,11 @@ export default function ResourcesPage() {
   });
 
   useEffect(() => {
-    void hydrate().then(() => fetchOverview());
-  }, [hydrate, fetchOverview]);
+    void hydrate().then(() => {
+      void fetchOverview();
+      void fetchAnalysisStatus();
+    });
+  }, [hydrate, fetchOverview, fetchAnalysisStatus]);
 
   // 顶栏重新扫描按钮联动：dispatch aiw:rescan 后重拉概览
   useEffect(() => {
@@ -117,7 +122,7 @@ export default function ResourcesPage() {
       ) : (
         <div className="flex flex-col gap-5">
           {/* 统计条 */}
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
             <StatCard
               label="已索引资源"
               value={String(total)}
@@ -139,6 +144,15 @@ export default function ResourcesPage() {
               label="本次覆盖位置"
               value={String(scanRun.locations.length)}
               hint="候选根 + Harness 命中"
+            />
+            <StatCard
+              label="能力标签"
+              value={String(analysisStatus?.capabilityCount ?? 0)}
+              hint={
+                analysisStatus?.lastRunAt
+                  ? `扫描即自动索引 · 上次 ${formatAgo(analysisStatus.lastRunAt)}`
+                  : "扫描时自动索引（无演示数据）"
+              }
             />
           </div>
 

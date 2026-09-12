@@ -1266,3 +1266,11 @@ Authentication / Multi-user / Permissions / 真实 LLM Provider Adapter（OpenAI
 - 实际效果（API + 浏览器实测「写一篇小红书文案」）：电商选品/seed-audio 等不相关项被淘汰；小红书图文笔记技能 doubao-newmedia-writing 升至 #2（0.9 分）；推荐从 8 项灌水收敛为 4 项高质量。数据周报→表格类第一、会议纪要→会议类第一，验证通用性。
 - 验证：lint ✅ / tsc ✅ / build ✅ / API 200 ✅ / 生产浏览器实测 ✅。
 
+
+### S1.37 Task Intelligence 推翻重设计（用户定三点 → 三态可决策出口）
+- 定位变更：从「任务→拆解→能力需求→推荐」的分析报告，改为「任务 → 三个可决策出口」——有技能→复制预置问题去用；无技能→建议设计什么技能+创建提示词+直接生成按钮（仅文案，由用户决定是否创建）；只识别不执行。
+- 新增模块（lib/task-intelligence/）：matcher.ts（三态判定，阈值 0.55/0.35 按真实数据标定）、preset-questions.ts（每技能 2~3 个嵌入用户任务的预置问题：直接执行/完整产出/按场景优化）、skill-proposal.ts（无匹配时的技能创建建议：建议名/描述/触发场景/工作流/自由度 + 创建提示词 + SKILL.md 草案，参考豆包 skill-creator-for-work 结构，确定性模板版不接 LLM）。
+- 重构 components/task-intelligence/task-intelligence-view.tsx 结果区：态A 技能卡（预置问题选择+复制+复制来源路径+折叠证据）、态B 技能建议区块（创建提示词可复制+「直接生成完整方案」展开 SKILL.md 草案）、态C 边缘匹配提示；旧版拆解/证据/任务计划折叠进「查看分析详情」。
+- 实测：态A「写一篇小红书文案」→4 技能卡带预置问题；态B「帮我预约明天下午的牙医」→automation-assistant 建议+创建提示词+SKILL.md 草案展开正常；不创建文件、不调外部 Harness、不接真实 LLM。
+- 验证：lint ✅ / tsc ✅ / build ✅ / API 200 ✅ / 生产浏览器三态实测 ✅。
+

@@ -33,6 +33,11 @@ export async function fetchResourceDetail(): Promise<DiscoveredResource> {
   throw new ApiError(404, { code: "NOT_FOUND", message: "Mock 模式无资源可展示" });
 }
 
+/** 相关资源推荐（Mock：真实空态，不伪造相关关系） */
+export async function fetchRelatedResources(): Promise<{ items: never[] }> {
+  return { items: [] };
+}
+
 /* ---------------- 用户级资源隐藏（Mock：真实空态） ---------------- */
 
 export async function hideResource(): Promise<never> {

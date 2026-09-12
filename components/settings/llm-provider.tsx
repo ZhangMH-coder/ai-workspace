@@ -41,6 +41,10 @@ const OFFICIAL_ENDPOINTS = [
   { key: "anthropic", name: "Anthropic", baseUrl: "https://api.anthropic.com/v1", hint: "Anthropic 官方端点（chat 格式与 OpenAI 不同，建议经 OpenAI 兼容中转使用）" },
   { key: "moonshot", name: "Kimi", baseUrl: "https://api.moonshot.cn/v1", hint: "Moonshot Kimi 官方端点" },
   { key: "zhipu", name: "智谱", baseUrl: "https://open.bigmodel.cn/api/paas/v4", hint: "智谱 GLM 官方端点" },
+  { key: "qwen", name: "通义千问", baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1", hint: "阿里云百炼 DashScope（OpenAI 兼容模式）" },
+  { key: "openrouter", name: "OpenRouter", baseUrl: "https://openrouter.ai/api/v1", hint: "OpenRouter 聚合端点（需 OPENROUTER_API_KEY）" },
+  { key: "ollama", name: "Ollama", baseUrl: "http://localhost:11434/v1", hint: "本地 Ollama（无需 API Key，可填任意占位）" },
+  { key: "doubao", name: "豆包 Ark", baseUrl: "https://ark.cn-beijing.volces.com/api/v3", hint: "火山方舟豆包 Ark（OpenAI 兼容模式）" },
 ];
 
 /** 测试连接成功后：可用模型选择（端点返回 /models 时展示；否则提示手动输入） */

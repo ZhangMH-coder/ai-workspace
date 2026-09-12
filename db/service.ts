@@ -546,6 +546,45 @@ export function getDiscoveredResource(id: string): DiscoveredResource {
   return resourceToDomain(row);
 }
 
+/* ---------------- 相关资源推荐（真实派生，S1.28） ----------------
+ * 只读派生：共享 ResourceCapability 能力标签优先，其次同 Harness + 同类型；
+ * 不复制任何资源/分析数据；返回的每项均可继续溯源到真实 sourcePath。
+ */
+
+export interface RelatedResourceItem {
+  id: string;
+  name: string;
+  type: string;
+  harnessId: string;
+  sourcePath: string;
+  parseable: boolean;
+  /** 与目标资源共享的能力标签数（0 = 无共享能力，仅同类补充） */
+  sharedCapabilities: number;
+  /** 相关理由（真实信号，非推断） */
+  reason: string;
+}
+
+export function getRelatedResources(id: string): { items: RelatedResourceItem[] } {
+  const row = repo.getDiscoveredResource(id);
+  if (!row) throw new ServiceError("NOT_FOUND", "资源不存在");
+  const rows = repo.findRelatedResources(id, 8);
+  return {
+    items: rows.map((r) => ({
+      id: r.id,
+      name: r.name,
+      type: r.type ?? "unknown",
+      harnessId: r.harnessId ?? "",
+      sourcePath: r.sourcePath,
+      parseable: r.parseable,
+      sharedCapabilities: r.sharedCapabilities,
+      reason:
+        r.sharedCapabilities > 0
+          ? `共享 ${r.sharedCapabilities} 个能力标签`
+          : "同 Harness · 同类资源",
+    })),
+  };
+}
+
 /* ---------------- 用户级资源隐藏（展示排除，S1.12） ----------------
  * 语义：按 sourcePath 记录用户隐藏，列表展示过滤；原始文件零改动；
  * 重扫 upsert / 资源 ID 变化均不丢失隐藏状态；资源真实消失后隐藏记录无害残留。

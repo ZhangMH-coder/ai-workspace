@@ -1188,3 +1188,9 @@ Resource Discovery MVP —— 实现完成、全量验证通过、待审批（�
 - 候选 3 排查结论：LLM 增强链路正常（直测端点与系统路径均返回正确 JSON）。此前「任务内容为空，无法判断类型」为早期一次 LLM 异常输出被幂等复用所致；每次分析 LLM 覆盖会重新执行，复测「写一篇小红书文案」已返回 content_creation +「撰写小红书平台风格的推广文案。」✅ 无需改代码。
 - 候选 4 完成：resources 列表页监听 aiw:rescan 事件，顶栏重新扫描后自动重拉概览（与 Dashboard 同模式）。
 - Git push 根因修正：此前误用 -c http.proxy= 禁用了系统代理（git 全局代理 http://127.0.0.1:33210）导致直连失败；恢复默认代理后推送成功（aa517cf..4576f7f）。
+
+### S1.29 候选 2/3/4 执行（2026-09-12，用户「234执行」）
+候选 2（Vercel）挂起：本机无 ~/.vercel 登录态、无 vercel CLI，需用户注册 Vercel 并提供 token 才能部署。
+候选 3 完成 · 资源详情页「相关资源」推荐：GET /api/v1/resource-discovery/resources/[id]/related（真实派生，只读）——共享 ResourceCapability 能力标签优先（按共享数降序），其次同 Harness+同类型可解析资源；排除自身与用户隐藏资源；每项返回真实 reason（「共享 N 个能力标签」/「同 Harness · 同类资源」）。Repository 新增 findRelatedResources（JOIN capability 别名自关联 + 同类补充），service 新增 getRelatedResources，store 新增 relatedResources/relatedLoading + fetchRelatedResources，详情页新增 RelatedResources 区块（可点击溯源）。实测：能力最多资源（12 个标签）→ 8 条相关，shared=8/4/0 排序正确。
+候选 4 完成 · 官方端点预设补充：新增通义千问 DashScope、OpenRouter、本地 Ollama（无需 Key）、豆包 Ark 四个预设，全部 OpenAI 兼容格式 + 悬浮提示。
+- 验证：lint / tsc / build ✅；API related 实测 ✅（sandev-project-homepage 8 条同类、能力密集资源 8 条含共享排序）；浏览器实测详情页相关资源区块渲染 ✅；零 Demo 数据、原始 Harness 零修改 ✅。

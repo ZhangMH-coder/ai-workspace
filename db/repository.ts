@@ -611,6 +611,102 @@ export function listDistinctHarnessResources() {
     .all();
 }
 
+/* ---------------- 相关资源推荐（真实派生） ---------------- */
+
+export interface RelatedResourceRow {
+  id: string;
+  name: string;
+  type: string | null;
+  harnessId: string | null;
+  sourcePath: string;
+  parseable: boolean;
+  /** 与目标资源共享的能力标签数（>0 表示有实质相关） */
+  sharedCapabilities: number;
+}
+
+/**
+ * 查找与指定资源相关的资源：
+ * 1. 优先：共享 ResourceCapability 能力标签（按共享数降序）；
+ * 2. 补充：同 Harness + 同类型（可解析）资源。
+ * 排除自身与用户隐藏资源；返回真实 discovered_resource 行，不复制任何分析数据。
+ */
+export function findRelatedResources(resourceId: string, limit = 8): RelatedResourceRow[] {
+  const hiddenPaths = listHiddenSourcePaths();
+  const other = alias(resourceCapabilities, "other");
+
+  // 共享能力标签数（JOIN resource_capability.capability）
+  const sharedRows = db
+    .select({
+      resourceId: other.resourceId,
+      shared: count(),
+    })
+    .from(resourceCapabilities)
+    .innerJoin(other, eq(other.capability, resourceCapabilities.capability))
+    .where(
+      and(eq(resourceCapabilities.resourceId, resourceId), ne(other.resourceId, resourceId))
+    )
+    .groupBy(other.resourceId)
+    .orderBy(desc(count()))
+    .limit(limit)
+    .all();
+
+  const sharedById = new Map(sharedRows.map((r) => [r.resourceId, r.shared]));
+  const picked = sharedRows.map((r) => r.resourceId);
+  const known = new Set<string>(picked);
+
+  // 补充：同 Harness + 同类型（可解析、未被选中、未隐藏）
+  const current = db
+    .select({ harnessId: discoveredResources.harnessId, type: discoveredResources.type })
+    .from(discoveredResources)
+    .where(eq(discoveredResources.id, resourceId))
+    .get();
+
+  let extra: { id: string }[] = [];
+  if (current?.harnessId) {
+    extra = db
+      .select({ id: discoveredResources.id })
+      .from(discoveredResources)
+      .where(
+        and(
+          eq(discoveredResources.harnessId, current.harnessId),
+          eq(discoveredResources.type, current.type ?? ""),
+          eq(discoveredResources.parseable, true),
+          notInArray(discoveredResources.id, [...known])
+        )
+      )
+      .orderBy(asc(discoveredResources.name))
+      .limit(Math.max(0, limit - picked.length))
+      .all();
+  }
+
+  const ids = [...picked, ...extra.map((e) => e.id)];
+  if (ids.length === 0) return [];
+
+  const info = db
+    .select({
+      id: discoveredResources.id,
+      name: discoveredResources.name,
+      type: discoveredResources.type,
+      harnessId: discoveredResources.harnessId,
+      sourcePath: discoveredResources.sourcePath,
+      parseable: discoveredResources.parseable,
+    })
+    .from(discoveredResources)
+    .where(inArray(discoveredResources.id, ids))
+    .all();
+
+  const byId = new Map(info.map((r) => [r.id, r]));
+  const result: RelatedResourceRow[] = [];
+  for (const id of ids) {
+    const row = byId.get(id);
+    if (!row || hiddenPaths.has(row.sourcePath)) continue;
+    result.push({ ...row, sharedCapabilities: sharedById.get(id) ?? 0 });
+  }
+  // 稳定排序：共享数降序在前，其次按名称
+  result.sort((a, b) => b.sharedCapabilities - a.sharedCapabilities || a.name.localeCompare(b.name));
+  return result.slice(0, limit);
+}
+
 /* ---------------- Resource Intelligence（Phase 2） ----------------
  * 分析记录（历史保留）与能力标签 CRUD。
  * 唯一键：resourceId + inputFingerprint + analyzerVersion —— 同一输入同版本不重复生成。

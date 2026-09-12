@@ -48,6 +48,29 @@ export async function fetchResourceDetail(id: string): Promise<DiscoveredResourc
   return toDiscoveredResource(dto);
 }
 
+/* ---------------- 相关资源推荐（真实派生，S1.28） ---------------- */
+
+export interface RelatedResourceItem {
+  id: string;
+  name: string;
+  type: string;
+  harnessId: string;
+  sourcePath: string;
+  parseable: boolean;
+  /** 与目标资源共享的能力标签数（0 = 无共享能力，仅同类补充） */
+  sharedCapabilities: number;
+  /** 相关理由（真实信号，非推断） */
+  reason: string;
+}
+
+export async function fetchRelatedResources(
+  id: string
+): Promise<{ items: RelatedResourceItem[] }> {
+  return http.get<{ items: RelatedResourceItem[] }>(
+    `/resource-discovery/resources/${id}/related`
+  );
+}
+
 /* ---------------- 用户级资源隐藏（展示排除，S1.12） ---------------- */
 
 export interface HiddenResourceInfo {

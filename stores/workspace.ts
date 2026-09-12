@@ -56,6 +56,7 @@ import {
 import {
   fetchDiscoveryOverview as fetchDiscoveryOverviewService,
   fetchDiscoveredResources as fetchDiscoveredResourcesService,
+  fetchRelatedResources as fetchRelatedResourcesService,
   fetchResourceDetail as fetchResourceDetailService,
   hideResource as hideResourceService,
   runResourceScan as runResourceScanService,
@@ -78,7 +79,7 @@ import type {
   TimeRange,
   UpdateCapabilityInput,
 } from "@/lib/types";
-import type { ResourceListQuery } from "@/lib/api/resource-discovery";
+import type { ResourceListQuery, RelatedResourceItem } from "@/lib/api/resource-discovery";
 import type {
   AnalysisRunResult,
   AnalysisStatusSummary,
@@ -198,6 +199,8 @@ interface WorkspaceState {
     resources: DiscoveredResource[];
     resourcesTotal: number;
     resourceDetail: DiscoveredResource | null;
+    relatedResources: RelatedResourceItem[];
+    relatedLoading: boolean;
     loading: boolean;
     scanning: boolean;
     error: string | null;
@@ -207,6 +210,7 @@ interface WorkspaceState {
   runResourceScan: () => Promise<void>;
   fetchDiscoveredResources: (q?: ResourceListQuery) => Promise<void>;
   fetchResourceDetail: (id: string) => Promise<void>;
+  fetchRelatedResources: (id: string) => Promise<void>;
   /** 隐藏资源（展示排除，S1.12）：按 sourcePath 记录，列表刷新由调用方负责 */
   hideResource: (id: string) => Promise<void>;
   /** 恢复被隐藏的资源 */
@@ -270,6 +274,8 @@ export const useWorkspaceStore = create<WorkspaceState>()(
         resources: [],
         resourcesTotal: 0,
         resourceDetail: null,
+        relatedResources: [],
+        relatedLoading: false,
         loading: false,
         scanning: false,
         error: null,
@@ -359,6 +365,19 @@ export const useWorkspaceStore = create<WorkspaceState>()(
         } catch (e) {
           set((s) => ({
             discovery: { ...s.discovery, loading: false, error: (e as Error).message },
+          }));
+        }
+      },
+      fetchRelatedResources: async (id) => {
+        set((s) => ({ discovery: { ...s.discovery, relatedLoading: true } }));
+        try {
+          const { items } = await fetchRelatedResourcesService(id);
+          set((s) => ({
+            discovery: { ...s.discovery, relatedResources: items, relatedLoading: false },
+          }));
+        } catch {
+          set((s) => ({
+            discovery: { ...s.discovery, relatedResources: [], relatedLoading: false },
           }));
         }
       },

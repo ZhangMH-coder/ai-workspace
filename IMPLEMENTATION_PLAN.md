@@ -1154,3 +1154,9 @@ Resource Discovery MVP —— 实现完成、全量验证通过、待审批（�
 - 侧边栏 / 顶栏由不透明 bg-background 改为 bg-background/70 + backdrop-blur-xl：壁纸 / 流体背景可贯穿整个页面，不止内容区。
 - 「玻璃效果」开关语义扩展：关闭时 aside / header 恢复实色（globals.css data-glass=off 规则）。
 - 验证：浏览器实测壁纸下顶栏/侧边栏 70% 透明 + blur(24px)；glass off 时实色 rgb(10,10,12) 无 blur；内容卡片照常显示在壁纸上。
+
+### S1.25 全页面背景贯穿（2026-09-12，用户确认「整个页面都受背景影响」后实现）
+- bg-surface-1 大面积卡片（metric-card / agent-card / projects-overview / quick-actions / module-placeholder 等）玻璃开启时改为 72% 半透明 + blur(--glass-blur)，壁纸 / 流体贯穿到卡片层。
+- 移动端抽屉（SheetContent）改 bg-background/80 + backdrop-blur-2xl；命令面板 Command 改 bg-popover/90 + backdrop-blur-xl。
+- 玻璃效果关闭时所有卡片 / 抽屉恢复实色。
+- 验证：浏览器实测卡片 oklab(…/0.72) + blur(16px)；glass off 实色 rgb(16,16,20) 无 blur；壁纸整页渲染正常；lint/tsc/build ✅。

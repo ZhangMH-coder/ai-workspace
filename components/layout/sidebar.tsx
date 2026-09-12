@@ -63,7 +63,7 @@ export function Sidebar({
         <SheetContent
           side="left"
           showCloseButton={false}
-          className="w-[280px] gap-0 border-r bg-background p-0 sm:max-w-[280px]"
+          className="w-[280px] gap-0 border-r bg-background/80 p-0 backdrop-blur-2xl sm:max-w-[280px]"
         >
           <SheetTitle className="sr-only">导航菜单</SheetTitle>
           <SidebarContent collapsed={false} />

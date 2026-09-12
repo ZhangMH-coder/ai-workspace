@@ -311,6 +311,18 @@ html[data-glass='off'] header {
   backdrop-filter: none;
 }
 
+/* 玻璃效果开启时：大面积卡片（bg-surface-1）半透明毛玻璃，让壁纸/流体贯穿全页面（S1.25） */
+html[data-glass='on'] [class*="bg-surface-1"] {
+  background-color: color-mix(in oklab, var(--surface-1) 72%, transparent);
+  -webkit-backdrop-filter: blur(var(--glass-blur, 16px));
+  backdrop-filter: blur(var(--glass-blur, 16px));
+}
+html[data-glass='off'] [class*="bg-surface-1"] {
+  background-color: var(--surface-1);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
 
 /* ═══ 外观背景层（S1.24，复刻 GlassTodo 背景体系）═══
  * 背景层 fixed z-0，内容容器 relative z-10（见 workspace layout）。

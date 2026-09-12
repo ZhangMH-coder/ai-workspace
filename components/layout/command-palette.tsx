@@ -33,7 +33,7 @@ export function CommandPalette({
       title="命令面板"
       description="搜索并跳转到页面"
     >
-      <Command className="border-border/60">
+      <Command className="border-border/60 bg-popover/90 backdrop-blur-xl">
         <CommandInput placeholder="搜索页面、功能…" />
         <CommandList>
           <CommandEmpty>未找到相关结果</CommandEmpty>

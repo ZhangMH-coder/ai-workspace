@@ -106,7 +106,7 @@ export interface RecommendationPlan {
 }
 
 /** 分析器版本常量（与 registry 分离：任务分析有独立版本演进） */
-export const TASK_ANALYZER_VERSION = "task-heuristic-v1";
+export const TASK_ANALYZER_VERSION = "task-heuristic-v2";
 
 /** 任务类型元数据 */
 export const TASK_TYPE_OPTIONS: { id: TaskTypeId; label: string; category: CapabilityCategory }[] = [

@@ -37,8 +37,9 @@ function baseScoreFor(
   cap: RetrievableCapability,
   tokens: string[],
   /** 反向匹配基准：真实用户任务原文（非自造需求文本，避免模板词虚高） */
-  userTask: string
-): { score: number; hits: number; kwHits: number } {
+  userTask: string,
+  userTokens: string[]
+): { score: number; hits: number; kwHits: number; userHits: number } {
   const hay = [cap.capability, cap.keywords.join(" "), cap.evidenceSnippet]
     .join(" ")
     .toLowerCase();
@@ -46,11 +47,16 @@ function baseScoreFor(
   const kwHits = cap.keywords.filter(
     (k) => k.length >= 2 && userTask.toLowerCase().includes(k)
   ).length;
-  if (hits === 0 && kwHits === 0) return { score: 0, hits: 0, kwHits: 0 };
-  // 与现有匹配一致的融合：词法命中（0.65）+ 标签置信度（0.35）
-  const score =
-    Math.min(1, (Math.min(hits + kwHits, 5) / 5) * 0.65 + cap.confidence * 0.35);
-  return { score, hits, kwHits };
+  // 真实用户任务原文词在能力文本中的命中：最强相关性信号
+  const userHits = userTokens.filter((t) => t.length >= 2 && hay.includes(t)).length;
+  // 无任何真实用户信号（原文词命中 / 关键词反向命中）→ 视为不相关，直接淘汰，
+  // 防止模板通用词（撰写/生成/平台/内容…）把无关能力顶到前排。
+  if (userHits === 0 && kwHits === 0) return { score: 0, hits, kwHits, userHits };
+  // 相关性主导：用户原文词 0.7 + 模板语义词辅助 0.2 + 标签置信度微调 0.1
+  const lexical = Math.min(1, (userHits + kwHits) / 3);
+  const forward = Math.min(1, hits / 12);
+  const score = lexical * 0.7 + forward * 0.2 + cap.confidence * 0.1;
+  return { score, hits, kwHits, userHits };
 }
 
 /**
@@ -65,17 +71,23 @@ export function retrieveCapabilities(
   topN = 6,
   userTask?: string
 ): RetrievedItem[] {
-  // other 类型（未识别任务）：只依赖真实用户词的反向匹配（kwHits），
+  // other 类型（未识别任务）：只依赖真实用户词（userHits / kwHits），
   // 关闭正向语义词匹配，避免泛化词/3-gram 噪声产生虚高推荐。
   if (requirement.category === "other") {
     const reverseBase = userTask?.trim() || requirement.requirementText;
+    const userTokens = tokenizeTask(reverseBase);
     const items: RetrievedItem[] = [];
     for (const cap of capabilities) {
+      const hay = [cap.capability, cap.keywords.join(" "), cap.evidenceSnippet]
+        .join(" ")
+        .toLowerCase();
+      const userHits = userTokens.filter((t) => t.length >= 2 && hay.includes(t)).length;
       const kwHits = cap.keywords.filter(
         (k) => k.length >= 2 && reverseBase.toLowerCase().includes(k)
       ).length;
-      if (kwHits === 0) continue;
-      const score = Math.min(1, (Math.min(kwHits, 5) / 5) * 0.65 + cap.confidence * 0.35);
+      if (userHits === 0 && kwHits === 0) continue;
+      const score =
+        Math.min(1, (userHits + kwHits) / 3) * 0.8 + cap.confidence * 0.2;
       items.push({ capability: cap, baseScore: Math.round(score * 100) / 100 });
     }
     items.sort((a, b) => b.baseScore - a.baseScore);
@@ -86,9 +98,10 @@ export function retrieveCapabilities(
     `${requirement.requirementText} ${requirement.keywords.join(" ")}`
   );
   const reverseBase = userTask?.trim() || requirement.requirementText;
+  const userTokens = tokenizeTask(reverseBase);
   const items: RetrievedItem[] = [];
   for (const cap of capabilities) {
-    const { score } = baseScoreFor(cap, tokens, reverseBase);
+    const { score } = baseScoreFor(cap, tokens, reverseBase, userTokens);
     if (score === 0) continue;
     let final = score;
     // 类别加成（early return 已排除 other 需求）

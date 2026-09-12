@@ -1255,3 +1255,14 @@ Authentication / Multi-user / Permissions / 真实 LLM Provider Adapter（OpenAI
 - 修复：去掉所有 CSS transition，改为纯类切换（开 left-[14px] / 关 left-[2px]），滑块位置由 JS 实测正确（开 14px、关 2px、往返正常、无动画卡死）。
 - 验证：lint ✅ / tsc ✅ / build ✅ / 生产浏览器 DOM 实测 ✅；bu 自动化截图在该页面显示空白为渲染捕获环境问题（DOM 与 console 正常），不阻塞交付。
 
+
+### S1.36 任务推荐评分修复（用户指出「候选资源没推荐好」）
+- 根因：旧评分被「模板通用词 hits + 标签 confidence」主导——模板需求词（撰写/生成/平台/内容/创作…）对所有内容类技能几乎全命中，且命中 5 词即词法满分 0.65、confidence 权重 0.35 过重，导致不相关技能（电商选品、生成音频）与真正匹配技能同分挤入前排；用户任务原文词（小红书/文案）反向匹配全为 0。
+- 修复（lib/task-intelligence/retriever.ts）：
+  - 新增 userHits：真实用户任务原文词在能力文本中的命中，作为最强相关性信号；
+  - 新评分 = 用户原文词 0.7 + 模板语义词 0.2 + 置信度微调 0.1；无任何用户真实信号直接淘汰；
+  - other 分支同步改用用户词为主；
+  - TASK_ANALYZER_VERSION bump 至 v2，旧 fingerprint 缓存失效重算。
+- 实际效果（API + 浏览器实测「写一篇小红书文案」）：电商选品/seed-audio 等不相关项被淘汰；小红书图文笔记技能 doubao-newmedia-writing 升至 #2（0.9 分）；推荐从 8 项灌水收敛为 4 项高质量。数据周报→表格类第一、会议纪要→会议类第一，验证通用性。
+- 验证：lint ✅ / tsc ✅ / build ✅ / API 200 ✅ / 生产浏览器实测 ✅。
+

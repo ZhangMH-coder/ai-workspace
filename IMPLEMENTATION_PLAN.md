@@ -525,7 +525,7 @@ Authentication / Multi-user / Permissions / 真实 LLM Provider Adapter（OpenAI
 
 ## 当前阶段
 
-**S1.30 Agents 真实化（方案 B）+ Hermes 文案中性化** —— 实现完成、全量验证通过、待审批（不自动进入下一阶段）。
+**S1.31 Agent 运行真实输出展示** —— 实现完成、全量验证通过、待审批（不自动进入下一阶段）。
 
 ## 本次修改内容
 
@@ -1219,4 +1219,12 @@ Authentication / Multi-user / Permissions / 真实 LLM Provider Adapter（OpenAI
 - API：GET /ai/models 返回 19 个真实模型（glm-5.1 / deepseek-v4-flash-0731 等），configured=true ✅；真实运行闭环 succeeded（1715ms / 57 tokens；3113ms / 35 tokens，input/output tokens 真实落库，provider=llm）✅。
 - 浏览器实测：新建页 19 个模型 chips + 刷新按钮 ✅；创建「客户支持助手」→ 详情页指令输入框 → 真实运行 → 运行历史实时刷新（2 次 · 成功率 100% · 85 tokens · 真实耗时）✅；dashboard 全站 UI Hermes=0（/resources /settings /agents /projects /task-intelligence 全 0；dashboard 仅剩 3 处真实 SOUL/SKILL 文件原文）✅；控制台 0 错误 ✅。
 - 临时测试 Agent（PowerShell 编码乱码）已从 SQLite 清除；原始 Harness 文件零修改。
+
+
+### S1.31 Agent 运行真实输出展示（2026-09-12，用户「继续继续」→ 候选 1）
+- agent_run 表新增 output 列（migration 0008，ALTER TABLE ADD output text，可空兼容旧数据）；db/service runAgent 落库 result.output（真实 LLM 返回文本），mock/agents runAgent 同构透传；repository updateRun patch 支持 output。
+- DTO/mapper/AgentRun 类型链路补 output 字段（http 与 mock 双模式一致）。
+- Agent 详情页运行历史每行可点击展开（ChevronDown 旋转 + aria-expanded），展开显示完整输出（pre 等宽、max-h-64 滚动、长文本换行）；旧记录无输出时如实提示「S1.31 之前的旧记录」。
+- **修复验证环境根因**：此前多次「改代码后 API 无效果」为 3000 端口被旧 next start 进程（pid 15980）占用、新进程 EADDRINUSE 所致（kill 过滤未匹配 `"next" start` 带引号命令行）；本次精确按端口/pid 清理后新 build 生效。
+- 验证：lint 0/0 ✅ / tsc ✅ / build（清 .next 干净构建）✅；API 真实运行 3 次均 output 落库（如「您好，我是客户支持助手，随时为您高效解答问题。」36 tokens，provider=llm，input 22 / output 14）✅；tsx 直调源码确认链路（对照定位到旧进程）✅；浏览器实测展开 aria-expanded=true + 输出文本可见 ✅；原始 Harness 零修改 ✅。
 

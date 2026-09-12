@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { ArrowLeft, Bot, Loader2, Play, Plus } from "lucide-react";
+import { ArrowLeft, Bot, ChevronDown, Loader2, Play, Plus } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
@@ -44,6 +44,8 @@ export default function AgentDetailPage() {
   const [running, setRunning] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [runInput, setRunInput] = useState("");
+  // S1.31：运行历史展开查看真实输出
+  const [expandedRunId, setExpandedRunId] = useState<string | null>(null);
 
   useEffect(() => {
     void hydrate();
@@ -159,21 +161,44 @@ export default function AgentDetailPage() {
             </div>
           ) : (
             <div className="flex flex-col">
-              {ownRuns.slice(0, 12).map((run) => (
-                <div
-                  key={run.id}
-                  className="flex items-start gap-3 border-b border-border/70 px-5 py-3.5 last:border-b-0"
-                >
-                  <RunBadge status={run.status} />
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-[13px] text-ink">{run.summary}</p>
-                    <p className="mt-0.5 text-[12px] text-ink-3">
-                      {formatRelativeTime(run.startedAt)} · {formatDuration(run.durationMs)} ·{" "}
-                      {formatTokens(run.tokensUsed)} tokens · {run.messages} 条消息
-                    </p>
+              {ownRuns.slice(0, 12).map((run) => {
+                const expanded = expandedRunId === run.id;
+                return (
+                  <div key={run.id} className="border-b border-border/70 last:border-b-0">
+                    <button
+                      type="button"
+                      onClick={() => setExpandedRunId(expanded ? null : run.id)}
+                      className="flex w-full items-start gap-3 px-5 py-3.5 text-left transition-colors hover:bg-surface-2"
+                      aria-expanded={expanded}
+                    >
+                      <RunBadge status={run.status} />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-[13px] text-ink">{run.summary}</p>
+                        <p className="mt-0.5 text-[12px] text-ink-3">
+                          {formatRelativeTime(run.startedAt)} · {formatDuration(run.durationMs)} ·{" "}
+                          {formatTokens(run.tokensUsed)} tokens · {run.messages} 条消息
+                        </p>
+                      </div>
+                      <ChevronDown
+                        className={`mt-0.5 h-4 w-4 shrink-0 text-ink-3 transition-transform ${
+                          expanded ? "rotate-180" : ""
+                        }`}
+                      />
+                    </button>
+                    {expanded && (
+                      <div className="px-5 pb-4 pl-12">
+                        {run.output ? (
+                          <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-black/25 p-3 font-mono text-[12px] leading-relaxed text-ink-2">
+                            {run.output}
+                          </pre>
+                        ) : (
+                          <p className="text-[12px] text-ink-3">该运行未保存输出内容（S1.31 之前的旧记录）</p>
+                        )}
+                      </div>
+                    )}
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </Card>

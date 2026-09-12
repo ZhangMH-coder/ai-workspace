@@ -114,6 +114,8 @@ export const agentRuns = sqliteTable(
     outputTokens: integer("output_tokens"),
     errorCode: text("error_code"),
     errorMessage: text("error_message"),
+    // S1.31：真实 LLM 输出内容（可空；历史数据为空字符串）
+    output: text("output"),
   },
   (t) => [
     index("idx_agent_run_agent_started").on(t.agentId, t.startedAt),

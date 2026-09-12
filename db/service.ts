@@ -226,6 +226,8 @@ export async function runAgent(agentId: string, input?: string) {
     outputTokens: result.usage.outputTokens,
     errorCode: result.error?.code,
     errorMessage: result.error?.message,
+    // S1.31：真实 LLM 输出落库（可空）
+    output: result.output ?? null,
   });
 
   // 6) 更新 Agent lastRunAt

@@ -119,6 +119,8 @@ export async function runAgent(agentId: string, agentName: string, input?: strin
       result.status === "succeeded"
         ? `「${agentName}」完成一次运行，输出 ${result.usage.totalTokens} tokens`
         : `「${agentName}」运行中断：${result.error?.message ?? "模拟上游超时"}`,
+    // S1.31：Mock 输出落库（与 Real 同构）
+    output: result.output ?? null,
   };
   // 同步到 Mock 内存数据层，统计聚合（mock/runs.ts）才能反映本次运行
   pushRun(run);

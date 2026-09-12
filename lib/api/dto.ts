@@ -51,6 +51,8 @@ export interface AgentRunDTO {
   outputTokens?: number;
   errorCode?: string;
   errorMessage?: string;
+  // S1.31：真实 LLM 输出（可空）
+  output?: string | null;
 }
 
 export interface CapabilityDefinitionDTO {

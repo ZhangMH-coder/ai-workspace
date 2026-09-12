@@ -189,6 +189,8 @@ export interface AgentRun {
   outputTokens?: number;
   errorCode?: string;
   errorMessage?: string;
+  // S1.31：真实 LLM 输出内容（可空；旧数据为空）
+  output?: string | null;
 }
 
 /** 新建 Agent 的表单输入 */

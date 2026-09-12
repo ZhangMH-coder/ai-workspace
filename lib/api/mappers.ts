@@ -83,6 +83,7 @@ export function toAgentRun(d: AgentRunDTO): AgentRun {
     outputTokens: d.outputTokens,
     errorCode: d.errorCode,
     errorMessage: d.errorMessage,
+    output: d.output ?? null,
   };
 }
 

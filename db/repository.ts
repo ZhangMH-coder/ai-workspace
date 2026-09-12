@@ -244,6 +244,7 @@ export function updateRun(
     | "outputTokens"
     | "errorCode"
     | "errorMessage"
+    | "output"
   >>
 ) {
   return db.update(agentRuns).set(patch).where(eq(agentRuns.id, id)).returning().get();

@@ -59,6 +59,8 @@ export interface RelatedResourceItem {
   parseable: boolean;
   /** 与目标资源共享的能力标签数（0 = 无共享能力，仅同类补充） */
   sharedCapabilities: number;
+  /** S1.33：相关资源的真实使用方式（metadata.usage，可空） */
+  usage?: string | null;
   /** 相关理由（真实信号，非推断） */
   reason: string;
 }

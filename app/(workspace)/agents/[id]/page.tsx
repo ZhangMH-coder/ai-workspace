@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { ArrowLeft, Bot, ChevronDown, Loader2, Play, Plus } from "lucide-react";
+import { ArrowLeft, Bot, ChevronDown, CircleAlert, Loader2, Play, Plus } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
@@ -15,7 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { formatDateTime, formatDuration, formatNumber, formatPercent, formatRelativeTime, formatTokens } from "@/lib/format";
+import { formatDateTime, formatDuration, formatNumber, formatPercent, formatRelativeTime, formatRunErrorCode, formatTokens } from "@/lib/format";
 import { modelLabel, normalizeRunStatus, runStatusMeta } from "@/lib/types";
 import { EMPTY_RUNS_STATS, useWorkspaceStore } from "@/stores/workspace";
 
@@ -187,7 +187,25 @@ export default function AgentDetailPage() {
                     </button>
                     {expanded && (
                       <div className="px-5 pb-4 pl-12">
-                        {run.output ? (
+                        {run.status === "failed" && (run.errorCode || run.errorMessage) ? (
+                          <div
+                            className="rounded-lg border border-danger/25 bg-danger/[0.06] p-3"
+                            role="alert"
+                          >
+                            <p className="flex items-center gap-1.5 text-[12px] font-medium text-danger">
+                              <CircleAlert className="size-3.5" />
+                              {formatRunErrorCode(run.errorCode)}
+                            </p>
+                            {run.errorMessage ? (
+                              <p className="mt-1.5 break-words text-[12px] leading-relaxed text-ink-2">
+                                {run.errorMessage}
+                              </p>
+                            ) : null}
+                            {run.errorCode ? (
+                              <p className="mt-1.5 font-mono text-[10.5px] text-ink-3">code: {run.errorCode}</p>
+                            ) : null}
+                          </div>
+                        ) : run.output ? (
                           <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-black/25 p-3 font-mono text-[12px] leading-relaxed text-ink-2">
                             {run.output}
                           </pre>

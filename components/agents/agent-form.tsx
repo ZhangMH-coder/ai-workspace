@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Bot, Loader2, RefreshCw } from "lucide-react";
+import { Bot, Loader2, RefreshCw, Search } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,39 @@ import { Textarea } from "@/components/ui/textarea";
 import type { ModelId } from "@/lib/types";
 import { fetchAvailableModels } from "@/lib/services/ai";
 import { useWorkspaceStore } from "@/stores/workspace";
+
+/** S1.33：按模型名前缀推断厂商分组（真实模型列表的展示层归类，不修改数据） */
+const VENDOR_ORDER = ["DeepSeek", "智谱 GLM", "MiniMax", "Kimi", "通义千问", "豆包", "OpenAI", "Anthropic", "Google", "开源模型", "其他"];
+
+function vendorOf(model: string): string {
+  const m = model.toLowerCase();
+  if (m.includes("deepseek")) return "DeepSeek";
+  if (m.includes("glm") || m.includes("chatglm")) return "智谱 GLM";
+  if (m.includes("minimax")) return "MiniMax";
+  if (m.includes("kimi") || m.includes("moonshot")) return "Kimi";
+  if (m.includes("qwen")) return "通义千问";
+  if (m.includes("doubao") || m.includes("ark") || m.startsWith("seed")) return "豆包";
+  if (m.includes("gpt") || m.includes("o1") || m.includes("o3")) return "OpenAI";
+  if (m.includes("claude")) return "Anthropic";
+  if (m.includes("gemini")) return "Google";
+  if (m.includes("llama") || m.includes("mistral") || m.includes("qwen")) return "开源模型";
+  return "其他";
+}
+
+/** S1.33：真实模型按厂商分组（组内保持端点返回顺序；未识别归「其他」） */
+function groupModels(models: string[]): Array<[string, string[]]> {
+  const byVendor = new Map<string, string[]>();
+  for (const m of models) {
+    const v = vendorOf(m);
+    if (!byVendor.has(v)) byVendor.set(v, []);
+    byVendor.get(v)!.push(m);
+  }
+  const ordered = VENDOR_ORDER.filter((v) => byVendor.has(v)).map((v) => [v, byVendor.get(v)!] as [string, string[]]);
+  for (const [v, list] of byVendor) {
+    if (!ordered.some(([ov]) => ov === v)) ordered.push([v, list]);
+  }
+  return ordered;
+}
 
 export function AgentForm() {
   const router = useRouter();
@@ -27,6 +60,17 @@ export function AgentForm() {
   // S1.30：模型列表来自真实 Provider 端点（Settings → AI Provider），不硬编码假模型
   const [models, setModels] = useState<string[] | null>(null);
   const [modelsLoading, setModelsLoading] = useState(true);
+  // S1.33：模型搜索过滤
+  const [modelQuery, setModelQuery] = useState("");
+
+  // S1.33：真实模型分组（搜索过滤后）
+  const modelGroups = useMemo(() => {
+    if (!models || models.length === 0) return [];
+    const q = modelQuery.trim().toLowerCase();
+    const filtered = q ? models.filter((m) => m.toLowerCase().includes(q)) : models;
+    return groupModels(filtered);
+  }, [models, modelQuery]);
+  const filteredCount = modelGroups.reduce((n, [, ms]) => n + ms.length, 0);
 
   async function loadModels() {
     setModelsLoading(true);
@@ -124,26 +168,56 @@ export function AgentForm() {
                 正在读取模型列表…
               </div>
             ) : models && models.length > 0 ? (
-              <div className="flex flex-wrap gap-2">
-                {models.map((m) => (
-                  <button
-                    key={m}
-                    type="button"
-                    onClick={() => setModel(m)}
-                    className={`flex items-center gap-2 rounded-lg border px-3 py-1.5 text-[12.5px] transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/50 ${
-                      model === m
-                        ? "border-brand/50 bg-brand-soft text-ink"
-                        : "border-border bg-white/[0.02] text-ink-2 hover:border-white/15"
-                    }`}
-                  >
-                    <Bot
-                      className={`size-3.5 ${
-                        model === m ? "text-brand" : "text-ink-3"
-                      }`}
-                    />
-                    {m}
-                  </button>
-                ))}
+              <div className="grid gap-3">
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-ink-3" />
+                  <Input
+                    value={modelQuery}
+                    onChange={(e) => setModelQuery(e.target.value)}
+                    placeholder={`搜索模型（共 ${models.length} 个）…`}
+                    className="h-8 pl-8 text-[12.5px]"
+                    aria-label="搜索模型"
+                  />
+                </div>
+                {modelGroups.length === 0 ? (
+                  <p className="py-3 text-center text-[12px] text-ink-3">没有匹配「{modelQuery}」的模型</p>
+                ) : (
+                  <div className="grid max-h-[300px] gap-3 overflow-auto pr-1">
+                    {modelGroups.map(([vendor, ms]) => (
+                      <div key={vendor} className="grid gap-1.5">
+                        <p className="text-[11px] font-medium uppercase tracking-wide text-ink-3">
+                          {vendor} · {ms.length}
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          {ms.map((m) => (
+                            <button
+                              key={m}
+                              type="button"
+                              onClick={() => setModel(m)}
+                              className={`flex items-center gap-2 rounded-lg border px-3 py-1.5 text-[12.5px] transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/50 ${
+                                model === m
+                                  ? "border-brand/50 bg-brand-soft text-ink"
+                                  : "border-border bg-white/[0.02] text-ink-2 hover:border-white/15"
+                              }`}
+                            >
+                              <Bot
+                                className={`size-3.5 ${
+                                  model === m ? "text-brand" : "text-ink-3"
+                                }`}
+                              />
+                              {m}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {filteredCount > 0 ? (
+                  <p className="text-[11px] text-ink-3">
+                    {filteredCount}/{models.length} 个模型 · 当前选中：{model || "未选择"}
+                  </p>
+                ) : null}
               </div>
             ) : (
               <div className="grid gap-2">

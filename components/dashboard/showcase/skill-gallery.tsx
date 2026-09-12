@@ -57,17 +57,22 @@ export function SkillGallery({ skills }: { skills: DiscoveredResource[] }) {
       </div>
       {categories.length > 1 ? (
         <div className="mb-3 flex flex-wrap items-center gap-1.5">
-          <CategoryTab active={category === "all"} onClick={() => setCategory("all")}>
+          <CategoryTab active={category === "all"} count={skills.length} onClick={() => setCategory("all")}>
             全部
           </CategoryTab>
           {categories.map((c) => (
-            <CategoryTab key={c} active={category === c} onClick={() => setCategory(c)}>
+            <CategoryTab
+              key={c}
+              active={category === c}
+              count={skills.filter((s) => s.metadata?.category === c).length}
+              onClick={() => setCategory(c)}
+            >
               {c}
             </CategoryTab>
           ))}
         </div>
       ) : null}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <motion.div key={category} className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {visible.map((s, i) => {
           const c = typeof s.metadata?.category === "string" ? s.metadata.category : null;
           return (
@@ -121,17 +126,19 @@ export function SkillGallery({ skills }: { skills: DiscoveredResource[] }) {
             </motion.div>
           );
         })}
-      </div>
+      </motion.div>
     </div>
   );
 }
 
 function CategoryTab({
   active,
+  count,
   onClick,
   children,
 }: {
   active: boolean;
+  count?: number;
   onClick: () => void;
   children: React.ReactNode;
 }) {
@@ -139,13 +146,22 @@ function CategoryTab({
     <button
       type="button"
       onClick={onClick}
-      className={`h-6 rounded-md px-2.5 text-[11.5px] transition-colors ${
-        active
-          ? "bg-primary/15 text-primary"
-          : "text-ink-3 hover:bg-white/[0.05] hover:text-ink-2"
+      aria-pressed={active}
+      className={`relative h-6 rounded-md px-2.5 text-[11.5px] transition-colors ${
+        active ? "text-primary" : "text-ink-3 hover:bg-white/[0.05] hover:text-ink-2"
       }`}
     >
-      {children}
+      {active ? (
+        <motion.span
+          layoutId="skill-category-bg"
+          className="absolute inset-0 rounded-md bg-primary/15"
+          transition={{ type: "spring", stiffness: 400, damping: 32 }}
+        />
+      ) : null}
+      <span className="relative z-10">
+        {children}
+        {count !== undefined ? <span className="opacity-60"> · {count}</span> : null}
+      </span>
     </button>
   );
 }

@@ -45,3 +45,21 @@ export function formatDateTime(iso: string): string {
     d.getMinutes()
   )}`;
 }
+
+/** S1.33：Run 错误码可读化（errorCode → 中文标签；未知码原样返回） */
+const RUN_ERROR_LABELS: Record<string, string> = {
+  provider_unavailable: "Provider 不可用",
+  provider_timeout: "Provider 超时",
+  provider_error: "Provider 返回错误",
+  provider_rate_limited: "请求被限流",
+  model_not_found: "模型不存在或不可用",
+  invalid_request: "无效请求",
+  internal_error: "运行时内部错误",
+  runtime_error: "运行时错误",
+  cancelled: "已取消",
+};
+
+export function formatRunErrorCode(code?: string | null): string {
+  if (!code) return "未知错误";
+  return RUN_ERROR_LABELS[code] ?? code;
+}

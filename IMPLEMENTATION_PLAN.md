@@ -525,7 +525,7 @@ Authentication / Multi-user / Permissions / 真实 LLM Provider Adapter（OpenAI
 
 ## 当前阶段
 
-**S1.32 移除 Cursor 残留资源（扫描停用 + 索引清理）** —— 实现完成、全量验证通过、待审批（不自动进入下一阶段）。
+**S1.33 交互增强四合一（模型分组搜索 / 失败错误面板 / 相关资源×使用建议 / 画廊打磨）** —— 实现完成、全量验证通过、待审批（不自动进入下一阶段）。
 
 ## 本次修改内容
 
@@ -1234,4 +1234,12 @@ Authentication / Multi-user / Permissions / 真实 LLM Provider Adapter（OpenAI
 - 清理 SQLite 索引：DELETE discovered_resource where harness_id in ('cursor','cursor-user')（20 条：cursor 19 + cursor-user 1），外键级联清除 resource_analysis 38 条、resource_capability 129 条；resource_recommendation 无引用（预检 0）。
 - 重新扫描（产品自身 scan 接口）刷新 harness_scans 快照：overview 不再包含 Cursor / Cursor User；资源总数 272 → 252（hermes 140 / doubao-skills 106 / codex 3 / project-agents 2 / claude 0）。
 - 验证：lint 0/0 ✅ / tsc ✅ / build（清 .next 干净构建）✅ / API overview 无 cursor ✅ / 浏览器 /settings 无 Cursor、/resources 无 cursor harness（唯一 1 处「Cursor」为 hermes-skill-install 真实 SKILL.md 正文中的生态描述，属资源数据保留）✅ / 原始 Harness 文件零修改 ✅。
+
+
+### S1.33 交互增强四合一（用户一次批准 4 个候选）
+1. **Agent 表单模型分组 + 搜索**（components/agents/agent-form.tsx）：真实模型按厂商分组（DeepSeek/智谱 GLM/MiniMax/Kimi/通义千问/豆包/OpenAI/Anthropic/Google/开源/其他，按前缀推断），组标题含计数；顶部搜索框实时过滤（无匹配显示空态）；底部展示「N/total 个模型 · 当前选中」；手动输入兜底保留。
+2. **运行失败错误面板**（app/(workspace)/agents/[id]/page.tsx + lib/format.ts）：新增 formatRunErrorCode 可读映射（provider_unavailable→Provider 不可用 等 9 类，未知码原样显示）；失败 run 展开区显示 errorCode 徽章 + 完整 errorMessage + 原始 code（role=alert）。真实验证：用不存在的模型跑一次真实失败（provider_unavailable / LLM API 错误 400）落库并展示。
+3. **相关资源 × 使用建议联动**（db/repository.ts、db/service.ts、lib/api/resource-discovery.ts、components/resources/related-resources.tsx、resource-detail.tsx）：related 链路返回 usage（metadata.usage 为空时与详情页同口径回退 description，全部真实数据）；相关资源每项显示「使用建议：…」。**修复遗留 bug**：resource-detail.tsx 内联了一份早期 RelatedResources（同 Harness 简单版，props 是 harnessId/currentId/type）与 store 版（共享能力优先）重复，导致页面一直显示 store 残留旧数据——已删除内联版、统一用 store 版 `<RelatedResources resourceId={resource.id} />`，并清理 Share2/fetchDiscoveredResources 未使用 import。
+4. **技能画廊打磨**（components/dashboard/showcase/skill-gallery.tsx）：分类 Tab 增加真实计数（全部 · 8 / software-development · 3 …）；active Tab 用 framer-motion layoutId 滑条指示 + aria-pressed；grid 以 category 为 key，切换分类时卡片重放入场动画。
+- 验证：lint ✅ / tsc ✅ / build（Real）✅ / 浏览器实机 ✅（模型分组 7 组 19 个 + 搜索 kimi 过滤出 2 个；失败 run 展开显示「Provider 不可用 + code + 错误消息」；related 每条带真实使用建议且与 API 同源；画廊分类切换只显示对应分类真实技能）。新增验证用 Agent（模型 s1-33-not-exist-model）及其真实失败 run 保留在演示库，属真实数据。
 

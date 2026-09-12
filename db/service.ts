@@ -591,6 +591,7 @@ export function getRelatedResources(id: string): { items: RelatedResourceItem[] 
       sourcePath: r.sourcePath,
       parseable: r.parseable,
       sharedCapabilities: r.sharedCapabilities,
+      usage: r.usage ?? null,
       reason:
         r.sharedCapabilities > 0
           ? `共享 ${r.sharedCapabilities} 个能力标签`

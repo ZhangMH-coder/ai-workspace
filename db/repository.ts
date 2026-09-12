@@ -623,6 +623,8 @@ export interface RelatedResourceRow {
   parseable: boolean;
   /** 与目标资源共享的能力标签数（>0 表示有实质相关） */
   sharedCapabilities: number;
+  /** S1.33：相关资源的真实使用方式（metadata.usage，可空） */
+  usage?: string | null;
 }
 
 /**
@@ -691,6 +693,8 @@ export function findRelatedResources(resourceId: string, limit = 8): RelatedReso
       harnessId: discoveredResources.harnessId,
       sourcePath: discoveredResources.sourcePath,
       parseable: discoveredResources.parseable,
+      metadata: discoveredResources.metadata,
+      description: discoveredResources.description,
     })
     .from(discoveredResources)
     .where(inArray(discoveredResources.id, ids))
@@ -701,7 +705,17 @@ export function findRelatedResources(resourceId: string, limit = 8): RelatedReso
   for (const id of ids) {
     const row = byId.get(id);
     if (!row || hiddenPaths.has(row.sourcePath)) continue;
-    result.push({ ...row, sharedCapabilities: sharedById.get(id) ?? 0 });
+    const rawUsage =
+      row.metadata && typeof row.metadata === "object" && "usage" in row.metadata
+        ? String((row.metadata as { usage?: unknown }).usage ?? "")
+        : "";
+    // 与资源详情页「如何使用」同口径：usage 为空时回退 description
+    const usage = (rawUsage.trim() || row.description.trim());
+    result.push({
+      ...row,
+      sharedCapabilities: sharedById.get(id) ?? 0,
+      usage: usage ? usage : null,
+    });
   }
   // 稳定排序：共享数降序在前，其次按名称
   result.sort((a, b) => b.sharedCapabilities - a.sharedCapabilities || a.name.localeCompare(b.name));

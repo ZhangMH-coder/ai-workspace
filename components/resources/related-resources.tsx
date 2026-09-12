@@ -65,6 +65,11 @@ export function RelatedResources({ resourceId }: { resourceId: string }) {
                   <p className="mt-0.5 truncate text-[11px] text-ink-3" title={r.sourcePath}>
                     {r.sourcePath}
                   </p>
+                  {r.usage ? (
+                    <p className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-ink-2" title={r.usage}>
+                      使用建议：{r.usage}
+                    </p>
+                  ) : null}
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
                   <span className="text-[10px] text-ink-3">{r.reason}</span>

@@ -1308,3 +1308,18 @@ Authentication / Multi-user / Permissions / 真实 LLM Provider Adapter（OpenAI
 - 验证：lint ✅ / tsc ✅ / build ✅；生产实测 GET /api/v1/resource-analysis/status → {totalResources:252, analyzed:250, failed:2, capabilityCount:963, lastRunAt:…, analyzerVersion:heuristic-v3}；resources 页 200 ✅。
 - 已知问题：无新增。
 
+
+### S1.41 任务推荐双语扩展 + 候选池与并列排序修复（Hermes 等非豆包 Harness 进推荐榜）
+- 背景：S1.38 后「转写音频」类中文任务推荐仍全是 doubao——根因①跨语言：中文任务词 vs 英文能力/资源名无法词形命中；②候选池 topN=6 过小，双语扩展后第一梯队同分并列（0.98×N）被按插入序截断；③测试任务 fingerprint 复用历史分析（同任务直接返回旧结果，曾误判为未生效）。
+- 修改：
+  - 新增 lib/task-intelligence/term-map.ts：AI/办公高频中英术语双向映射（audio↔音频、transcription↔转写、subtitle↔字幕、document↔文档等 ~60 条，克制收录避免噪声）；
+  - retriever.ts：tokenizeTask 支持双语同义词扩展（默认关闭、向后兼容）；hay 加入 resourceName + expandText 双语扩展；候选池 topN 6→12；同分按 userHits（真实用户原文词命中数）次级排序；
+  - reranker.ts：最终排序加次级键 score → userHits → harnessId → resourceName（确定性，非硬编码）；
+  - lib/task-intelligence/types.ts：RetrievedItem 增加 userHits。
+- 实际效果（全新措辞任务验证，heuristic）：
+  - 「把录音整理成文字稿，再加时间轴标记」→ Hermes audio-transcription（0.72）第 4 名、wechat-voice-stt（0.63）第 5 名进榜；
+  - 「转写这段音频，输出字幕文件」→ doubao byted 系列 0.83-0.93 靠前（长描述 forward 结构性优势，Hermes 排 7-8，可接受边界）；
+  - 回归「统计本周店铺销售数据生成汇总」→ 数据类 doubao 正常推荐，无异常。
+- 验证：lint ✅ / tsc ✅ / build ✅ / 生产 API 实测 ✅（reused:false 确认新计算）/ 回归 ✅ / 原始文件零修改 ✅。
+- 已知问题：描述长度差异导致的 forward 分差仍是启发式天花板（简洁但精准的 Hermes 描述在模板词多的任务下可能排 7-8 名）；不做硬编码修正，后续可接 LLM 语义匹配治本。
+

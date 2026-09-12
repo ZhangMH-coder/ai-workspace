@@ -63,6 +63,8 @@ export interface RetrievableCapability {
 export interface RetrievedItem {
   capability: RetrievableCapability;
   baseScore: number;
+  /** 真实用户原文词（含双语扩展）在能力文本中的命中数：同分并列时的次级排序信号 */
+  userHits: number;
 }
 
 /** 最终推荐（事实分数 + 推断理由） */

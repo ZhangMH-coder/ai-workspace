@@ -114,6 +114,7 @@ export function rerankAndAssemble(
         evidenceSnippet: cap.evidenceSnippet,
         sourcePath: cap.sourcePath,
         score,
+        userHits: entry.best.userHits,
         reason: buildReason(entry.requirement, entry.best, entry.extraHits),
         requirementText: entry.requirement.requirementText,
         rank: 0,
@@ -121,7 +122,15 @@ export function rerankAndAssemble(
     })
     .filter((r) => r.score >= MIN_RECOMMENDATION_SCORE);
 
-  list.sort((a, b) => b.score - a.score);
+  // 主序：分数降序；同分（常见于双语扩展后的并列第一梯队）→ 真实用户词命中数降序，
+  // 让更贴切用户原文的语义主证据优先展示（确定性，非硬编码）。
+  list.sort(
+    (a, b) =>
+      b.score - a.score ||
+      b.userHits - a.userHits ||
+      a.harnessId.localeCompare(b.harnessId) ||
+      a.resourceName.localeCompare(b.resourceName)
+  );
   return list
     .slice(0, limit)
     .map((r, i) => ({ ...r, rank: i + 1 }));

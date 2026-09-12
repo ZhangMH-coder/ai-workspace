@@ -8,6 +8,7 @@
  * 不针对测试词硬编码；打分对所有标签通用。
  */
 import type { CapabilityRequirement, RetrievableCapability, RetrievedItem } from "./types";
+import { expandText, expandToken } from "./term-map";
 
 /** 中文 2-gram 高频停用词（无信息量，避免宽匹配噪声；不影响英文 token） */
 const HAN_STOPWORDS = new Set([
@@ -17,20 +18,43 @@ const HAN_STOPWORDS = new Set([
   "文件", "使用", "支持", "根据", "要求", "针对", "处理", "任务", "工作",
 ]);
 
-/** 分词：英文词（≥2）+ 中文 2-gram / 3-gram（过滤停用词；与现有匹配语义一致） */
-export function tokenizeTask(task: string): string[] {
+/**
+ * 分词：英文词（≥2）+ 中文 2-gram / 3-gram（过滤停用词；与现有匹配语义一致）。
+ * opts.expand=true 时对每个 token 做中英术语同义词扩展（见 term-map），
+ * 用于跨语言匹配（中文任务词 ↔ 英文能力/资源名），默认不扩展、行为向后兼容。
+ */
+export function tokenizeTask(task: string, opts?: { expand?: boolean }): string[] {
   const s = task.toLowerCase().trim();
   const tokens = new Set<string>();
+  const push = (t: string) => {
+    if (t.length < 2) return;
+    if (opts?.expand) {
+      for (const x of expandToken(t)) {
+        if (x.length >= 2) tokens.add(x);
+      }
+    } else {
+      tokens.add(t);
+    }
+  };
   for (const t of s.split(/[^a-z0-9]+/)) {
-    if (t.length >= 2) tokens.add(t);
+    if (t.length >= 2) push(t);
   }
   const han = s.replace(/[^a-z0-9\u4e00-\u9fff]+/g, "");
   for (let i = 0; i < han.length - 1; i += 1) {
     const g2 = han.slice(i, i + 2);
-    if (!HAN_STOPWORDS.has(g2)) tokens.add(g2);
+    if (!HAN_STOPWORDS.has(g2)) push(g2);
   }
-  for (let i = 0; i < han.length - 2; i += 1) tokens.add(han.slice(i, i + 3));
+  for (let i = 0; i < han.length - 2; i += 1) push(han.slice(i, i + 3));
   return [...tokens];
+}
+
+/** 构造匹配 hay：能力文本 + 关键词 + 证据片段 + 资源名 + 双语同义词扩展 */
+function buildHay(cap: RetrievableCapability): string {
+  const raw = [cap.capability, cap.keywords.join(" "), cap.evidenceSnippet, cap.resourceName]
+    .join(" ")
+    .toLowerCase();
+  const extra = expandText(raw);
+  return extra ? `${raw} ${extra}` : raw;
 }
 
 function baseScoreFor(
@@ -40,9 +64,7 @@ function baseScoreFor(
   userTask: string,
   userTokens: string[]
 ): { score: number; hits: number; kwHits: number; userHits: number } {
-  const hay = [cap.capability, cap.keywords.join(" "), cap.evidenceSnippet]
-    .join(" ")
-    .toLowerCase();
+  const hay = buildHay(cap);
   const hits = tokens.filter((t) => t.length >= 2 && hay.includes(t)).length;
   const kwHits = cap.keywords.filter(
     (k) => k.length >= 2 && userTask.toLowerCase().includes(k)
@@ -64,23 +86,23 @@ function baseScoreFor(
  * - 正向分词（hits）：需求语义词（模板+类型信号）在标签中的命中
  * - 反向匹配（kwHits）：真实用户任务原文中的词对标签关键词的命中（避免自造模板词虚高）
  * categoryBoost：需求类别与标签类别一致 +0.08（确定性，封顶 1）。
+ * topN 取 12：双语扩展后第一梯队常出现同分并列，候选池过小会把等价能力按插入序截断，
+ * 由 Reranker 的 evidenceBoost / 去重做最终排序。
  */
 export function retrieveCapabilities(
   requirement: CapabilityRequirement,
   capabilities: RetrievableCapability[],
-  topN = 6,
+  topN = 12,
   userTask?: string
 ): RetrievedItem[] {
   // other 类型（未识别任务）：只依赖真实用户词（userHits / kwHits），
   // 关闭正向语义词匹配，避免泛化词/3-gram 噪声产生虚高推荐。
   if (requirement.category === "other") {
     const reverseBase = userTask?.trim() || requirement.requirementText;
-    const userTokens = tokenizeTask(reverseBase);
+    const userTokens = tokenizeTask(reverseBase, { expand: true });
     const items: RetrievedItem[] = [];
     for (const cap of capabilities) {
-      const hay = [cap.capability, cap.keywords.join(" "), cap.evidenceSnippet]
-        .join(" ")
-        .toLowerCase();
+      const hay = buildHay(cap);
       const userHits = userTokens.filter((t) => t.length >= 2 && hay.includes(t)).length;
       const kwHits = cap.keywords.filter(
         (k) => k.length >= 2 && reverseBase.toLowerCase().includes(k)
@@ -88,28 +110,37 @@ export function retrieveCapabilities(
       if (userHits === 0 && kwHits === 0) continue;
       const score =
         Math.min(1, (userHits + kwHits) / 3) * 0.8 + cap.confidence * 0.2;
-      items.push({ capability: cap, baseScore: Math.round(score * 100) / 100 });
+      items.push({
+        capability: cap,
+        baseScore: Math.round(score * 100) / 100,
+        userHits,
+      });
     }
-    items.sort((a, b) => b.baseScore - a.baseScore);
+    items.sort((a, b) => b.baseScore - a.baseScore || b.userHits - a.userHits);
     return items.slice(0, topN);
   }
 
   const tokens = tokenizeTask(
-    `${requirement.requirementText} ${requirement.keywords.join(" ")}`
+    `${requirement.requirementText} ${requirement.keywords.join(" ")}`,
+    { expand: true }
   );
   const reverseBase = userTask?.trim() || requirement.requirementText;
-  const userTokens = tokenizeTask(reverseBase);
+  const userTokens = tokenizeTask(reverseBase, { expand: true });
   const items: RetrievedItem[] = [];
   for (const cap of capabilities) {
-    const { score } = baseScoreFor(cap, tokens, reverseBase, userTokens);
+    const { score, userHits } = baseScoreFor(cap, tokens, reverseBase, userTokens);
     if (score === 0) continue;
     let final = score;
     // 类别加成（early return 已排除 other 需求）
     if (cap.category === requirement.category) {
       final = Math.min(1, final + 0.08);
     }
-    items.push({ capability: cap, baseScore: Math.round(final * 100) / 100 });
+    items.push({
+      capability: cap,
+      baseScore: Math.round(final * 100) / 100,
+      userHits,
+    });
   }
-  items.sort((a, b) => b.baseScore - a.baseScore);
+  items.sort((a, b) => b.baseScore - a.baseScore || b.userHits - a.userHits);
   return items.slice(0, topN);
 }

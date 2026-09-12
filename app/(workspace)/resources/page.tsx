@@ -43,6 +43,15 @@ export default function ResourcesPage() {
     void hydrate().then(() => fetchOverview());
   }, [hydrate, fetchOverview]);
 
+  // 顶栏重新扫描按钮联动：dispatch aiw:rescan 后重拉概览
+  useEffect(() => {
+    const onRescan = () => {
+      void fetchOverview();
+    };
+    window.addEventListener("aiw:rescan", onRescan);
+    return () => window.removeEventListener("aiw:rescan", onRescan);
+  }, [fetchOverview]);
+
   async function handleScan() {
     try {
       await runScan();

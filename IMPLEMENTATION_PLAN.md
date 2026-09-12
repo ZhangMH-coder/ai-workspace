@@ -1183,3 +1183,8 @@ Resource Discovery MVP —— 实现完成、全量验证通过、待审批（�
 候选 4 · 官方端点标注：Anthropic 预设按钮 title 标注「chat 格式与 OpenAI 不同，建议经兼容中转」。
 候选 2（Vercel 部署）挂起：待用户注册 Vercel 账号。
 - 验证：lint / tsc / build ✅；浏览器实测「AI 增强」开关渲染、Dashboard 当前生效 badge 渲染；API 实测 heuristic → strategy=heuristic，llm-assisted → strategy=llm-assisted ✅。
+
+补充（S1.28 收尾）：
+- 候选 3 排查结论：LLM 增强链路正常（直测端点与系统路径均返回正确 JSON）。此前「任务内容为空，无法判断类型」为早期一次 LLM 异常输出被幂等复用所致；每次分析 LLM 覆盖会重新执行，复测「写一篇小红书文案」已返回 content_creation +「撰写小红书平台风格的推广文案。」✅ 无需改代码。
+- 候选 4 完成：resources 列表页监听 aiw:rescan 事件，顶栏重新扫描后自动重拉概览（与 Dashboard 同模式）。
+- Git push 根因修正：此前误用 -c http.proxy= 禁用了系统代理（git 全局代理 http://127.0.0.1:33210）导致直连失败；恢复默认代理后推送成功（aa517cf..4576f7f）。

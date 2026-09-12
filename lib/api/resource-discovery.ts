@@ -87,9 +87,13 @@ export async function unhideResourceRecord(recordId: string): Promise<{ sourcePa
   return dto.unhidden;
 }
 
-/** 技能 AI 解读：POST → { markdown, model, interpretedAt }；未配置 Key → 501 LLM_NOT_CONFIGURED */
+/** 技能 AI 解读：POST → 结构化「如何使用」；未配置 Key → 501 LLM_NOT_CONFIGURED */
 export interface ResourceInterpretResult {
-  markdown: string;
+  summary: string;
+  whatItDoes: string[];
+  howToUse: string[];
+  /** 仅当结构化解析失败时非空，前端回退平铺展示 */
+  rawMarkdown: string;
   model: string;
   interpretedAt: string;
 }

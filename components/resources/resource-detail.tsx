@@ -10,8 +10,10 @@ import { useEffect, useState } from "react";
 import {
   ArrowLeft,
   Bot,
+  Check,
   ChevronDown,
   ChevronUp,
+  Copy,
   EyeOff,
   FileCode2,
   FolderOpen,
@@ -418,9 +420,13 @@ function SoulProfileDetail({ metadata }: { metadata: Record<string, unknown> }) 
 /** AI 解读区块：真实 LLM 总结资源用途；未配置 Key / 调用失败按 code 如实提示 */
 function AiInterpretSection({ resource }: { resource: DiscoveredResource }) {
   const [state, setState] = useState<"idle" | "loading" | "done" | "error">("idle");
-  const [markdown, setMarkdown] = useState("");
+  const [summary, setSummary] = useState("");
+  const [whatItDoes, setWhatItDoes] = useState<string[]>([]);
+  const [howToUse, setHowToUse] = useState<string[]>([]);
+  const [rawMarkdown, setRawMarkdown] = useState("");
   const [model, setModel] = useState("");
   const [interpretedAt, setInterpretedAt] = useState("");
+  const [copied, setCopied] = useState(false);
   const [error, setError] = useState("");
 
   async function handleInterpret() {
@@ -429,7 +435,10 @@ function AiInterpretSection({ resource }: { resource: DiscoveredResource }) {
     setError("");
     try {
       const res = await interpretResource(resource.id);
-      setMarkdown(res.markdown);
+      setSummary(res.summary);
+      setWhatItDoes(res.whatItDoes);
+      setHowToUse(res.howToUse);
+      setRawMarkdown(res.rawMarkdown);
       setModel(res.model);
       setInterpretedAt(res.interpretedAt);
       setState("done");
@@ -440,7 +449,7 @@ function AiInterpretSection({ resource }: { resource: DiscoveredResource }) {
           : "";
       if (code === "LLM_NOT_CONFIGURED") {
         setError(
-          "未配置 LLM API Key：请设置环境变量 LLM_API_KEY（或复用 Hermes 的 HERMES_CUSTOM_OPENAI_API_KEY）后重启服务。"
+          "未配置 LLM API Key：请到 Settings → AI Provider 填写，或设置环境变量 LLM_API_KEY（可复用 Hermes 的 HERMES_CUSTOM_OPENAI_API_KEY）后重启服务。"
         );
       } else {
         setError(e instanceof Error ? e.message : "AI 解读失败，请稍后重试");
@@ -449,11 +458,25 @@ function AiInterpretSection({ resource }: { resource: DiscoveredResource }) {
     }
   }
 
+  async function handleCopyHowToUse() {
+    const steps = howToUse.length > 0 ? howToUse : whatItDoes;
+    const text = `【${resource.name}】${summary}\n${steps.map((s, i) => `${i + 1}. ${s}`).join("\n")}`;
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      // 剪贴板不可用时忽略
+    }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  const fallback = state === "done" && !summary && whatItDoes.length === 0 && howToUse.length === 0;
+
   return (
-    <div className="flex flex-col gap-2 rounded-xl border border-white/10 bg-white/[0.03] p-4">
+    <div className="flex flex-col gap-3 rounded-xl border border-white/10 bg-white/[0.03] p-4">
       <div className="flex items-center justify-between gap-2">
         <p className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-ink-3">
-          <Sparkles className="size-3.5 text-primary" /> AI 解读
+          <Sparkles className="size-3.5 text-primary" /> 如何使用（AI 解读）
         </p>
         {state === "idle" ? (
           <Button
@@ -462,7 +485,7 @@ function AiInterpretSection({ resource }: { resource: DiscoveredResource }) {
             onClick={handleInterpret}
             className="h-7 gap-1.5 border-white/10 px-2.5 text-[12px] text-ink-2 hover:text-ink"
           >
-            <Bot className="size-3.5" /> 生成解读
+            <Bot className="size-3.5" /> 生成使用说明
           </Button>
         ) : null}
       </div>
@@ -488,17 +511,68 @@ function AiInterpretSection({ resource }: { resource: DiscoveredResource }) {
       ) : null}
 
       {state === "done" ? (
-        <div className="flex flex-col gap-2">
+        fallback ? (
+          // 结构化解析失败：回退原始 Markdown 平铺展示，不伪造字段
           <pre className="whitespace-pre-wrap break-words rounded-lg border border-white/[0.06] bg-black/30 p-3 font-sans text-[13px] leading-relaxed text-ink">
-            {markdown}
+            {rawMarkdown}
           </pre>
-          <p className="text-[10.5px] text-ink-3">
-            模型 {model}
-            {interpretedAt
-              ? ` · ${new Date(interpretedAt).toLocaleString()}`
-              : ""}
-          </p>
-        </div>
+        ) : (
+          <div className="flex flex-col gap-2.5">
+            {summary ? (
+              <div className="rounded-lg border border-white/[0.06] bg-black/30 px-3 py-2">
+                <p className="text-[13px] leading-relaxed text-ink">{summary}</p>
+              </div>
+            ) : null}
+            {whatItDoes.length > 0 ? (
+              <div className="flex flex-col gap-1">
+                <p className="text-[11px] font-medium text-ink-3">它能做什么</p>
+                <ul className="flex flex-col gap-1 pl-1">
+                  {whatItDoes.map((item) => (
+                    <li key={item} className="flex items-start gap-1.5 text-[12px] leading-relaxed text-ink-2">
+                      <span className="mt-1.5 size-1 shrink-0 rounded-full bg-primary/60" />
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+            {howToUse.length > 0 ? (
+              <div className="flex flex-col gap-1.5">
+                <p className="text-[11px] font-medium text-ink-3">怎么用</p>
+                <ol className="flex flex-col gap-1.5">
+                  {howToUse.map((step, i) => (
+                    <li key={step} className="flex items-start gap-2 text-[12px] leading-relaxed text-ink">
+                      <span className="mt-px flex size-4 shrink-0 items-center justify-center rounded-full bg-primary/15 font-mono text-[10px] text-primary">
+                        {i + 1}
+                      </span>
+                      {step}
+                    </li>
+                  ))}
+                </ol>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => void handleCopyHowToUse()}
+                  className="mt-1 h-7 w-fit gap-1 px-2 text-[12px] text-primary hover:text-primary/80"
+                >
+                  {copied ? (
+                    <>
+                      <Check className="size-3.5 text-emerald-400" /> 已复制
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="size-3.5" /> 复制使用方式
+                    </>
+                  )}
+                </Button>
+              </div>
+            ) : null}
+            <p className="text-[10.5px] text-ink-3">
+              模型 {model}
+              {interpretedAt ? ` · ${new Date(interpretedAt).toLocaleString()}` : ""}
+            </p>
+          </div>
+        )
       ) : null}
     </div>
   );

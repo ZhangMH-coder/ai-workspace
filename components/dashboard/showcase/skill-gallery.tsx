@@ -1,12 +1,12 @@
 /**
  * 展示首页 — 精选 Hermes 技能画廊（真实数据）
  *
- * 支持：按技能类别切换 + 卡片悬停预览完整说明（不推挤布局）。
+ * 支持：按技能类别切换 + 卡片悬停预览完整说明 + 复制使用方式（去对应 Harness 用）。
  */
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { ArrowUpRight, FolderOpen } from "lucide-react";
+import { ArrowUpRight, Check, Copy, FolderOpen } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import type { DiscoveredResource } from "@/lib/types";
@@ -19,6 +19,7 @@ function usageOf(resource: DiscoveredResource): string {
 
 export function SkillGallery({ skills }: { skills: DiscoveredResource[] }) {
   const [category, setCategory] = useState<string>("all");
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const categories = useMemo(() => {
     const set = new Set<string>();
@@ -33,6 +34,17 @@ export function SkillGallery({ skills }: { skills: DiscoveredResource[] }) {
     () => (category === "all" ? skills : skills.filter((s) => s.metadata?.category === category)),
     [skills, category],
   );
+
+  async function handleCopy(s: DiscoveredResource) {
+    const text = `【${s.name}】使用方式：${usageOf(s)}`;
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      // 剪贴板不可用时忽略，仅做选中反馈
+    }
+    setCopiedId(s.id);
+    setTimeout(() => setCopiedId((cur) => (cur === s.id ? null : cur)), 2000);
+  }
 
   if (skills.length === 0) return null;
   return (
@@ -61,13 +73,14 @@ export function SkillGallery({ skills }: { skills: DiscoveredResource[] }) {
           return (
             <motion.div
               key={s.id}
+              className="group relative"
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.06 * i, duration: 0.3, ease: "easeOut" }}
             >
               <Link
                 href={`/resources/${s.id}`}
-                className="group relative flex h-full flex-col rounded-xl border border-white/[0.07] bg-white/[0.03] p-4 transition-colors hover:border-primary/30 hover:bg-white/[0.05]"
+                className="relative flex h-full flex-col rounded-xl border border-white/[0.07] bg-white/[0.03] p-4 transition-colors hover:border-primary/30 hover:bg-white/[0.05]"
               >
                 <div className="flex items-center justify-between gap-2">
                   <p className="truncate text-[13px] font-medium text-ink">{s.name}</p>
@@ -82,14 +95,29 @@ export function SkillGallery({ skills }: { skills: DiscoveredResource[] }) {
                 <p className="mt-2 line-clamp-2 flex-1 text-[11px] leading-relaxed text-ink-2">
                   {usageOf(s)}
                 </p>
-                {/* 悬停预览：完整说明浮层，不推挤布局 */}
-                <div className="pointer-events-none absolute inset-x-0 bottom-full z-10 mb-2 hidden rounded-lg border border-white/10 bg-surface-2/95 p-3 opacity-0 shadow-xl backdrop-blur transition-opacity duration-150 group-hover:block group-hover:opacity-100 lg:block">
-                  <p className="text-[11px] font-medium text-ink">{s.name}</p>
-                  <p className="mt-1 max-h-[120px] overflow-auto whitespace-pre-line text-[11px] leading-relaxed text-ink-2">
-                    {usageOf(s)}
-                  </p>
-                </div>
               </Link>
+              {/* 悬停预览：完整说明 + 复制使用方式（不推挤布局；与卡片同属一个 hover 组） */}
+              <div className="pointer-events-none absolute inset-x-0 bottom-full z-10 mb-2 hidden rounded-lg border border-white/10 bg-surface-2/95 p-3 opacity-0 shadow-xl backdrop-blur transition-opacity duration-150 group-hover:pointer-events-auto group-hover:block group-hover:opacity-100 lg:block">
+                <p className="text-[11px] font-medium text-ink">{s.name}</p>
+                <p className="mt-1 max-h-[120px] overflow-auto whitespace-pre-line text-[11px] leading-relaxed text-ink-2">
+                  {usageOf(s)}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => void handleCopy(s)}
+                  className="mt-2 flex h-6 items-center gap-1 rounded-md border border-white/10 px-2 text-[11px] text-ink-2 transition-colors hover:border-primary/30 hover:text-primary"
+                >
+                  {copiedId === s.id ? (
+                    <>
+                      <Check className="size-3 text-emerald-400" /> 已复制
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="size-3" /> 复制使用方式
+                    </>
+                  )}
+                </button>
+              </div>
             </motion.div>
           );
         })}

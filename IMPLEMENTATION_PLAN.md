@@ -1110,3 +1110,24 @@ Resource Discovery MVP —— 实现完成、全量验证通过、待审批（�
 
 ### 当前状态
 - 阶段完成；未越界；Git 待提交（push 仍受代理未运行阻塞：commit 834878d / 331dfb0 待推送）
+
+---
+
+## S1.22 技能建议改「预设问题」+ 详情页 AI 解读结构化 + 画廊复制按钮（2026-09-12）
+
+### 已完成
+1. **「技能使用建议」改为预设问题形态**（用户纠正方向）：每条 = 真实技能 + 一条预设问题——点击「复制问题」把可直接提问的指令复制到剪贴板，粘贴到对应 Harness（如 Hermes）即可使用；预设问题优先取真实 usage（触发方式），否则基于真实 description 转成任务指令（如「帮我写一篇小红书图文笔记」）；不重复（resourceId 去重）。
+2. **资源详情页 AI 解读 → 「如何使用」结构化**：服务端 interpret 改为输出 JSON（summary / whatItDoes[] / howToUse[]），解析失败回退原始 Markdown（不伪造）；前端分区展示「一句话总结 + 它能做什么 + 怎么用（步骤编号）+ 复制使用方式」，LLM 未配置时提示去 Settings → AI Provider 填写。
+3. **首页技能画廊**：悬停预览新增「复制使用方式」按钮（与卡片同 hover 组，复制「技能名 + 使用方式」）；分类切换保持。
+4. **GitHub push 完成**：直连成功，S1.20/S1.21 全部 commit 已推送，master 与远端一致（efe1eda）。
+5. 修复：生产服务进程因会话回收退出导致页面进不去——已用 Start-Process 重启并验证 HTTP 200。
+
+### 验证结果
+- lint ✅ 0 错误 / tsc ✅ / build ✅
+- /task-intelligence HTTP 200，SSR 含「预设问题」副标题 ✅
+- interpret 真实 API 回归 ✅：summary + whatItDoes 4 条 + howToUse 3 条 + rawMarkdown 空（结构化成功）+ model=deepseek-v4-flash-0731；偶发一次 500（LLM 抖动）已被错误态+重试覆盖，重试 200
+- 画廊/详情页交互为客户端渲染，SSR 主体为 RSC 编码，交互验证待浏览器通道恢复
+- 原始 Harness 文件零修改
+
+### 当前状态
+- 阶段完成；未越界；Git 待提交（S1.22）；master 已与远端同步（S1.20/S1.21 已推送）

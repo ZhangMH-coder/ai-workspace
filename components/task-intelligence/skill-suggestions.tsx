@@ -1,9 +1,10 @@
 /**
- * Task Intelligence — 技能使用建议（S1.21）
+ * Task Intelligence — 技能使用建议（预设问题形态）
  *
- * 替换「最近分析」区块：从真实技能资源中挑选建议（真实数据，零 Demo），
- * 点击卡片跳转详情页查看真实来源；「复制使用方式」把技能名 + 用法复制到剪贴板，
- * 用户可粘贴到对应 Harness（如 Hermes）中使用 —— AI Workspace 只展示与指引，不执行技能。
+ * 从真实技能资源中挑选建议（真实数据，零 Demo），每条对应一个「预设问题」——
+ * 点击复制该问题，粘贴到对应 Harness（如 Hermes）即可直接提问使用。
+ * 预设问题优先取真实 usage（触发方式），否则基于真实 description 转成任务指令；
+ * 点击卡片跳转详情页查看真实来源。AI Workspace 只展示与指引，不执行技能。
  *
  * 不重复：按 resourceId 去重（Set），同一技能只出现一次。
  */
@@ -11,7 +12,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Check, Copy, Loader2, Sparkles } from "lucide-react";
+import { Check, Copy, Loader2, MessageCircleQuestion, Sparkles } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -26,6 +27,21 @@ function getUsage(r: DiscoveredResource): string {
   return typeof u === "string" ? u.trim() : "";
 }
 
+/** 预设问题：优先真实 usage（触发方式），否则基于真实 description 转成任务指令 */
+function presetQuestion(r: DiscoveredResource): string {
+  const usage = getUsage(r);
+  if (usage) return usage;
+  const d = r.description?.trim();
+  if (d) {
+    const cleaned = d
+      .replace(/^(用于|负责|面向|帮助|可以|能够|支持|为|给)[：:，,、\s]*/, "")
+      .replace(/^的/, "")
+      .trim();
+    if (cleaned) return `帮我${cleaned}`;
+  }
+  return `帮我使用「${r.name}」技能完成相关任务`;
+}
+
 function pickSuggestions(items: DiscoveredResource[]): DiscoveredResource[] {
   // 真实去重：同一 resourceId 只保留一次
   const seen = new Set<string>();
@@ -38,12 +54,6 @@ function pickSuggestions(items: DiscoveredResource[]): DiscoveredResource[] {
   const withUsage = unique.filter((r) => getUsage(r));
   const withDesc = unique.filter((r) => !getUsage(r) && r.description?.trim());
   return [...withUsage, ...withDesc].slice(0, MAX_ITEMS);
-}
-
-function suggestionText(r: DiscoveredResource): string {
-  const usage = getUsage(r);
-  if (usage) return usage;
-  return r.description?.trim() || "查看详情获取完整说明";
 }
 
 export function SkillSuggestions() {
@@ -77,7 +87,7 @@ export function SkillSuggestions() {
   }, []);
 
   async function handleCopy(r: DiscoveredResource) {
-    const text = `【${r.name}】使用方式：${suggestionText(r)}`;
+    const text = presetQuestion(r);
     try {
       await navigator.clipboard.writeText(text);
       setCopiedId(r.id);
@@ -97,7 +107,7 @@ export function SkillSuggestions() {
           <Sparkles className="size-3 text-primary" />
         </CardTitle>
         <p className="text-[11px] text-ink-3">
-          来自本机真实技能 · 点击复制使用方式，到对应 Harness 使用（不重复，仅指引不执行）
+          来自本机真实技能 · 点击复制预设问题，到对应 Harness 提问（不重复，仅指引不执行）
         </p>
       </CardHeader>
       <CardContent className="p-4 pt-1">
@@ -122,7 +132,7 @@ export function SkillSuggestions() {
                   onClick={() => {
                     router.push(`/resources/${r.id}`);
                   }}
-                  className="flex min-w-0 flex-1 flex-col items-start gap-0.5 text-left"
+                  className="flex min-w-0 flex-1 flex-col items-start gap-1 text-left"
                 >
                   <span className="flex items-center gap-1.5 text-[12px] font-medium text-ink-1">
                     <span className="truncate">{r.name}</span>
@@ -135,8 +145,9 @@ export function SkillSuggestions() {
                       </Badge>
                     )}
                   </span>
-                  <span className="line-clamp-1 text-[11px] text-ink-3">
-                    {suggestionText(r)}
+                  <span className="flex items-start gap-1 text-[12px] leading-relaxed text-ink-2">
+                    <MessageCircleQuestion className="mt-0.5 size-3 shrink-0 text-primary/70" />
+                    <span className="line-clamp-2">{presetQuestion(r)}</span>
                   </span>
                 </button>
                 <Button
@@ -151,7 +162,7 @@ export function SkillSuggestions() {
                     </>
                   ) : (
                     <>
-                      <Copy className="size-3" /> 复制使用方式
+                      <Copy className="size-3" /> 复制问题
                     </>
                   )}
                 </Button>

@@ -1079,9 +1079,13 @@ export async function analyzeTaskWithLLM(task: string): Promise<AnalyzeTaskResul
   return { plan: newPlan, reused: base.reused };
 }
 
-/** 技能 AI 解读（场景 B）：服务端调用 LLM 总结资源用途，返回 Markdown */
+/** 技能 AI 解读（场景 B）：服务端调用 LLM 总结资源用途，返回结构化「如何使用」 */
 export interface ResourceInterpretResult {
-  markdown: string;
+  summary: string;
+  whatItDoes: string[];
+  howToUse: string[];
+  /** 仅当结构化解析失败时非空，前端回退平铺展示 */
+  rawMarkdown: string;
   model: string;
   interpretedAt: string;
 }
@@ -1099,7 +1103,7 @@ export async function interpretResource(id: string): Promise<ResourceInterpretRe
     typeof res.metadata?.usage === "string" && res.metadata.usage.trim()
       ? res.metadata.usage
       : res.description ?? "";
-  const { markdown, model } = await interpretResourceText(
+  const { summary, whatItDoes, howToUse, rawMarkdown, model } = await interpretResourceText(
     {
       name: res.name,
       type: res.type,
@@ -1109,7 +1113,7 @@ export async function interpretResource(id: string): Promise<ResourceInterpretRe
     },
     effective.config
   );
-  return { markdown, model, interpretedAt: new Date().toISOString() };
+  return { summary, whatItDoes, howToUse, rawMarkdown, model, interpretedAt: new Date().toISOString() };
 }
 
 /* ---------------- LLM Provider 配置（S1.20：Settings 手动配置 / 官方连接） ---------------- */

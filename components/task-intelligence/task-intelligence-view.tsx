@@ -165,14 +165,15 @@ export function TaskIntelligenceView() {
   const error = useWorkspaceStore((s) => s.taskIntelligence.error);
   const analyzeTask = useWorkspaceStore((s) => s.analyzeTask);
   const [task, setTask] = useState("");
+  const [aiEnhanced, setAiEnhanced] = useState(true);
 
   async function handleAnalyze(e: React.FormEvent) {
     e.preventDefault();
     const t = task.trim();
     if (!t || analyzing) return;
     try {
-      await analyzeTask(t);
-      toast.success("任务分析完成");
+      await analyzeTask(t, aiEnhanced ? "llm-assisted" : "heuristic");
+      toast.success(aiEnhanced ? "任务分析完成（AI 增强）" : "任务分析完成（启发式）");
     } catch (err) {
       toast.error((err as Error).message || "任务分析失败");
     }
@@ -212,6 +213,27 @@ export function TaskIntelligenceView() {
                 )}
                 {analyzing ? "分析中…" : "分析任务"}
               </Button>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={aiEnhanced}
+                onClick={() => setAiEnhanced((v) => !v)}
+                className="flex h-7 items-center gap-1.5 rounded-md border border-white/[0.08] px-2 text-[11px] text-ink-2 transition-colors hover:border-white/20 hover:text-ink"
+                title="开启时用当前 AI Provider 增强任务类型/摘要推断；未配置 Key 时自动回退启发式"
+              >
+                <span
+                  className={`relative h-3.5 w-6 rounded-full transition-colors ${
+                    aiEnhanced ? "bg-violet-500/60" : "bg-white/10"
+                  }`}
+                >
+                  <span
+                    className={`absolute top-0.5 size-2.5 rounded-full bg-white transition-transform ${
+                      aiEnhanced ? "translate-x-3" : "translate-x-0.5"
+                    }`}
+                  />
+                </span>
+                AI 增强
+              </button>
               <div className="flex flex-wrap items-center gap-1.5">
                 <span className="text-[10px] text-ink-3">示例：</span>
                 {SAMPLE_TASKS.map((t) => (

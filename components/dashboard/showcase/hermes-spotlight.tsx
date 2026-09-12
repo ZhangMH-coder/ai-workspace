@@ -33,9 +33,12 @@ function usageOf(resource: DiscoveredResource): string {
 export function HermesSpotlight({
   config,
   profiles,
+  manualModel,
 }: {
   config: DiscoveredResource | null;
   profiles: DiscoveredResource[];
+  /** AI Workspace 手动配置的生效模型（如已配置；不覆盖 Hermes 自身配置，仅叠加展示） */
+  manualModel?: string | null;
 }) {
   const cfg = config ? metaOf(config) : null;
   return (
@@ -71,6 +74,11 @@ export function HermesSpotlight({
               {typeof cfg.modelCount === "number" && cfg.modelCount > 0 ? (
                 <Badge variant="outline" className="border-white/10 text-ink-2">
                   {cfg.modelCount} 个可用模型
+                </Badge>
+              ) : null}
+              {manualModel ? (
+                <Badge variant="outline" className="border-emerald-400/25 bg-emerald-500/10 text-emerald-300">
+                  AI Workspace 当前生效 · {manualModel}
                 </Badge>
               ) : null}
             </div>

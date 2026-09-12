@@ -245,7 +245,7 @@ interface WorkspaceState {
     planError: string | null;
     planReused: boolean;
   };
-  analyzeTask: (task: string) => Promise<RecommendationPlan>;
+  analyzeTask: (task: string, strategy?: "heuristic" | "llm-assisted") => Promise<RecommendationPlan>;
   fetchTaskAnalysisHistory: () => Promise<void>;
   createTaskPlan: (analysisId: string) => Promise<TaskPlan>;
   fetchPlanByAnalysis: (analysisId: string) => Promise<TaskPlan | null>;
@@ -440,10 +440,10 @@ export const useWorkspaceStore = create<WorkspaceState>()(
         }
       },
 
-      analyzeTask: async (task: string) => {
+      analyzeTask: async (task: string, strategy?: "heuristic" | "llm-assisted") => {
         set((s) => ({ taskIntelligence: { ...s.taskIntelligence, analyzing: true, error: null } }));
         try {
-          const result = await analyzeTaskService(task);
+          const result = await analyzeTaskService(task, { strategy });
           set((s) => ({
             taskIntelligence: {
               ...s.taskIntelligence,

@@ -36,11 +36,11 @@ const SOURCE_LABEL: Record<string, string> = {
 
 /** 官方端点预设（OpenAI 兼容格式，仅填 base_url，模型 / Key 由用户填写） */
 const OFFICIAL_ENDPOINTS = [
-  { key: "openai", name: "OpenAI", baseUrl: "https://api.openai.com/v1" },
-  { key: "deepseek", name: "DeepSeek", baseUrl: "https://api.deepseek.com/v1" },
-  { key: "anthropic", name: "Anthropic", baseUrl: "https://api.anthropic.com/v1" },
-  { key: "moonshot", name: "Kimi", baseUrl: "https://api.moonshot.cn/v1" },
-  { key: "zhipu", name: "智谱", baseUrl: "https://open.bigmodel.cn/api/paas/v4" },
+  { key: "openai", name: "OpenAI", baseUrl: "https://api.openai.com/v1", hint: "OpenAI 官方端点" },
+  { key: "deepseek", name: "DeepSeek", baseUrl: "https://api.deepseek.com/v1", hint: "DeepSeek 官方端点" },
+  { key: "anthropic", name: "Anthropic", baseUrl: "https://api.anthropic.com/v1", hint: "Anthropic 官方端点（chat 格式与 OpenAI 不同，建议经 OpenAI 兼容中转使用）" },
+  { key: "moonshot", name: "Kimi", baseUrl: "https://api.moonshot.cn/v1", hint: "Moonshot Kimi 官方端点" },
+  { key: "zhipu", name: "智谱", baseUrl: "https://open.bigmodel.cn/api/paas/v4", hint: "智谱 GLM 官方端点" },
 ];
 
 /** 测试连接成功后：可用模型选择（端点返回 /models 时展示；否则提示手动输入） */
@@ -285,7 +285,7 @@ export function LlmProvider() {
                       ? "border-primary/40 bg-primary/10 text-primary"
                       : "border-white/10 bg-white/[0.03] text-ink-2 hover:border-white/20 hover:text-ink"
                   }`}
-                  title={`${o.name}：${o.baseUrl}`}
+                  title={`${o.hint}：${o.baseUrl}`}
                 >
                   {o.name}
                 </button>

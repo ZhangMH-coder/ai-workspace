@@ -1176,3 +1176,10 @@ Resource Discovery MVP —— 实现完成、全量验证通过、待审批（�
 - 连接测试接口扩展：测试成功后顺带拉取端点模型列表，TestLLMResult / TestLLMResultDTO 增加 models?: string[] | null。
 - Settings AI Provider：测试连接成功后显示「可用模型」选择区（点击模型自动填入 Model 输入框 + 提示已选择）；端点不支持 /models 时提示手动输入。
 - 验证：真实 Hermes tokenrhythm 端点测试 ok=true，拉取 19 个模型（glm-5.1 / minimax-m2.7 / kimi-k2.6 / qwen3.7-max 等）；浏览器实测「测试连接」→ 连接成功 1595ms → 可用模型列表渲染；lint / tsc / build ✅。
+
+### S1.28 候选执行（2026-09-12，用户「执行候选」）
+候选 1 · Dashboard 联动：HermesSpotlight 增加「AI Workspace 当前生效」badge（读取手动 Provider 配置的生效模型，叠加展示，不覆盖 Hermes 自身 config.yaml 事实）。
+候选 3 · 任务分析 AI 增强入口：analyze 接口支持 strategy 参数（heuristic / llm-assisted），前端「AI 增强」开关（默认开，未配置 Key 时服务端静默回退）；同时修复 toPlan 把 strategy 写死 heuristic 的回显 bug。
+候选 4 · 官方端点标注：Anthropic 预设按钮 title 标注「chat 格式与 OpenAI 不同，建议经兼容中转」。
+候选 2（Vercel 部署）挂起：待用户注册 Vercel 账号。
+- 验证：lint / tsc / build ✅；浏览器实测「AI 增强」开关渲染、Dashboard 当前生效 badge 渲染；API 实测 heuristic → strategy=heuristic，llm-assisted → strategy=llm-assisted ✅。

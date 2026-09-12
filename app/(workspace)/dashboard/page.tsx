@@ -18,6 +18,7 @@ import { PageHeader } from "@/components/shared/page-header";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { fetchDiscoveredResources, fetchDiscoveryOverview, runResourceScan } from "@/lib/services/resource-discovery";
+import { fetchLLMProviderConfig } from "@/lib/services/ai";
 import type { DiscoveredResource, ResourceType } from "@/lib/types";
 
 const TYPE_CARD_DEFS: { type: ResourceType; label: string; description: string }[] = [
@@ -32,6 +33,7 @@ export default function DashboardPage() {
   const [profiles, setProfiles] = useState<DiscoveredResource[]>([]);
   const [configs, setConfigs] = useState<DiscoveredResource[]>([]);
   const [skills, setSkills] = useState<DiscoveredResource[]>([]);
+  const [manualModel, setManualModel] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
 
   const loadAll = async () => {
@@ -45,6 +47,13 @@ export default function DashboardPage() {
     setProfiles(pr.items);
     setConfigs(cf.items);
     setSkills(sk.items);
+    // 手动配置的生效模型（仅叠加展示，不覆盖 Hermes 自身配置）
+    try {
+      const llm = await fetchLLMProviderConfig();
+      setManualModel(llm.effective.model || null);
+    } catch {
+      setManualModel(null);
+    }
   };
 
   useEffect(() => {
@@ -130,7 +139,7 @@ export default function DashboardPage() {
 
           <TypeCards cards={cards} />
 
-          <HermesSpotlight config={config} profiles={profiles} />
+          <HermesSpotlight config={config} profiles={profiles} manualModel={manualModel} />
 
           <SkillGallery skills={skills} />
         </motion.div>

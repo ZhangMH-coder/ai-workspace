@@ -108,7 +108,7 @@ function toPlan(d: TaskAnalysisPlanDTO): RecommendationPlan {
       isInferred: r.isInferred as true,
     })),
     recommendations: (d.recommendations ?? []).map(toRecommendation),
-    strategy: "heuristic",
+    strategy: d.strategy === "llm-assisted" ? "llm-assisted" : "heuristic",
     analyzerVersion: d.analyzerVersion,
   };
 }
@@ -120,9 +120,19 @@ export interface AnalyzeResult {
 
 /* ---------------- Client ---------------- */
 
-/** 任务分析（幂等：同输入复用已有结果） */
-export async function analyzeTask(task: string): Promise<AnalyzeResult> {
-  const dto = await http.post<TaskAnalysisPlanDTO>("/task-intelligence/analyze", { task });
+export type AnalyzeStrategy = "heuristic" | "llm-assisted";
+
+/* ---------------- Client ---------------- */
+
+/** 任务分析（幂等：同输入复用已有结果）；strategy 控制是否用 LLM 增强推断字段 */
+export async function analyzeTask(
+  task: string,
+  opts?: { strategy?: AnalyzeStrategy }
+): Promise<AnalyzeResult> {
+  const dto = await http.post<TaskAnalysisPlanDTO>("/task-intelligence/analyze", {
+    task,
+    strategy: opts?.strategy ?? "llm-assisted",
+  });
   return { plan: toPlan(dto), reused: Boolean(dto.reused) };
 }
 

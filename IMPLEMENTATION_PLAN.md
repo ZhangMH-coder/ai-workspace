@@ -1249,3 +1249,9 @@ Authentication / Multi-user / Permissions / 真实 LLM Provider Adapter（OpenAI
 - 开关打磨：轨道 h-4 w-7、滑块 size-3 用 top-1/2 -translate-y-1/2 精确垂直居中，开关位移对齐（开 14px / 关 2px），不再偏上。
 - 验证：lint ✅ / tsc ✅ / build ✅ / 浏览器实机 ✅（第一行按钮+开关、第二行示例，视觉对齐）。
 
+
+### S1.35 「AI 增强」开关滑块修复（用户截图指出）
+- 根因：Tailwind v4 的 CSS transition（transition-transform / transition-[left]）在本项目 React 重渲染下触发 CSSTransition 卡死（currentTime 恒 0），滑块 left 被冻结在旧值 14px，导致开启态滑块贴在轨道右缘、切换不归位。
+- 修复：去掉所有 CSS transition，改为纯类切换（开 left-[14px] / 关 left-[2px]），滑块位置由 JS 实测正确（开 14px、关 2px、往返正常、无动画卡死）。
+- 验证：lint ✅ / tsc ✅ / build ✅ / 生产浏览器 DOM 实测 ✅；bu 自动化截图在该页面显示空白为渲染捕获环境问题（DOM 与 console 正常），不阻塞交付。
+

@@ -222,13 +222,13 @@ export function TaskIntelligenceView() {
                 title="开启时用当前 AI Provider 增强任务类型/摘要推断；未配置 Key 时自动回退启发式"
               >
                 <span
-                  className={`relative h-4 w-7 shrink-0 rounded-full transition-colors ${
+                  className={`relative block h-4 w-7 shrink-0 rounded-full transition-colors ${
                     aiEnhanced ? "bg-violet-500/60" : "bg-white/10"
                   }`}
                 >
                   <span
-                    className={`absolute top-1/2 size-3 -translate-y-1/2 rounded-full bg-white shadow transition-transform ${
-                      aiEnhanced ? "translate-x-[14px]" : "translate-x-[2px]"
+                    className={`absolute top-1/2 size-3 -translate-y-1/2 rounded-full bg-white shadow ${
+                      aiEnhanced ? "left-[14px]" : "left-[2px]"
                     }`}
                   />
                 </span>

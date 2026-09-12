@@ -33,3 +33,5 @@ export const listHiddenResources = USE_MOCK
 export const unhideResourceRecord = USE_MOCK
   ? mock.unhideResourceRecord
   : http.unhideResourceRecord;
+
+export const interpretResource = USE_MOCK ? mock.interpretResource : http.interpretResource;

@@ -90,7 +90,8 @@ function PlanResult({ plan }: { plan: RecommendationPlan }) {
               </Badge>
             ) : null}
             <span className="ml-auto font-mono text-[10px] text-ink-3">
-              {plan.strategy} · {plan.analyzerVersion}
+              {plan.strategy === "llm-assisted" ? "LLM 增强" : "启发式"} ·{" "}
+              {plan.analyzerVersion}
             </span>
           </div>
           <p className="mt-3 text-[13px] leading-relaxed text-ink-1">{plan.summary}</p>

@@ -100,7 +100,8 @@ export interface RecommendationPlan {
   requirements: CapabilityRequirement[];
   /** 推荐列表（按 score 降序） */
   recommendations: Recommendation[];
-  strategy: "heuristic";
+  /** 策略：启发式 / LLM 增强（推断字段由 LLM 覆盖时标记 llm-assisted） */
+  strategy: "heuristic" | "llm-assisted";
   analyzerVersion: string;
 }
 

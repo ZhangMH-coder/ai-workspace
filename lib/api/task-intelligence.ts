@@ -122,14 +122,14 @@ export interface AnalyzeResult {
 
 /** 任务分析（幂等：同输入复用已有结果） */
 export async function analyzeTask(task: string): Promise<AnalyzeResult> {
-  const dto = await http.post<TaskAnalysisPlanDTO>("/api/v1/task-intelligence/analyze", { task });
+  const dto = await http.post<TaskAnalysisPlanDTO>("/task-intelligence/analyze", { task });
   return { plan: toPlan(dto), reused: Boolean(dto.reused) };
 }
 
 /** 任务分析历史列表 */
 export async function fetchTaskAnalyses(limit = 20): Promise<TaskAnalysisListItemDTO[]> {
   const dto = await http.get<{ items: TaskAnalysisListItemDTO[] }>(
-    `/api/v1/task-intelligence/analyses?limit=${limit}`
+    `/task-intelligence/analyses?limit=${limit}`
   );
   return dto.items ?? [];
 }
@@ -137,7 +137,7 @@ export async function fetchTaskAnalyses(limit = 20): Promise<TaskAnalysisListIte
 /** 单次任务分析详情 */
 export async function fetchTaskAnalysis(id: string): Promise<RecommendationPlan> {
   const dto = await http.get<TaskAnalysisPlanDTO>(
-    `/api/v1/task-intelligence/analyses/${encodeURIComponent(id)}`
+    `/task-intelligence/analyses/${encodeURIComponent(id)}`
   );
   return toPlan(dto);
 }
@@ -235,14 +235,14 @@ export interface CreatePlanResultDTO {
 
 /** 生成任务计划（幂等：同 analysisId 复用已有计划） */
 export async function createTaskPlan(analysisId: string): Promise<CreatePlanResultDTO> {
-  const dto = await http.post<TaskPlanDTO>("/api/v1/task-intelligence/plan", { analysisId });
+  const dto = await http.post<TaskPlanDTO>("/task-intelligence/plan", { analysisId });
   return { plan: toTaskPlan(dto), reused: Boolean(dto.reused) };
 }
 
 /** 按 id 查询任务计划 */
 export async function fetchTaskPlan(id: string): Promise<TaskPlan> {
   const dto = await http.get<TaskPlanDTO>(
-    `/api/v1/task-intelligence/plans/${encodeURIComponent(id)}`
+    `/task-intelligence/plans/${encodeURIComponent(id)}`
   );
   return toTaskPlan(dto);
 }
@@ -250,7 +250,7 @@ export async function fetchTaskPlan(id: string): Promise<TaskPlan> {
 /** 按分析查询其当前计划（未生成时抛 404，由调用方转为空态） */
 export async function fetchPlanByAnalysis(analysisId: string): Promise<TaskPlan> {
   const dto = await http.get<TaskPlanDTO>(
-    `/api/v1/task-intelligence/analyses/${encodeURIComponent(analysisId)}/plan`
+    `/task-intelligence/analyses/${encodeURIComponent(analysisId)}/plan`
   );
   return toTaskPlan(dto);
 }

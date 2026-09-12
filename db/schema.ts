@@ -503,6 +503,26 @@ export const planDependencies = sqliteTable(
   ]
 );
 
+/* ---------------- LLM Provider 配置（S1.20：Settings 手动配置 / 官方连接） ----------------
+ *
+ * 单行配置表（id 固定 "default"）：用户在 Settings 填写的自定义端点 / 模型 / Key。
+ * 生效优先级：手动配置 > 环境变量 > Hermes 自动发现（.hermes/.env + config.yaml）> 内置默认。
+ * Key 明文存本地 SQLite（等同 Hermes .env 明文行为）；data/ 不入 Git。
+ */
+export const llmProviderConfigs = sqliteTable(
+  "llm_provider_config",
+  {
+    id: text("id").primaryKey(),
+    /** 自定义端点（OpenAI 兼容 /v1） */
+    baseUrl: text("base_url"),
+    /** 模型名 */
+    model: text("model"),
+    /** API Key（本地明文，仅本机访问） */
+    apiKey: text("api_key"),
+    updatedAt: text("updated_at").notNull(),
+  }
+);
+
 export type AgentRow = typeof agents.$inferSelect;
 export type AgentRunRow = typeof agentRuns.$inferSelect;
 export type CapabilityDefinitionRow = typeof capabilityDefinitions.$inferSelect;
@@ -520,3 +540,4 @@ export type ResourceRecommendationRow = typeof resourceRecommendations.$inferSel
 export type TaskPlanRow = typeof taskPlans.$inferSelect;
 export type PlanStepRow = typeof planSteps.$inferSelect;
 export type PlanDependencyRow = typeof planDependencies.$inferSelect;
+export type LlmProviderConfigRow = typeof llmProviderConfigs.$inferSelect;

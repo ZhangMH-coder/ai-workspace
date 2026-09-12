@@ -54,3 +54,11 @@ export async function listHiddenResources(): Promise<{ id: string; sourcePath: s
 export async function unhideResourceRecord(): Promise<never> {
   throw new ApiError(404, { code: "NOT_FOUND", message: "Mock 模式无资源可恢复" });
 }
+
+/** 技能 AI 解读（Mock：真实空态，不伪造分析结果） */
+export async function interpretResource(): Promise<never> {
+  throw new ApiError(501, {
+    code: "LLM_NOT_CONFIGURED",
+    message: "Mock 模式未配置 LLM，无法进行 AI 解读",
+  });
+}

@@ -31,6 +31,11 @@ import {
   type RecommendationPlan,
   type RetrievableCapability,
 } from "@/lib/task-intelligence";
+import { discoverStaticConfig, isLLMConfigured, maskKey, DEFAULT_BASE_URL, DEFAULT_MODEL } from "@/lib/ai/config";
+import { llmUnderstandTask } from "@/lib/ai/task-understand";
+import { interpretResourceText } from "@/lib/ai/interpret-resource";
+import { chatCompletion } from "@/lib/ai/client";
+import type { LLMConfig } from "@/lib/ai/config";
 import { randomUUID as uuid } from "node:crypto";
 import { heuristicPlanner, PLANNER_VERSION } from "@/lib/task-planning";
 import type { PlanCandidate, PlanValidation, TaskPlan } from "@/lib/task-planning";
@@ -63,7 +68,12 @@ import type {
 /** 统一内部错误（code 对齐 ApiErrorCode；CONFLICT 语义由具体业务触发） */
 export class ServiceError extends Error {
   constructor(
-    public code: "VALIDATION_ERROR" | "NOT_FOUND" | "CONFLICT",
+    public code:
+      | "VALIDATION_ERROR"
+      | "NOT_FOUND"
+      | "CONFLICT"
+      | "LLM_NOT_CONFIGURED"
+      | "INTERNAL_ERROR",
     message: string
   ) {
     super(message);
@@ -1035,6 +1045,203 @@ export function analyzeTask(task: string): AnalyzeTaskResult {
   });
 
   return { plan: { ...plan, analysisId }, reused: false };
+}
+
+/**
+ * 任务分析 + LLM 增强（场景 A）
+ *
+ * 先执行 Heuristic 全流程（能力检索 / 推荐 / 落库，保证证据链真实可追溯）；
+ * 再尝试用 LLM 覆盖「推断字段」taskType / summary，strategy 标记为 llm-assisted。
+ * LLM 未配置 / 失败时静默回退 Heuristic，不影响主流程。
+ */
+export async function analyzeTaskWithLLM(task: string): Promise<AnalyzeTaskResult> {
+  const trimmed = task.trim();
+  const base = analyzeTask(trimmed);
+  const effective = getEffectiveLLMConfig();
+  if (!isLLMConfigured(effective.config)) return base;
+
+  const llm = await llmUnderstandTask(trimmed, effective.config);
+  if (!llm) return base;
+
+  const plan = base.plan;
+  const newPlan: RecommendationPlan = {
+    ...plan,
+    taskType: llm.taskType as RecommendationPlan["taskType"],
+    summary: llm.summary,
+    strategy: "llm-assisted",
+  };
+  repo.patchTaskAnalysisLlm(plan.analysisId, {
+    strategy: "llm-assisted",
+    taskType: newPlan.taskType,
+    summary: newPlan.summary,
+    analyzedAt: new Date().toISOString(),
+  });
+  return { plan: newPlan, reused: base.reused };
+}
+
+/** 技能 AI 解读（场景 B）：服务端调用 LLM 总结资源用途，返回 Markdown */
+export interface ResourceInterpretResult {
+  markdown: string;
+  model: string;
+  interpretedAt: string;
+}
+
+export async function interpretResource(id: string): Promise<ResourceInterpretResult> {
+  const res = getDiscoveredResource(id);
+  const effective = getEffectiveLLMConfig();
+  if (!isLLMConfigured(effective.config)) {
+    throw new ServiceError(
+      "LLM_NOT_CONFIGURED",
+      "未配置 LLM API Key（可在 Settings → AI Provider 中填写，或通过环境变量 / Hermes 自动发现）"
+    );
+  }
+  const usage =
+    typeof res.metadata?.usage === "string" && res.metadata.usage.trim()
+      ? res.metadata.usage
+      : res.description ?? "";
+  const { markdown, model } = await interpretResourceText(
+    {
+      name: res.name,
+      type: res.type,
+      description: res.description ?? "",
+      sourcePath: res.sourcePath,
+      usage,
+    },
+    effective.config
+  );
+  return { markdown, model, interpretedAt: new Date().toISOString() };
+}
+
+/* ---------------- LLM Provider 配置（S1.20：Settings 手动配置 / 官方连接） ---------------- */
+
+export type LLMConfigSource = "manual" | "env" | "hermes" | "default";
+
+export interface EffectiveLLMConfig {
+  config: LLMConfig;
+  /** 生效来源：manual=Settings 手动配置；env=环境变量；hermes=Hermes 自动发现；default=内置默认（无 Key） */
+  source: LLMConfigSource;
+}
+
+/**
+ * 生效配置：手动配置（DB）> 环境变量 > Hermes 自动发现 > 内置默认。
+ * 手动配置字段允许部分为空：空字段回落到静态发现值。
+ */
+export function getEffectiveLLMConfig(): EffectiveLLMConfig {
+  const staticCfg = discoverStaticConfig();
+  const row = repo.getLLMProviderConfigRow();
+
+  if (row) {
+    const hasManual = Boolean(row.baseUrl || row.model || row.apiKey);
+    if (hasManual) {
+      return {
+        config: {
+          baseUrl: row.baseUrl || staticCfg.baseUrl,
+          model: row.model || staticCfg.model,
+          apiKey: row.apiKey || staticCfg.apiKey,
+        },
+        source: "manual",
+      };
+    }
+  }
+  return { config: staticCfg, source: staticCfg.source };
+}
+
+export interface SaveLLMProviderInput {
+  baseUrl?: string;
+  model?: string;
+  apiKey?: string;
+}
+
+/** 保存手动配置；apiKey 传空 / 未传表示不修改 Key */
+export function saveLLMProviderConfig(input: SaveLLMProviderInput): EffectiveLLMConfig {
+  repo.upsertLLMProviderConfig({
+    baseUrl: input.baseUrl,
+    model: input.model,
+    apiKey: input.apiKey,
+  });
+  return getEffectiveLLMConfig();
+}
+
+/** 清除手动配置（恢复自动发现） */
+export function clearLLMProviderConfig(): EffectiveLLMConfig {
+  repo.clearLLMProviderConfig();
+  return getEffectiveLLMConfig();
+}
+
+export interface TestLLMResult {
+  ok: boolean;
+  latencyMs: number;
+  model: string;
+  source: LLMConfigSource;
+  error?: string;
+}
+
+/** 测试连接：用当前生效配置真实调用一次 LLM（短消息），返回延迟与结果 */
+export async function testLLMProviderConfig(): Promise<TestLLMResult> {
+  const effective = getEffectiveLLMConfig();
+  if (!isLLMConfigured(effective.config)) {
+    return {
+      ok: false,
+      latencyMs: 0,
+      model: effective.config.model,
+      source: effective.source,
+      error: "未配置 API Key（可在表单中填写，或通过环境变量 / Hermes 自动发现）",
+    };
+  }
+  const started = Date.now();
+  try {
+    const res = await chatCompletion(
+      {
+        temperature: 0,
+        maxTokens: 16,
+        timeoutMs: 20_000,
+        messages: [
+          { role: "system", content: "只回复两个字：正常" },
+          { role: "user", content: "连接测试" },
+        ],
+      },
+      effective.config
+    );
+    return {
+      ok: true,
+      latencyMs: Date.now() - started,
+      model: res.model,
+      source: effective.source,
+    };
+  } catch (e) {
+    return {
+      ok: false,
+      latencyMs: Date.now() - started,
+      model: effective.config.model,
+      source: effective.source,
+      error: e instanceof Error ? e.message : String(e),
+    };
+  }
+}
+
+/** 页面回显用：当前生效配置（Key 只回显掩码，绝不返回原文） */
+export function getLLMProviderConfigView() {
+  const effective = getEffectiveLLMConfig();
+  const row = repo.getLLMProviderConfigRow();
+  return {
+    effective: {
+      source: effective.source,
+      baseUrl: effective.config.baseUrl,
+      model: effective.config.model,
+      keyConfigured: isLLMConfigured(effective.config),
+      keyMasked: isLLMConfigured(effective.config)
+        ? maskKey(effective.config.apiKey)
+        : null,
+      defaults: { baseUrl: DEFAULT_BASE_URL, model: DEFAULT_MODEL },
+    },
+    manual: row
+      ? {
+          baseUrl: row.baseUrl ?? "",
+          model: row.model ?? "",
+          keyConfigured: Boolean(row.apiKey),
+        }
+      : null,
+  };
 }
 
 /** 查询单次任务分析（含需求与推荐） */

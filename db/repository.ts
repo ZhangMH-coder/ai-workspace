@@ -18,6 +18,7 @@ import {
   capabilityDefinitions,
   discoveredResources,
   harnessScans,
+  llmProviderConfigs,
   planDependencies,
   projectAgents,
   projects,
@@ -813,6 +814,27 @@ export function markOtherTaskAnalysesNotCurrent(task: string, keepId: string) {
     .run();
 }
 
+/** 更新分析记录的 LLM 增强结果（strategy / taskType / summary，不重建需求与推荐） */
+export function patchTaskAnalysisLlm(
+  id: string,
+  patch: {
+    strategy: "heuristic" | "llm-assisted";
+    taskType: string;
+    summary: string;
+    analyzedAt: string;
+  }
+) {
+  db.update(taskAnalyses)
+    .set({
+      strategy: patch.strategy,
+      taskType: patch.taskType,
+      summary: patch.summary,
+      analyzedAt: patch.analyzedAt,
+    })
+    .where(eq(taskAnalyses.id, id))
+    .run();
+}
+
 /** 删除某次分析的全部需求（重分析时替换） */
 export function deleteTaskRequirementsByAnalysis(analysisId: string) {
   db.delete(taskRequirements)
@@ -977,4 +999,51 @@ export function getPlanResult(id: string) {
     .orderBy(asc(planDependencies.type))
     .all();
   return { plan, steps, dependencies };
+}
+
+/* ---------------- LLM Provider 配置（S1.20） ---------------- */
+
+/** 单行配置（id 固定 "default"） */
+export function getLLMProviderConfigRow() {
+  return db.select().from(llmProviderConfigs).where(eq(llmProviderConfigs.id, "default")).get();
+}
+
+export interface SaveLLMProviderInput {
+  baseUrl?: string | null;
+  model?: string | null;
+  apiKey?: string | null;
+}
+
+/** 保存手动配置（null / 空字符串表示该字段不修改；全部为空则仅更新时间戳） */
+export function upsertLLMProviderConfig(input: SaveLLMProviderInput) {
+  const existing = getLLMProviderConfigRow();
+  const now = new Date().toISOString();
+  const patch: SaveLLMProviderInput = {};
+  if (input.baseUrl !== undefined) patch.baseUrl = input.baseUrl?.trim() || null;
+  if (input.model !== undefined) patch.model = input.model?.trim() || null;
+  if (input.apiKey !== undefined) patch.apiKey = input.apiKey?.trim() || null;
+
+  if (!existing) {
+    db.insert(llmProviderConfigs)
+      .values({
+        id: "default",
+        baseUrl: patch.baseUrl ?? null,
+        model: patch.model ?? null,
+        apiKey: patch.apiKey ?? null,
+        updatedAt: now,
+      })
+      .run();
+    return;
+  }
+
+  const set: Record<string, unknown> = { updatedAt: now };
+  if (input.baseUrl !== undefined) set.baseUrl = patch.baseUrl ?? null;
+  if (input.model !== undefined) set.model = patch.model ?? null;
+  if (input.apiKey !== undefined) set.apiKey = patch.apiKey ?? null;
+  db.update(llmProviderConfigs).set(set).where(eq(llmProviderConfigs.id, "default")).run();
+}
+
+/** 清除手动配置（恢复自动发现） */
+export function clearLLMProviderConfig() {
+  db.delete(llmProviderConfigs).where(eq(llmProviderConfigs.id, "default")).run();
 }

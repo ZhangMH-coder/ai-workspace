@@ -14,6 +14,7 @@ export const API_ERROR_CODES = [
   "FORBIDDEN",
   "INTERNAL_ERROR",
   "RATE_LIMITED",
+  "LLM_NOT_CONFIGURED",
 ] as const;
 
 export type ApiErrorCode = (typeof API_ERROR_CODES)[number];
@@ -40,6 +41,7 @@ export const HTTP_STATUS_BY_CODE: Record<ApiErrorCode, number> = {
   FORBIDDEN: 403,
   INTERNAL_ERROR: 500,
   RATE_LIMITED: 429,
+  LLM_NOT_CONFIGURED: 501,
 };
 
 /** 前端统一异常类型（lib/api/client.ts 使用） */

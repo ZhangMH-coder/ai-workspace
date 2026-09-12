@@ -9,13 +9,16 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
   ArrowLeft,
+  Bot,
   ChevronDown,
   ChevronUp,
   EyeOff,
   FileCode2,
   FolderOpen,
+  Loader2,
   RotateCcw,
   Share2,
+  Sparkles,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -25,6 +28,7 @@ import { Separator } from "@/components/ui/separator";
 import { useWorkspaceStore } from "@/stores/workspace";
 import {
   fetchDiscoveredResources,
+  interpretResource,
   isResourceHidden,
 } from "@/lib/services/resource-discovery";
 import {
@@ -161,6 +165,9 @@ export function ResourceDetail({ resource }: { resource: DiscoveredResource }) {
       ) : null}
 
       {/* Hermes 配置专用展示：模型 / Provider / 可用模型列表 */}
+
+      {/* AI 解读：真实 LLM 总结用途（未配置 Key 时如实提示，不伪造） */}
+      {resource.parseable ? <AiInterpretSection resource={resource} /> : null}
       {resource.type === "rule" && typeof resource.metadata?.defaultModel === "string" ? (
         <HermesConfigDetail metadata={resource.metadata} />
       ) : null}
@@ -404,6 +411,95 @@ function SoulProfileDetail({ metadata }: { metadata: Record<string, unknown> }) 
       <pre className="max-h-[420px] overflow-y-auto whitespace-pre-wrap break-words rounded-lg border border-white/[0.06] bg-black/30 p-3 font-sans text-[12px] leading-relaxed text-ink-2">
         {content}
       </pre>
+    </div>
+  );
+}
+
+/** AI 解读区块：真实 LLM 总结资源用途；未配置 Key / 调用失败按 code 如实提示 */
+function AiInterpretSection({ resource }: { resource: DiscoveredResource }) {
+  const [state, setState] = useState<"idle" | "loading" | "done" | "error">("idle");
+  const [markdown, setMarkdown] = useState("");
+  const [model, setModel] = useState("");
+  const [interpretedAt, setInterpretedAt] = useState("");
+  const [error, setError] = useState("");
+
+  async function handleInterpret() {
+    if (state === "loading") return;
+    setState("loading");
+    setError("");
+    try {
+      const res = await interpretResource(resource.id);
+      setMarkdown(res.markdown);
+      setModel(res.model);
+      setInterpretedAt(res.interpretedAt);
+      setState("done");
+    } catch (e) {
+      const code =
+        typeof e === "object" && e !== null && "code" in e
+          ? String((e as { code: unknown }).code)
+          : "";
+      if (code === "LLM_NOT_CONFIGURED") {
+        setError(
+          "未配置 LLM API Key：请设置环境变量 LLM_API_KEY（或复用 Hermes 的 HERMES_CUSTOM_OPENAI_API_KEY）后重启服务。"
+        );
+      } else {
+        setError(e instanceof Error ? e.message : "AI 解读失败，请稍后重试");
+      }
+      setState("error");
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-2 rounded-xl border border-white/10 bg-white/[0.03] p-4">
+      <div className="flex items-center justify-between gap-2">
+        <p className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-ink-3">
+          <Sparkles className="size-3.5 text-primary" /> AI 解读
+        </p>
+        {state === "idle" ? (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleInterpret}
+            className="h-7 gap-1.5 border-white/10 px-2.5 text-[12px] text-ink-2 hover:text-ink"
+          >
+            <Bot className="size-3.5" /> 生成解读
+          </Button>
+        ) : null}
+      </div>
+
+      {state === "loading" ? (
+        <p className="flex items-center gap-2 text-[12px] text-ink-2">
+          <Loader2 className="size-3.5 animate-spin text-primary" /> 正在调用本地配置的 LLM 解读此资源…
+        </p>
+      ) : null}
+
+      {state === "error" ? (
+        <div className="flex flex-col gap-2">
+          <p className="text-[12px] leading-relaxed text-warning">{error}</p>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleInterpret}
+            className="h-7 w-fit px-2 text-[12px] text-primary hover:text-primary/80"
+          >
+            重试
+          </Button>
+        </div>
+      ) : null}
+
+      {state === "done" ? (
+        <div className="flex flex-col gap-2">
+          <pre className="whitespace-pre-wrap break-words rounded-lg border border-white/[0.06] bg-black/30 p-3 font-sans text-[13px] leading-relaxed text-ink">
+            {markdown}
+          </pre>
+          <p className="text-[10.5px] text-ink-3">
+            模型 {model}
+            {interpretedAt
+              ? ` · ${new Date(interpretedAt).toLocaleString()}`
+              : ""}
+          </p>
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -6,6 +6,7 @@ import { Settings } from "lucide-react";
 import { EnvInfo } from "@/components/settings/env-info";
 import { HarnessDirectories } from "@/components/settings/harness-directories";
 import { HiddenResources } from "@/components/settings/hidden-resources";
+import { LlmProvider } from "@/components/settings/llm-provider";
 import { ResourceStats } from "@/components/settings/resource-stats";
 import { PageHeader } from "@/components/shared/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -50,6 +51,11 @@ export default function SettingsPage() {
           <ResourceStats />
         </CardContent>
       </Card>
+
+      <section className="flex flex-col gap-2">
+        <h2 className="text-[13px] font-semibold text-ink">AI Provider</h2>
+        <LlmProvider />
+      </section>
 
       <section className="flex flex-col gap-2">
         <h2 className="text-[13px] font-semibold text-ink">已隐藏资源</h2>

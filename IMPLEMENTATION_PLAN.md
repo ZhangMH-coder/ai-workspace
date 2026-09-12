@@ -1064,3 +1064,29 @@ Resource Discovery MVP —— 实现完成、全量验证通过、待审批（�
 
 ### 当前状态
 - 阶段完成；未越界；Git：待提交
+
+---
+
+## S1.20 真实 AI Provider 接入（方案 C）+ LLM Provider 配置页（2026-09-12）
+
+### 已完成
+1. **LLM 客户端层**（`lib/ai/` 五文件）：API Key 解析 = 环境变量 `LLM_API_KEY`/`HERMES_CUSTOM_OPENAI_API_KEY` → 读取 `~/.hermes/.env` 的 `HERMES_CUSTOM_OPENAI_API_KEY`（Hermes 实际存放位置，零额外配置）；baseUrl 默认 tokenrhythm `/v1`，模型默认 `deepseek-v4-flash-0731`；`AiError` 5 码（CONFIG_MISSING/TIMEOUT/NETWORK/API_ERROR/PARSE_ERROR）；OpenAI 兼容非流式 `chatCompletion`，超时 25s；Key 只服务端进程内读，不进 DB / 不进 Git / 不进前端。
+2. **场景 A · 任务分析 LLM 增强**：`analyzeTaskWithLLM` 先跑 Heuristic 全流程落库（保证证据链可追溯），再 LLM 覆盖 taskType/summary 并标 `strategy=llm-assisted`，任何失败静默回退 Heuristic。实测 3/3 识别准确（自动化→automation、会议纪要→text_summary、短视频脚本→content_creation），3.3-5.2s。
+3. **场景 B · 技能 AI 解读**：资源详情页「生成解读」按钮 → `POST /resource-discovery/resources/[id]/interpret` → LLM 输出「一句话总结 + 能做什么 + 怎么用」Markdown，未配置 Key 返回 501 LLM_NOT_CONFIGURED。
+4. **修复 API 双前缀 404 bug**：`lib/api/client.ts` BASE=`/api/v1` 但 task-intelligence.ts（6 处）/ resource-analysis.ts（5 处）路径重复 `/api/v1/api/v1/...` 导致任务分析页红条；全库清零（教训：绝不用 PowerShell `Set-Content` 写 .ts，会 GBK 乱码；用 node -e fs.writeFileSync 或 Edit）。
+5. **LLM Provider 配置页（Settings → AI Provider）**：参考 Hermes config.yaml 字段（base_url / model / key_env）设计：
+   - 新表 `llm_provider_config`（单行 id=default；base_url/model/api_key/updated_at）+ migration 0007；
+   - 配置生效优先级：**手动配置（DB）> 环境变量 > Hermes 自动发现 > 内置默认**；
+   - API：GET/PUT/DELETE `/api/v1/ai/provider-config` + POST `/test`（真实连接测试，返回延迟/模型/错误）；
+   - 前端表单：当前生效来源徽标（手动配置/环境变量/Hermes 自动发现/内置默认）+ base_url/model/api_key 输入（Key 为 password，留空不修改）+ 保存/测试连接/恢复自动发现 + 测试结果与错误分支；Key 读取接口只回显掩码 `****fTSs` 形式，绝不返回完整 Key；
+   - 安全说明文案：Key 明文存本地 SQLite（data/ 不入 Git，等同 Hermes .env 行为）。
+
+### 验证结果
+- lint ✅ 0/0 / tsc ✅ / build ✅ / db:check ✅（migration 已应用且 schema 一致）
+- API 冒烟全过：GET 初始=hermes 自动发现（baseUrl/model/keyConfigured/keyMasked 正确）→ PUT 保存=manual → GET 掩码 `****1234` → POST test 无效 Key 如实返回网络错误 → DELETE 恢复 hermes；真实连接测试 ok=true 1014ms deepseek-v4-flash-0731
+- analyze LLM 增强回归：strategy=llm-assisted / content_creation ✅；interpret 回归：deepseek-v4-flash-0731 / 428 字 Markdown ✅
+- /settings 页面 HTTP 200 且 SSR 含「AI Provider」区块与加载态；服务端无错误日志
+- 已知问题：浏览器自动化通道本次不可用（环境限制），页面交互以 API 冒烟 + SSR 验证覆盖；migration 状态簿曾与磁盘表不同步（0006 表已存在但 drizzle 记录缺失/时间戳错位，且 meta 缺 0006_snapshot.json 导致 db:generate 重复生成 0006 内容）——已用「修正 0007 SQL + 对齐记录」方式解决，0007_snapshot.json 已生成保证后续 generate 基线正确
+
+### 当前状态
+- 阶段完成；未越界；未修改原始 Harness 文件；Git：待提交

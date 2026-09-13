@@ -37,11 +37,12 @@ pm run db:reset（clearAll 仅清 6 张演示业务表），agent / agent_run / 
 | 2026-09-12 | v1.16 | **S1.48 页面进入时自动扫描** | store 新增 `maybeAutoScan` action + 15 分钟阈值常量 + inFlight 并发锁：进入 Dashboard / Resources 页面时静默检查上次扫描时间，从未扫描或距上次扫描超 15 分钟才触发增量扫描，完成后 dispatch `aiw:rescan` 复用现有页面刷新链路；自动扫描失败静默（不弹 toast、不打断浏览），保留手动「重新扫描」入口；验证：lint / tsc / build 全绿，生产重启后打开 /resources 自动触发（scanId b89b9b89 → cda18ea4），totalResources 保持 254 幂等无重复；同时输出《候选资源推荐重构方案（S1.49）》待审批 | ✅ 已完成（本次交付） |
 | 2026-09-13 | v1.17 | **S1.49 功能评估清单第一批** | ① 能力索引页新增搜索（匹配能力/资源名/证据引用/类别名）+ 类别过滤 + 分页（100/页，>100 条显示翻页）；② 扫描变更提示：discovered_resource 新增 created_at（migration 0011/0012，存量行 NULL 不误报），扫描后统计 addedResources，自动扫描有新增时低打扰 toast、手动扫描 toast 显示新增数；③ 纠正：任务智能「技能创建建议」已在 S1.37 实现（SkillProposalBlock + generateSkillProposal），无需重复开发；验证：lint / tsc / build 全绿；scan API addedResources=0（存量 254 无新增不误报）、total 254 幂等；浏览器实测搜索「代码生成」52 条（分类名可命中）、类别过滤/空态/计数正常 | ✅ 已完成（本次交付） |
 | 2026-09-13 | v1.18 | **S1.50 四项候选执行** | ① 提交推送：`e4eaca8`（S1.47）+ `05a771a`（S1.48+S1.49），push 成功 `7812ef8..05a771a`；② 资源收藏 Pin：store persist 升 v6（partialize 增 pinnedResourcePaths；migrate 旧版仅留 timeRange、领域数据明确丢弃），toggleResourcePin(sourcePath)；资源列表行内 Pin 按钮 + 置顶排序 + 名称旁图标，详情页「置顶/已置顶」按钮；③ 导出 CSV/JSON：新 API `GET /api/v1/resource-discovery/export` 与 `/api/v1/resource-capabilities/export`（format=csv|json，Content-Disposition 下载，服务端排除用户隐藏、CSV 转义），新公共组件 export-menu.tsx，resources 页与 capabilities 页接入；④ 预设问题统一：抽 `lib/prompts.ts`（presetPromptsForResource 类型模板 3 条 + presetQuestionFromDescription 描述转指令 + cleanPromptDesc），suggested-prompts.tsx 与 skill-suggestions.tsx 两处调用点统一；验证：lint / tsc / build 全绿；生产重启（端口占用杀净）；export API：资源 JSON 253（254−1 隐藏）、CSV 254 行、能力标签 JSON 970（当前有效）、CSV 971 行；浏览器：Pin 点击→persist v6 pinned=1、刷新保留+置顶优先、详情页已置顶、取消置顶=0、导出菜单 CSV/JSON、任务智能页 console 无 error | ✅ 已完成（本次交付） |
+| 2026-09-13 | v1.20 | **S1.52 技能画廊交互打磨** | 复核：分类切换 / 悬停预览 / 复制在 S1.x 已实现（数据源 Hermes 8 个真实技能，`/resources?harness=hermes` 同源）；本次打磨 ① 悬停预览由「卡片上方外弹」改为「卡片内嵌覆盖」（任何行无方向溢出，z-10 覆盖层含完整说明 + 复制按钮，其余区域点击穿透进详情）；② 移动端无 hover 时复制不可达 → 卡片标题行新增常驻复制按钮（lg:hidden）；验证：lint/tsc/build 全绿；浏览器实测 hover 后 overlay visible=1 且含「复制使用方式」、分类切换 media→仅 booru-image-api、复制按钮存在 | ✅ 已完成（本次交付） |
 | 2026-09-13 | v1.19 | **S1.51 四项候选执行** | ① 任务分析历史管理：`db/repository.ts` listTaskAnalyses/deleteTaskAnalysisById（连带删 task_requirements/resource_recommendations/task_plans/task_analyses）、`db/service.ts` deleteTaskAnalysis（NOT_FOUND）、API `DELETE /api/v1/task-intelligence/analyses/[id]`、client http.del、store loadTaskAnalysis/deleteTaskAnalysis（analysisId 标识；删当前态即清空 current/plan）、`history-panel.tsx` 列表+回看+删除（hover 显现）；② 能力索引 50/页 + PinnedStrip：INDEX_PAGE_SIZE 100→50、`DiscoveredResourceQuery.ids`（sourcePath 精确取回、忽略分页/搜索、排除隐藏）、`resources/route.ts` ids 解析、client ResourceListQuery.ids、`pinned-strip.tsx` 置顶条跨页可见；③ Dashboard 真实分布条 + 详情相邻导航：`distribution-bars.tsx`（资源类型分布 + 能力标签分类分布，纯 CSS，970 能力合计一致）、`getAdjacentResources`（行内排序定位 last_modified DESC,name ASC、排除隐藏，避开 drizzle gt/lt 类型坑）、API `GET /resources/[id]/adjacent`、详情页上一条/下一条（首条 disabled）；④ 命令面板全局搜索：重写 `command-palette.tsx`（打开懒加载能力索引平铺、输入防抖 280ms 服务端搜资源、分组：资源→能力标签→导航→工作区，点击跳详情） | ✅ 已完成（本次交付） |
 
 ## 当前阶段
 
-**S1.51 四项候选执行（任务分析历史管理 / 能力索引 50·页 + 置顶跨页 / Dashboard 分布条 + 详情相邻导航 / 命令面板全局搜索）**（已完成；**不自动进入下一阶段**，待审批）
+**S1.52 技能画廊交互打磨（悬停预览内嵌化 / 移动端常驻复制）**（已完成；**不自动进入下一阶段**，待审批）
 
 ---
 
@@ -1459,4 +1460,16 @@ pm run db:reset（仅清空 6 张演示业务表，真实资源线不动）。
 - 验证：lint ✅（0 error，3 warning 为既有未用变量）/ tsc ✅（0）/ build ✅（0）/ 生产重启（kill 3000 → npm run start，200）/ API 冒烟：adjacent 中间条目 prev/next 正确、列表首条 prev=null ✅、ids(sourcePath) 精确取回 3/3 ✅、analyses 创建→DELETE 200→列表消失 ✅、runs/stats 回归正常 ✅ / 浏览器实测：详情页上一条（首条正确 disabled）+ 下一条跳转 doubao-app-builder ✅、Dashboard 分布条渲染且 9 类能力合计 970 与能力索引一致 ✅、任务智能「最近分析 20 条 · 点击回看」+ 点击回看出现「当前」标记与完整详情 ✅、置顶资源后列表页「置顶资源 1 个 · 跨页可见」+ doubao-app-builder 卡片 ✅、能力索引 50/页分页控件 ✅。
 - 已知问题：命令面板 dialog 在本机 WebView（computer_use）存在焦点获取限制（hotkey 被拒、dialog 闪开即关），面板分组/跳转逻辑已由代码 + API 层验证，真实浏览器交互待外部验证（环境限制，非代码缺陷）；置顶排序仍为服务端分页 50/页内的置顶优先，跨页不插入第 1 页（既定语义：PinnedStrip 解决跨页可见）。
 - Git：本小节全部改动待提交（见下方「Git 状态」）。
+
+
+
+### S1.52 技能画廊交互打磨（悬停预览内嵌化 / 移动端常驻复制）
+
+- 背景：用户询问「技能画廊交互增强（分类切换 / 悬停预览）做了吗，没做可以做」。勘察结论：分类切换（真实 metadata.category + layoutId 动画 + 计数）、悬停预览（完整说明 + 复制使用方式）、卡片入场动画、复制反馈在早期阶段已实现，且数据链路正确（dashboard 拉 `harness=hermes,type=skill,parseable=true,pageSize=8` 的 8 个真实技能，「查看全部 → /resources?harness=hermes」同源）。未做的是两项打磨。
+- 实现（`components/dashboard/showcase/skill-gallery.tsx`）：
+  - ① 悬停预览由「卡片上方外弹（bottom-full）」改为「卡片内嵌覆盖」：`absolute inset-0 z-10` 覆盖层，hover 时显示完整说明（可滚动）+「复制使用方式」按钮，其余区域 `pointer-events-none` 穿透进详情链接；任何行、任何滚动位置均无方向溢出风险。
+  - ② 移动端（无 hover）复制不可达 → 卡片标题行新增常驻复制按钮（`lg:hidden`，桌面由 hover 预览承载），点击复制 `【name】使用方式：…` 并显示 Check「已复制」反馈。
+- 验证：lint ✅（0 error，3 既有 warning）/ tsc ✅ / build ✅ / 生产重启 ✅ / 浏览器实测：hover 后内嵌 overlay `visible=1` 且含「复制使用方式」+ 完整说明 ✅、分类切换 media → 仅 booru-image-api（计数 1）✅、移动端常驻复制按钮（aria-label「复制 project-evaluation 的使用方式」）存在 ✅。
+- 已知问题：无新增；复制反馈为既有稳定逻辑（S1.47 已验）。
+- Git：本小节改动待提交（见下方「Git 状态」）。
 

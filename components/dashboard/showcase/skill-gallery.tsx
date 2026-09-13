@@ -85,11 +85,29 @@ export function SkillGallery({ skills }: { skills: DiscoveredResource[] }) {
             >
               <Link
                 href={`/resources/${s.id}`}
-                className="relative flex h-full flex-col rounded-xl border border-white/[0.07] bg-white/[0.03] p-4 transition-colors hover:border-primary/30 hover:bg-white/[0.05]"
+                className="group relative flex h-full flex-col rounded-xl border border-white/[0.07] bg-white/[0.03] p-4 transition-colors hover:border-primary/30 hover:bg-white/[0.05]"
               >
                 <div className="flex items-center justify-between gap-2">
                   <p className="truncate text-[13px] font-medium text-ink">{s.name}</p>
-                  <ArrowUpRight className="size-3.5 shrink-0 text-ink-3 transition-colors group-hover:text-primary" />
+                  <span className="flex shrink-0 items-center gap-1.5">
+                    {/* 移动端常驻复制（lg 隐藏，hover 预览内已提供） */}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        void handleCopy(s);
+                      }}
+                      aria-label={`复制 ${s.name} 的使用方式`}
+                      className="rounded-md p-1 text-ink-3 transition-colors hover:text-primary lg:hidden"
+                    >
+                      {copiedId === s.id ? (
+                        <Check className="size-3.5 text-emerald-400" />
+                      ) : (
+                        <Copy className="size-3.5" />
+                      )}
+                    </button>
+                    <ArrowUpRight className="size-3.5 text-ink-3 transition-colors group-hover:text-primary" />
+                  </span>
                 </div>
                 {c ? (
                   <Badge variant="outline" className="mt-1.5 w-fit border-white/10 text-[10px] font-normal text-ink-3">
@@ -100,29 +118,32 @@ export function SkillGallery({ skills }: { skills: DiscoveredResource[] }) {
                 <p className="mt-2 line-clamp-2 flex-1 text-[11px] leading-relaxed text-ink-2">
                   {usageOf(s)}
                 </p>
+                {/* 悬停预览：卡片内嵌覆盖（无方向溢出；复制按钮可点，其余点击穿透进详情） */}
+                <div className="pointer-events-none absolute inset-0 z-10 hidden flex-col rounded-xl border border-primary/20 bg-surface-2/95 p-4 opacity-0 shadow-xl backdrop-blur transition-opacity duration-150 group-hover:pointer-events-auto group-hover:flex group-hover:opacity-100 lg:flex">
+                  <p className="text-[11px] font-medium text-ink">{s.name}</p>
+                  <p className="mt-1 max-h-[140px] flex-1 overflow-auto whitespace-pre-line text-[11px] leading-relaxed text-ink-2">
+                    {usageOf(s)}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      void handleCopy(s);
+                    }}
+                    className="pointer-events-auto mt-2 flex h-6 w-fit items-center gap-1 rounded-md border border-white/10 px-2 text-[11px] text-ink-2 transition-colors hover:border-primary/30 hover:text-primary"
+                  >
+                    {copiedId === s.id ? (
+                      <>
+                        <Check className="size-3 text-emerald-400" /> 已复制
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="size-3" /> 复制使用方式
+                      </>
+                    )}
+                  </button>
+                </div>
               </Link>
-              {/* 悬停预览：完整说明 + 复制使用方式（不推挤布局；与卡片同属一个 hover 组） */}
-              <div className="pointer-events-none absolute inset-x-0 bottom-full z-10 mb-2 hidden rounded-lg border border-white/10 bg-surface-2/95 p-3 opacity-0 shadow-xl backdrop-blur transition-opacity duration-150 group-hover:pointer-events-auto group-hover:block group-hover:opacity-100 lg:block">
-                <p className="text-[11px] font-medium text-ink">{s.name}</p>
-                <p className="mt-1 max-h-[120px] overflow-auto whitespace-pre-line text-[11px] leading-relaxed text-ink-2">
-                  {usageOf(s)}
-                </p>
-                <button
-                  type="button"
-                  onClick={() => void handleCopy(s)}
-                  className="mt-2 flex h-6 items-center gap-1 rounded-md border border-white/10 px-2 text-[11px] text-ink-2 transition-colors hover:border-primary/30 hover:text-primary"
-                >
-                  {copiedId === s.id ? (
-                    <>
-                      <Check className="size-3 text-emerald-400" /> 已复制
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="size-3" /> 复制使用方式
-                    </>
-                  )}
-                </button>
-              </div>
             </motion.div>
           );
         })}

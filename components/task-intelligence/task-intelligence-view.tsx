@@ -39,7 +39,10 @@ import { classifyMatch } from "@/lib/task-intelligence/matcher";
 import {
   generatePresetQuestions,
 } from "@/lib/task-intelligence/preset-questions";
-import { generateSkillProposal } from "@/lib/task-intelligence/skill-proposal";
+import {
+  generateSkillProposals,
+  type SkillProposal,
+} from "@/lib/task-intelligence/skill-proposal";
 import { PlanSection } from "./plan-section";
 import { SkillSuggestions } from "./skill-suggestions";
 import { HistoryPanel } from "./history-panel";
@@ -167,7 +170,7 @@ function SkillCard({ rec, task }: { rec: Recommendation; task: string }) {
   );
 }
 
-/** 态 B：技能创建建议 */
+/** 态 B：技能创建建议（S1.58：相似度 < 80% 视为未找到 → 给出 3 个角度建议，复制后去任意 Harness 创建） */
 function SkillProposalBlock({
   task,
   type,
@@ -177,15 +180,28 @@ function SkillProposalBlock({
   type: RecommendationPlan["taskType"];
   requirements: CapabilityRequirement[];
 }) {
+  const proposals = generateSkillProposals(task, type, requirements);
+
+  return (
+    <div className="flex flex-col gap-3">
+      {proposals.map((proposal, idx) => (
+        <ProposalCard key={proposal.suggestedName} proposal={proposal} index={idx} />
+      ))}
+    </div>
+  );
+}
+
+/** 单个技能创建建议卡 */
+function ProposalCard({ proposal, index }: { proposal: SkillProposal; index: number }) {
   const [showDraft, setShowDraft] = useState(false);
-  const proposal = generateSkillProposal(task, type, requirements);
 
   return (
     <Card className="border-violet-400/20 bg-violet-400/[0.04]">
       <CardHeader className="pb-2 pt-4">
         <CardTitle className="flex items-center gap-2 text-[13px] font-medium text-ink-1">
           <Lightbulb className="size-3.5 text-violet-300" />
-          本地未找到匹配技能 · 建议设计一个「{proposal.suggestedName}」
+          <span className="text-[10px] text-violet-300/80">建议 {index + 1}</span>
+          设计「{proposal.suggestedName}」 · {proposal.angle}
         </CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-3 p-4 pt-1">
@@ -216,7 +232,7 @@ function SkillProposalBlock({
 
         <div className="rounded-lg border border-white/[0.06] bg-black/20 p-3">
           <div className="flex items-center justify-between">
-            <span className="text-[10px] uppercase tracking-wide text-ink-3">创建提示词（交给豆包 skill-creator）</span>
+            <span className="text-[10px] uppercase tracking-wide text-ink-3">创建提示词（复制后到 Hermes / 豆包等平台创建）</span>
             <Button
               type="button"
               size="sm"
@@ -275,7 +291,6 @@ function SkillProposalBlock({
   );
 }
 
-/** 结果区（三态） */
 function PlanResult({ plan }: { plan: RecommendationPlan }) {
   const reused = useWorkspaceStore((s) => s.taskIntelligence.reused);
   const [showDetail, setShowDetail] = useState(false);
@@ -301,10 +316,8 @@ function PlanResult({ plan }: { plan: RecommendationPlan }) {
               className="text-[10px]"
             >
               {match.state === "matched"
-                ? `已找到 ${plan.recommendations.length} 个可用技能`
-                : match.state === "low-confidence"
-                  ? "匹配度较低"
-                  : "未找到匹配技能"}
+                ? `已找到 ${plan.recommendations.length} 个可用技能（相似度 ≥ 80%）`
+                : `未找到匹配技能（相似度 < 80%，已生成下方创建建议）`}
             </Badge>
             {reused ? (
               <Badge variant="outline" className="text-[10px] text-ink-2">
@@ -350,25 +363,19 @@ function PlanResult({ plan }: { plan: RecommendationPlan }) {
         </CardContent>
       </Card>
 
-      {/* 态 A / 态 C：技能列表 */}
-      {match.state !== "no-match" ? (
+      {/* 态 A：候选资源推荐（仅相似度 ≥ 80% 展示；低于 80% 视为未找到） */}
+      {match.state === "matched" ? (
         <Card className="border-white/[0.08] bg-white/[0.02]">
           <CardHeader className="pb-2 pt-4">
             <CardTitle className="flex items-center gap-2 text-[13px] font-medium text-ink-1">
               <Sparkles className="size-3.5 text-violet-300" />
-              {match.state === "matched" ? "候选资源推荐" : "边缘匹配（可信度有限）"}
+              候选资源推荐
               <span className="text-[11px] font-normal text-ink-3">
                 （来自真实 ResourceCapability · {match.usable.length} 项）
               </span>
             </CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col gap-2.5 p-4 pt-1">
-            {match.state === "low-confidence" ? (
-              <div className="rounded-lg border border-amber-400/20 bg-amber-400/[0.05] px-3 py-2 text-[11px] leading-relaxed text-amber-200/90">
-                本地技能与任务的匹配度较低，以下仅作参考。若都不合用，可考虑创建一个专属技能
-                （见页面下方建议）。
-              </div>
-            ) : null}
             {match.usable.length === 0 ? (
               <div className="rounded-lg border border-dashed border-white/[0.1] px-4 py-6 text-center text-[12px] text-ink-3">
                 未找到匹配的真实资源（低相关任务如实返回空态，不做强行推荐）
@@ -382,8 +389,8 @@ function PlanResult({ plan }: { plan: RecommendationPlan }) {
         </Card>
       ) : null}
 
-      {/* 态 B：技能建议 */}
-      {match.state === "no-match" ? (
+      {/* 态 B：技能创建建议（<80% 一律给出，含低置信区间） */}
+      {match.state !== "matched" ? (
         <SkillProposalBlock
           task={plan.task}
           type={plan.taskType}

@@ -6,13 +6,14 @@
  * - low-confidence 边缘：有勉强可用的技能 → 少量推荐 + 建议补技能的提示
  * - no-match       无匹配：本地未找到相关技能 → 技能建议（创建新技能）
  *
- * 阈值基于真实数据标定，不针对测试词硬编码。
+ * 阈值：S1.58 按用户要求将「找到」阈值提到 0.80（80%）——低于 80% 视为未找到，
+ * 页面直接走技能创建建议，不再展示低相关推荐。
  */
 import type { Recommendation } from "./types";
 
 export type MatchState = "matched" | "low-confidence" | "no-match";
 
-export const MATCH_HIGH = 0.55;
+export const MATCH_HIGH = 0.8;
 export const MATCH_LOW = 0.35;
 
 export interface MatchClassification {

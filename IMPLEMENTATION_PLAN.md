@@ -1555,3 +1555,19 @@ pm run db:migrate 手动执行——已在 README / IMPL 记录，属既有机�
   - 浏览器实测（生产）：模拟最坏场景（壁纸模式 + 亮度 62 + 磨砂 45 + 玻璃开），Dashboard 标题/副标题/统计数字（254/252/4/142/244）/扫描时间等全部 OCR 稳定识别、无报错 ✅；按默认值恢复参数（bgBrightness 50 / wallpaperOpacity 100 / glassBlur 16 / glassFrost 20）后壁纸模式文字依旧全部可读 ✅；用户原有壁纸（本机初音壁纸）未被修改 ✅。
 - 已知问题：lint 4 个既有 warning 未处理（与本次无关）；深色主题下磨砂层由白雾改为黑雾，视觉上「磨砂发白」质感变弱（换取对比度，属有意取舍）。
 - Git：本小节改动待提交（push 前排除本地 QA 文档）。
+
+### S1.58 任务分析推荐阈值收紧：<80% 视为未找到 → 3 个技能创建建议
+
+- 背景：用户两次反馈「候选资源推荐不行、50 多分的推荐跟问题关联性不大」。原 MATCH_HIGH=0.55 会把低相关（50~70 分）资源当「找到」展示推荐。本轮用户明确规则：**低于 80% 相似度一律视为未找到**，改为生成几个技能创建建议（含创建提示词 + SKILL.md 草案），供复制到 Hermes / 豆包等平台创建技能。
+- 领域决策：
+  - MATCH_HIGH 0.55 → 0.80（MATCH_LOW 0.35 保留）；classifyMatch 三态语义不变：matched=有真实可用技能（≥80%）→ 推荐 + 预置问题；low-confidence / no-match（<80%）→ 一律走创建建议，不再展示低相关推荐。
+  - 建议生成从 1 条扩展为 3 个角度（generateSkillProposals）：standard「直接解决该类任务」/ workflow「沉淀为可复用工作流」/ expert「专家角色 + 规则约束 + 质量门」，各带独立 name 后缀（-assistant / -workflow / -expert）、触发场景、工作流、自由度与可复制的创建提示词、SKILL.md 草案。纯确定性模板生成，不接 LLM。
+- 实现：
+  - lib/task-intelligence/matcher.ts：MATCH_HIGH = 0.8。
+  - lib/task-intelligence/skill-proposal.ts：新增 ProposalVariant / variantSpecs / generateSkillProposals()（返回 3 变体），generateSkillProposal() 保留兼容（返回 [0]）；SkillProposal 增加 angle/variant 字段。
+  - components/task-intelligence/task-intelligence-view.tsx：SkillProposalBlock 改为多卡（ProposalCard 单卡组件，建议 1/2/3 + 角度标题）；推荐区仅 match.state==="matched" 渲染（去掉 low-confidence 边缘推荐与 amber 提示）；建议区改为 state!=="matched" 渲染；徽标文案「已找到 N 个可用技能（相似度 ≥ 80%）」/「未找到匹配技能（相似度 < 80%，已生成下方创建建议）」；创建提示词文案改为「复制后到 Hermes / 豆包等平台创建」。
+- 验证：
+  - lint ✅（0 error，4 既有 warning）/ tsc ✅ / build ✅ / 生产重启 200 ✅ / console clean ✅。
+  - API 冒烟（真实 analyze）：低相关任务「帮我制定一份接下来四周的健身训练计划」top=0.72 → 页面显示「未找到匹配技能（相似度 < 80%）」+ 3 张建议卡（task-assistant-assistant / -workflow / -expert，各含触发场景/工作流/创建提示词复制/SKILL.md 草案）✅；高相关任务「帮我写一篇小红书种草文案」top=1.0/0.95/0.91 → 徽标「已找到 3 个可用技能（相似度 ≥ 80%）」+ 候选推荐（#1 doubao-ecommerce-proposal 100 分）+ 预置问题复制 ✅。
+- 已知问题：lint 4 个既有 warning（与本次无关）；建议名基于任务类型通用前缀（如 task-assistant-*），对内容创作/数据分析等有专门 profile 的任务会使用对应前缀；低置信区间（0.35~0.80）不再展示任何推荐（用户明确要求）。
+- Git：本小节改动待提交（push 前排除本地 QA 文档）。

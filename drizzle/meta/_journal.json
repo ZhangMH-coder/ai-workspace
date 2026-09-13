@@ -78,6 +78,20 @@
       "when": 1789203600000,
       "tag": "0010_user_profile_avatar",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1789260000000,
+      "tag": "0011_discovered_resource_created_at",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1789260300000,
+      "tag": "0012_discovered_resource_created_idx",
+      "breakpoints": true
     }
   ]
 }

@@ -5,9 +5,17 @@
  * 所有数据来自真实文件分析（HeuristicAnalyzer），零 Demo / Mock 数据。
  */
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowRight, BrainCircuit, Search, Sparkles } from "lucide-react";
+import {
+  ArrowRight,
+  BrainCircuit,
+  ChevronLeft,
+  ChevronRight,
+  ListFilter,
+  Search,
+  Sparkles,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -15,7 +23,14 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useWorkspaceStore } from "@/stores/workspace";
-import { capabilityCategoryLabel, type CapabilityIndexEntry } from "@/lib/types";
+import {
+  capabilityCategoryLabel,
+  type CapabilityCategory,
+  type CapabilityIndexEntry,
+} from "@/lib/types";
+
+/** S1.49：能力索引分页大小 */
+const INDEX_PAGE_SIZE = 100;
 
 export function CapabilityIndexView() {
   const status = useWorkspaceStore((s) => s.analysis.status);
@@ -30,6 +45,48 @@ export function CapabilityIndexView() {
   const runAnalysis = useWorkspaceStore((s) => s.runAnalysis);
   const matchTask = useWorkspaceStore((s) => s.matchResourcesForTask);
   const [task, setTask] = useState("");
+  // S1.49：能力索引搜索 / 类别过滤 / 分页
+  const [indexQuery, setIndexQuery] = useState("");
+  const [indexCategory, setIndexCategory] = useState<CapabilityCategory | "all">("all");
+  const [indexPage, setIndexPage] = useState(1);
+
+  /** 类别过滤选项（来自真实索引，不去重猜测） */
+  const categoryOptions = useMemo(() => {
+    const seen = new Set<CapabilityCategory>();
+    for (const e of index) seen.add(e.category);
+    return Array.from(seen);
+  }, [index]);
+
+  /** 过滤后的拍平能力项（搜索匹配 capability / 资源名 / 证据引用 / 类别名） */
+  const filteredItems = useMemo(() => {
+    const q = indexQuery.trim().toLowerCase();
+    const out: { category: CapabilityCategory; item: CapabilityIndexEntry["items"][number] }[] = [];
+    for (const entry of index) {
+      if (indexCategory !== "all" && entry.category !== indexCategory) continue;
+      const catLabel = capabilityCategoryLabel(entry.category).toLowerCase();
+      for (const it of entry.items) {
+        if (
+          q &&
+          !catLabel.includes(q) &&
+          !it.capability.toLowerCase().includes(q) &&
+          !it.resourceName.toLowerCase().includes(q) &&
+          !it.evidenceRef.toLowerCase().includes(q)
+        ) {
+          continue;
+        }
+        out.push({ category: entry.category, item: it });
+      }
+    }
+    return out;
+  }, [index, indexQuery, indexCategory]);
+
+  const indexFiltered = indexQuery.trim().length > 0 || indexCategory !== "all";
+  const indexPageCount = Math.max(1, Math.ceil(filteredItems.length / INDEX_PAGE_SIZE));
+  const safePage = Math.min(indexPage, indexPageCount);
+  const pageItems = filteredItems.slice(
+    (safePage - 1) * INDEX_PAGE_SIZE,
+    safePage * INDEX_PAGE_SIZE,
+  );
 
   useEffect(() => {
     void fetchStatus();
@@ -152,21 +209,116 @@ export function CapabilityIndexView() {
         </CardContent>
       </Card>
 
-      {/* 能力索引（按类别分组） */}
-      {index.length === 0 ? (
-        <div className="flex items-start gap-2.5 rounded-xl border border-white/10 bg-white/[0.02] p-4">
-          <BrainCircuit className="mt-0.5 size-4 shrink-0 text-ink-3" />
-          <p className="text-[12px] leading-relaxed text-ink-2">
-            尚无能力索引。运行「增量分析」后，这里会展示从真实资源归纳出的能力（可追溯）。
-          </p>
+      {/* 能力索引（S1.49：搜索 / 类别过滤 / 分页） */}
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative min-w-[220px] flex-1">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-ink-3" />
+            <input
+              value={indexQuery}
+              onChange={(e) => {
+                setIndexQuery(e.target.value);
+                setIndexPage(1);
+              }}
+              placeholder="搜索能力 / 资源名 / 证据引用…"
+              aria-label="搜索能力索引"
+              className="h-8 w-full rounded-lg border border-white/10 bg-white/[0.03] pl-8 pr-3 text-[12.5px] text-ink outline-none placeholder:text-ink-3 focus:border-violet-400/40"
+            />
+          </div>
+          <div className="flex items-center gap-1.5">
+            <ListFilter className="size-3.5 text-ink-3" />
+            <select
+              value={indexCategory}
+              onChange={(e) => {
+                setIndexCategory(e.target.value as CapabilityCategory | "all");
+                setIndexPage(1);
+              }}
+              aria-label="按类别过滤"
+              className="h-8 rounded-lg border border-white/10 bg-white/[0.03] px-2 text-[12px] text-ink-2 outline-none focus:border-violet-400/40"
+            >
+              <option value="all">全部分类</option>
+              {categoryOptions.map((c) => (
+                <option key={c} value={c}>
+                  {capabilityCategoryLabel(c)}
+                </option>
+              ))}
+            </select>
+          </div>
+          <span className="text-[11px] text-ink-3">
+            {indexFiltered ? `${filteredItems.length} 条匹配` : `${filteredItems.length} 条能力`}
+          </span>
         </div>
-      ) : (
-        <div className="flex flex-col gap-4">
-          {index.map((entry) => (
-            <CategorySection key={entry.category} entry={entry} />
-          ))}
-        </div>
-      )}
+
+        {index.length === 0 ? (
+          <div className="flex items-start gap-2.5 rounded-xl border border-white/10 bg-white/[0.02] p-4">
+            <BrainCircuit className="mt-0.5 size-4 shrink-0 text-ink-3" />
+            <p className="text-[12px] leading-relaxed text-ink-2">
+              尚无能力索引。运行「增量分析」后，这里会展示从真实资源归纳出的能力（可追溯）。
+            </p>
+          </div>
+        ) : indexFiltered ? (
+          <div className="flex flex-col gap-2 rounded-xl border border-white/10 bg-white/[0.02] p-2">
+            {pageItems.length === 0 ? (
+              <p className="px-3 py-6 text-center text-[12px] text-ink-3">
+                没有匹配「{indexQuery}」的能力（如实空态，不猜测）。
+              </p>
+            ) : (
+              pageItems.map(({ category, item }, i) => (
+                <Link
+                  key={`${item.resourceId}-${item.capability}-${(safePage - 1) * INDEX_PAGE_SIZE + i}`}
+                  href={`/resources/${item.resourceId}`}
+                  className="group flex flex-wrap items-center gap-2 rounded-lg px-2 py-1.5 transition-colors hover:bg-white/[0.04]"
+                >
+                  <Badge variant="outline" className="border-white/10 text-[10px] text-ink-2">
+                    {capabilityCategoryLabel(category)}
+                  </Badge>
+                  <span className="text-[12px] font-medium text-ink group-hover:text-violet-300/90">
+                    {item.resourceName}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate text-[11px] text-ink-3">{item.capability}</span>
+                  <code className="hidden font-mono text-[10px] text-ink-3 sm:inline">{item.evidenceRef}</code>
+                  <span className="text-[10px] text-ink-3">
+                    {(item.confidence * 100).toFixed(0)}%
+                  </span>
+                </Link>
+              ))
+            )}
+            {indexPageCount > 1 ? (
+              <div className="flex items-center justify-between border-t border-white/[0.05] px-1 pt-2">
+                <span className="text-[11px] text-ink-3">
+                  第 {safePage} / {indexPageCount} 页 · 共 {filteredItems.length} 条
+                </span>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setIndexPage((p) => Math.max(1, p - 1))}
+                    disabled={safePage <= 1}
+                    aria-label="上一页"
+                    className="flex h-7 w-7 items-center justify-center rounded-md border border-white/10 text-ink-2 transition-colors hover:border-white/20 hover:text-ink disabled:cursor-not-allowed disabled:opacity-30"
+                  >
+                    <ChevronLeft className="size-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIndexPage((p) => Math.min(indexPageCount, p + 1))}
+                    disabled={safePage >= indexPageCount}
+                    aria-label="下一页"
+                    className="flex h-7 w-7 items-center justify-center rounded-md border border-white/10 text-ink-2 transition-colors hover:border-white/20 hover:text-ink disabled:cursor-not-allowed disabled:opacity-30"
+                  >
+                    <ChevronRight className="size-3.5" />
+                  </button>
+                </div>
+              </div>
+            ) : null}
+          </div>
+        ) : (
+          <div className="flex flex-col gap-4">
+            {index.map((entry) => (
+              <CategorySection key={entry.category} entry={entry} />
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

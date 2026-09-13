@@ -33,11 +33,14 @@
 pm run db:reset（clearAll 仅清 6 张演示业务表），agent / agent_run / capability_definition / agent_capability / project / project_agent 全部归 0，真实资源线零影响（discovered_resource 254 / resource_capability 3334 / resource_analysis 865 / harness_scan 198 / task_analysis 35 / task_plan 3 全保留）；Agents 页面恢复真实空态「还没有 Agent」；lint / tsc / build / 页面实测全绿 | ✅ 已完成（本次修复） |
 | 2026-09-12 | v1.12 | **S1.44 新建 Agent 表单「系统提示词专业润色」** | 后端 `db/service.ts` 新增 `polishSystemPrompt`（真实 LLM chat/completions：专业提示词工程师 System Prompt，只输出润色正文、保持原意、语言一致、空/无意义输入如实拒绝不伪造；未配 Key 抛 LLM_NOT_CONFIGURED）；新端点 `POST /api/v1/ai/polish-prompt`（zod 校验 prompt≤4000）；`lib/api/ai.ts` + `lib/services/ai.ts` 暴露 `polishSystemPrompt`；`agent-form.tsx` 系统提示词区新增「专业润色」按钮（Wand2 图标、空输入禁用、润色中 loading、成功回填并显示模型、LLM_NOT_CONFIGURED/VALIDATION 按 code 提示）；**handleError 新增 AiError 分支**（LLM API_ERROR/TIMEOUT/NETWORK → 502 + 真实原因透传，不再吞成笼统 500）；验证：空输入 400、正常输入 200 返回结构化专业提示词（deepseek-v4-flash-0731）、lint/tsc/build/生产页面（/agents/new 按钮渲染）全绿 | 2026-09-12 | v1.13 | **S1.45 个人资料页（真实身份 + 本机环境事实）** | 新增 `user_profile` 表（单行 default：displayName/title/bio/avatarColor/updatedAt）+ migration 0009；`GET/PUT /api/v1/profile`：GET 返回用户自定义信息 + 本机真实事实（os.userInfo/hostname/platform/DB 路径与大小/LLM 生效配置/资源与扫描计数），PUT 仅保存自定义展示字段（zod 校验、avatarColor 枚举、空串=清空）；新页面 `/profile`（个人信息可编辑卡：头像配色 6 色 + 昵称/职位/简介 + 保存；本机环境事实只读卡）；**消除硬编码假身份**：Sidebar UserMenu / TopBar AccountMenu 改为 fetch `/api/v1/profile` 显示真实用户名与主机名，「个人资料/偏好设置」从 toast 占位改为跳转 /profile、/settings；命令面板「工作区」假切换（Acme AI/个人空间）改为只读「本机工作区」；验证：db:migrate/db:check 通过、GET 200 真实数据（Administrator/DESKTOP-J8HRMN8/win32 x64/254 资源/198 扫描）、PUT 保存与清空 200、非法配色 400、lint/tsc/build/生产 /profile 页面渲染全绿 | ✅ 已完成（本次交付） |
 | 2026-09-12 | v1.14 | **S1.46 头像本地上传** | `user_profile` 新增 `avatar_path` 列（migration 0010，DB 只存 data/avatars/ 相对路径）；新端点 `POST/DELETE/GET /api/v1/profile/avatar`：上传（dataURL → MIME/大小校验 png|jpeg|webp ≤2MB → 写 data/avatars/<uuid>.<ext> → 替换时删旧文件）、移除（删文件+清引用）、读取（文件流 + Content-Type + 私有缓存）；`getProfile` 返回 `avatarUrl`（带版本号防缓存）；`ProfileForm` 支持点击头像/按钮上传（前端类型+大小预检、上传中 loading、成功回显、移除按钮）；Sidebar UserMenu / TopBar AccountMenu 头像支持显示上传图片（无图回退渐变+首字符）；路径安全：文件操作限定 avatars 目录内（startsWith 校验防穿越）；验证：migration/db:check 通过、非法类型 400、上传 200 且 GET 200 image/png、移除 200、移除后 404、avatarUrl 置空、lint/tsc/build/生产页面全绿 | ✅ 已完成（本次交付） |
+| 2026-09-12 | v1.15 | **S1.47 四项候选执行** | ① S1.44+45+46 一起提交并 push：commit `7812ef8`（feat(S1.46)），推送 `95cf5ea..7812ef8 master -> master`（docs/AI Workspace 项目-QA测试方案与报告.md 非本次产物，未纳入）；② 资源详情页新增「使用建议 · 预设问题」：新组件 `components/resources/suggested-prompts.tsx`，按 type 模板确定性生成 3 条预设问题（真实注入 name/description，不调用 LLM），点击复制去 Harness 使用；并修复「相关资源」重复渲染（page.tsx 与 resource-detail.tsx 各渲染一次 → 仅保留 resource-detail 内一处）；③ Agent 模型分组复核：厂商分组 + 搜索过滤已在 S1.33 落地，本次清理 vendorOf 冗余分支（qwen 被前序拦截、开源分支永不命中的历史遗留）；④ 运行失败错误面板复核：Agent 详情页 failed 运行错误卡（formatRunErrorCode 可读标签 + errorMessage + 原始 code）已存在，agent_run 表当前 0 条真实记录，无 failed 样本可验证；验证：lint / tsc / build / 生产重启 / /resources/[id] 预设问题渲染（真实资源 project-evaluation）+「相关资源」唯一 / /agents/new 模型分组（DeepSeek 3 · 智谱 GLM 4 · MiniMax 1 · Kimi 2 · 通义千问 5 · 豆包 2 · 其他 2 = 19）全绿 | ✅ 已完成（本次交付） |
+| 2026-09-12 | v1.16 | **S1.48 页面进入时自动扫描** | store 新增 `maybeAutoScan` action + 15 分钟阈值常量 + inFlight 并发锁：进入 Dashboard / Resources 页面时静默检查上次扫描时间，从未扫描或距上次扫描超 15 分钟才触发增量扫描，完成后 dispatch `aiw:rescan` 复用现有页面刷新链路；自动扫描失败静默（不弹 toast、不打断浏览），保留手动「重新扫描」入口；验证：lint / tsc / build 全绿，生产重启后打开 /resources 自动触发（scanId b89b9b89 → cda18ea4），totalResources 保持 254 幂等无重复；同时输出《候选资源推荐重构方案（S1.49）》待审批 | ✅ 已完成（本次交付） |
+| 2026-09-13 | v1.17 | **S1.49 功能评估清单第一批** | ① 能力索引页新增搜索（匹配能力/资源名/证据引用/类别名）+ 类别过滤 + 分页（100/页，>100 条显示翻页）；② 扫描变更提示：discovered_resource 新增 created_at（migration 0011/0012，存量行 NULL 不误报），扫描后统计 addedResources，自动扫描有新增时低打扰 toast、手动扫描 toast 显示新增数；③ 纠正：任务智能「技能创建建议」已在 S1.37 实现（SkillProposalBlock + generateSkillProposal），无需重复开发；验证：lint / tsc / build 全绿；scan API addedResources=0（存量 254 无新增不误报）、total 254 幂等；浏览器实测搜索「代码生成」52 条（分类名可命中）、类别过滤/空态/计数正常 | ✅ 已完成（本次交付） |
 | ✅ 已完成（本次交付） |
 
 ## 当前阶段
 
-**S1.46 头像本地上传**（已完成；上传/移除/读取全链路真实落盘；**不自动进入下一阶段**，待审批）
+**S1.49 功能评估清单第一批（能力索引搜索分页 / 扫描变更提示）**（已完成；**不自动进入下一阶段**，待审批）
 
 ---
 
@@ -1393,3 +1396,40 @@ pm run db:reset（仅清空 6 张演示业务表，真实资源线不动）。
   - Sidebar / TopBar 用户头像支持显示上传图片（有图显示 AvatarImage，无图回退渐变首字符）。
 - 验证：db:migrate ✅ / db:check ✅ / 非法类型 400「头像格式不支持」✅ / 上传 200 + avatarUrl ✅ / GET 头像 200 image/png ✅ / 移除 200 + avatarUrl null ✅ / 移除后 GET 404 ✅ / avatars 目录文件随移除清理 ✅ / lint ✅ / tsc ✅ / build ✅ / 生产 /profile 页面「上传头像」渲染 ✅。
 - 已知问题：无。
+
+
+---
+
+### S1.47 四项候选执行
+
+- ① Git 提交 + push：S1.44（系统提示词润色）+ S1.45（个人资料页）+ S1.46（头像上传）一并提交为 `7812ef8`（`feat(S1.46): 个人资料页 + 头像本地上传 + 系统提示词专业润色`），已推送 GitHub `master`（`95cf5ea..7812ef8`）。`docs/AI Workspace 项目-QA测试方案与报告.md`（此前 QA 技能产物、非本次范围）未纳入提交，仍留在工作区，如需入库请告知。
+- ② 资源详情页「使用建议 · 预设问题」：新增 `components/resources/suggested-prompts.tsx`——按资源类型（skill/agent/command/rule/prompt/mcp/plugin/other）8 组模板确定性生成 3 条预设问题，真实注入 `name` 与截断 `description`；点击复制，提示「去支持该 Skill 的 Harness 使用」。不依赖 LLM、零伪造。同时修复「相关资源」区块在页面重复渲染（page.tsx 与 resource-detail.tsx 各一处 → 保留 resource-detail 内一处）。
+- ③ Agent 表单模型分组复核：厂商分组（vendorOf/groupModels）+ 搜索过滤 + 刷新按钮在 S1.33 已实现，本次清理 `vendorOf` 中 qwen 被「通义千问」分支提前拦截导致「开源模型」分支永不可达的冗余判断（开源分支改为 llama/mistral/gemma）。
+- ④ 运行失败错误面板复核：Agent 详情页展开 failed 运行记录时展示错误卡（`formatRunErrorCode` 中文可读标签 + `errorMessage` + 原始 `code`）已实现（更早阶段）；本次仅复核 RUN_ERROR_LABELS 映射完整性。当前 `agent_run` 表 0 条记录，无真实 failed 样本可用于 UI 实测，面板代码路径已静态复核。
+- 验证：lint ✅ / tsc ✅ / build ✅ / 生产重启 ✅ / `/resources/27c60e87…`（project-evaluation）预设问题 3 条渲染 + 相关资源仅出现 1 次 ✅ / `/agents/new` 模型分组 7 组共 19 个、默认选中 deepseek-v4-flash-0731 ✅ / Git 工作区干净（仅剩未纳入的 QA 文档）✅。
+- 已知问题：无。
+
+
+---
+
+### S1.48 页面进入时自动扫描
+
+- 背景：用户询问"新增技能等资源后是否自动刷新"，当前只有手动「重新扫描」。选择候选 1：打开页面时按时间阈值静默增量扫描。
+- 实现：
+  - `stores/workspace.ts`：新增 `maybeAutoScan` action + `AUTO_SCAN_INTERVAL_MS = 15min` + 模块级 `autoScanInFlight` 并发锁。逻辑：扫描中/已有自动扫描在跑则跳过；概览未加载先拉一次；从未扫描或距上次 `finishedAt` 超阈值 → 静默调用 `runResourceScan`，完成后 `dispatchEvent("aiw:rescan")`（复用 Dashboard / Resources 已有监听刷新链路）；失败静默，不打扰浏览。
+  - `app/(workspace)/resources/page.tsx`：hydrate 完成后调用 `maybeAutoScan()`。
+  - `app/(workspace)/dashboard/page.tsx`：`loadAll()` 完成后调用 `maybeAutoScan()`（deps 加入，消除 lint warning）。
+- 验证：lint ✅ / tsc ✅ / build ✅ / 生产重启 ✅ / 打开 /resources 自动触发扫描：overview scanId `b89b9b89`(14:43Z) → `cda18ea4`(15:11Z)，totalResources 保持 254（幂等 upsert 无重复）✅ / 手动扫描按钮不受影响 ✅。
+- 已知问题：无。
+
+
+---
+
+### S1.49 功能评估清单第一批
+
+- 背景：用户要求「按清单开工」功能评估清单。先做收敛 3 项中的真实缺口（第 2 项「任务智能创建建议」经核查已在 S1.37 实现，本阶段纠正并跳过）。
+- 实现：
+  - `components/resources/analysis/capability-index-view.tsx`：新增搜索框（关键词匹配 capability / 资源名 / evidenceRef / 类别名）+ 类别下拉（真实 9 分类）+ 分页（100/页；搜索/过滤激活时切换平铺列表视图，否则保留原分组折叠视图；空态如实提示）。
+  - 扫描变更提示：`db/schema.ts` discovered_resource 加 `createdAt`；`drizzle/0011_discovered_resource_created_at.sql`（ALTER）+ `0012_discovered_resource_created_idx.sql`（CREATE INDEX，单语句约束）；`db/repository.ts` upsert 不改写 createdAt + `countResourcesCreatedAfter`；`db/service.ts` runResourceScan 传入 createdAt 并统计 `addedResources`；`lib/types.ts` RunScanResult 加 `addedResources?`；`stores/workspace.ts` maybeAutoScan 扫描后有新增时 `toast.info`（无新增完全静默）；`resources/page.tsx` 手动扫描 toast 显示新增数。
+- 验证：lint ✅ / tsc ✅ / build ✅ / migration 应用 ✅（journal 手写条目 + 单语句文件拆分）/ scan API `addedResources=0`、`totalResources=254` 幂等 ✅ / 浏览器实测：搜索「代码生成」52 条命中（分类名可搜）、类别过滤生效、空态「没有匹配（如实）」、无新增不误报 ✅。
+- 已知问题：分页控件需过滤结果 >100 条才出现，单次搜索词实测未达阈值（真实能力标签为短文本）；逻辑为确定性 slice，未做真实触发。

@@ -511,6 +511,7 @@ export function runResourceScan(): RunScanResult {
       parseNote: r.parseNote ?? null,
       lastModified: r.lastModified,
       metadata: JSON.stringify(r.metadata ?? {}),
+      createdAt: now, // 首次入索引时间；upsert 不改写 → 用于「本次新增」统计
     });
     resources.push(resourceToDomain(row));
   }
@@ -524,11 +525,15 @@ export function runResourceScan(): RunScanResult {
   // 原始 Harness 文件全程只读，转换只写 resource_analysis / resource_capability 索引表。
   const analysis = runIncrementalAnalysis();
 
+  // S1.49：扫描变更提示——本次扫描首次入索引的资源数（>= 本次扫描开始时间）
+  const addedResources = repo.countResourcesCreatedAfter(now);
+
   return {
     scanRun: scanRunToDomain(repo.getScanRun(scanId))!,
     harnesses: harnessSummaries,
     resources,
     analysis,
+    addedResources,
   };
 }
 

@@ -484,10 +484,22 @@ export function upsertDiscoveredResource(row: typeof discoveredResources.$inferI
         parseNote: row.parseNote,
         lastModified: row.lastModified,
         metadata: row.metadata,
+        // createdAt 保持首次创建时间：upsert 不改写（用于「本次新增」统计）
       },
     })
     .returning()
     .get();
+}
+
+/** 统计某时间点及之后首次入索引的资源数（created_at 非空且 >= iso；用于扫描变更提示） */
+export function countResourcesCreatedAfter(iso: string) {
+  return (
+    db
+      .select({ n: sql<number>`count(*)` })
+      .from(discoveredResources)
+      .where(gte(discoveredResources.createdAt, iso))
+      .get()?.n ?? 0
+  );
 }
 
 export function getLatestScanRun() {

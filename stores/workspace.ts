@@ -20,6 +20,7 @@
  */
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
+import { toast } from "sonner";
 
 import {
   createAgent as createAgentService,
@@ -209,6 +210,8 @@ interface WorkspaceState {
   fetchDiscoveryOverview: () => Promise<void>;
   /** 重新扫描本机真实 Harness 资源（只读；幂等 upsert 索引） */
   runResourceScan: () => Promise<RunScanResult | void>;
+  /** 页面进入时静默自动扫描（S1.48）：距上次扫描超阈值才触发，失败静默，不打扰浏览 */
+  maybeAutoScan: () => Promise<void>;
   fetchDiscoveredResources: (q?: ResourceListQuery) => Promise<void>;
   fetchResourceDetail: (id: string) => Promise<void>;
   fetchRelatedResources: (id: string) => Promise<void>;
@@ -255,6 +258,10 @@ interface WorkspaceState {
   createTaskPlan: (analysisId: string) => Promise<TaskPlan>;
   fetchPlanByAnalysis: (analysisId: string) => Promise<TaskPlan | null>;
 }
+
+/** S1.48：页面进入时自动扫描阈值（15 分钟）与并发锁 */
+const AUTO_SCAN_INTERVAL_MS = 15 * 60 * 1000;
+let autoScanInFlight = false;
 
 export const useWorkspaceStore = create<WorkspaceState>()(
   persist(
@@ -345,6 +352,42 @@ export const useWorkspaceStore = create<WorkspaceState>()(
             discovery: { ...s.discovery, scanning: false, error: (e as Error).message },
           }));
           throw e;
+        }
+      },
+
+      maybeAutoScan: async () => {
+        if (autoScanInFlight) return;
+        const s = get();
+        if (s.discovery.scanning) return;
+        let scanRun = s.discovery.overview?.scanRun ?? null;
+        // 概览未加载时先拉一次，确保 lastScannedAt 准确
+        if (!scanRun && !s.discovery.overview) {
+          try {
+            await s.fetchDiscoveryOverview();
+          } catch {
+            return;
+          }
+          scanRun = get().discovery.overview?.scanRun ?? null;
+        }
+        const last = scanRun?.finishedAt ? new Date(scanRun.finishedAt).getTime() : 0;
+        // 从未扫描，或距上次扫描超过阈值 → 静默触发增量扫描
+        if (last === 0 || Date.now() - last > AUTO_SCAN_INTERVAL_MS) {
+          autoScanInFlight = true;
+          try {
+            const result = await get().runResourceScan();
+            // S1.49：扫描变更提示——新增资源时低打扰提示，否则完全静默
+            const added = result?.addedResources ?? 0;
+            if (added > 0) {
+              toast.info(`自动扫描完成：本机新增 ${added} 个资源，已入索引`);
+            }
+            if (typeof window !== "undefined") {
+              window.dispatchEvent(new Event("aiw:rescan"));
+            }
+          } catch {
+            // 自动扫描失败静默：不打断浏览，保留手动「重新扫描」入口
+          } finally {
+            autoScanInFlight = false;
+          }
         }
       },
 

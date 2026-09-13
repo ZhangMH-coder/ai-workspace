@@ -355,6 +355,8 @@ export interface RunScanResult {
   resources: DiscoveredResource[];
   /** 扫描后自动执行的能力索引（分析）结果；老后端无此字段时为空 */
   analysis?: AnalysisRunResult | null;
+  /** S1.49：本次扫描首次入索引的资源数（扫描变更提示）；老后端无此字段时缺省为 0 */
+  addedResources?: number;
 }
 
 /* ---------------- Resource Intelligence（Phase 2：能力分析 / 能力索引） ---------------- */

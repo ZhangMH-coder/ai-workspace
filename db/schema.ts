@@ -189,12 +189,14 @@ export const discoveredResources = sqliteTable(
     parseNote: text("parse_note"),
     lastModified: text("last_modified"),
     metadata: text("metadata").notNull().default("{}"), // JSON: 原始元数据摘要
+    createdAt: text("created_at"), // 首次被扫描索引的时间（新增统计；upsert 不改写）
   },
   (t) => [
     uniqueIndex("uq_discovered_source_path").on(t.sourcePath),
     index("idx_discovered_harness").on(t.harnessId),
     index("idx_discovered_type").on(t.type),
     index("idx_discovered_scan").on(t.scanId),
+    index("idx_discovered_created").on(t.createdAt),
   ]
 );
 

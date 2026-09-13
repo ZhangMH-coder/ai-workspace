@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { fetchDiscoveredResources, fetchDiscoveryOverview, runResourceScan } from "@/lib/services/resource-discovery";
 import { fetchLLMProviderConfig } from "@/lib/services/ai";
+import { useWorkspaceStore } from "@/stores/workspace";
 import type { DiscoveredResource, ResourceType } from "@/lib/types";
 
 const TYPE_CARD_DEFS: { type: ResourceType; label: string; description: string }[] = [
@@ -29,6 +30,7 @@ const TYPE_CARD_DEFS: { type: ResourceType; label: string; description: string }
 ];
 
 export default function DashboardPage() {
+  const maybeAutoScan = useWorkspaceStore((s) => s.maybeAutoScan);
   const [overview, setOverview] = useState<Awaited<ReturnType<typeof fetchDiscoveryOverview>> | null>(null);
   const [profiles, setProfiles] = useState<DiscoveredResource[]>([]);
   const [configs, setConfigs] = useState<DiscoveredResource[]>([]);
@@ -62,6 +64,8 @@ export default function DashboardPage() {
       await loadAll();
       if (cancelled) return;
     })();
+    // S1.48：进入首页时静默检查并自动增量扫描（超阈值才触发）
+    void maybeAutoScan();
     const onRescan = () => {
       void loadAll();
     };
@@ -70,7 +74,7 @@ export default function DashboardPage() {
       cancelled = true;
       window.removeEventListener("aiw:rescan", onRescan);
     };
-  }, []);
+  }, [maybeAutoScan]);
 
   const onScan = async () => {
     setScanning(true);

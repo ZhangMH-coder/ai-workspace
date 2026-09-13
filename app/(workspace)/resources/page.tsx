@@ -32,6 +32,7 @@ export default function ResourcesPage() {
   const error = useWorkspaceStore((s) => s.discovery.error);
   const fetchOverview = useWorkspaceStore((s) => s.fetchDiscoveryOverview);
   const runScan = useWorkspaceStore((s) => s.runResourceScan);
+  const maybeAutoScan = useWorkspaceStore((s) => s.maybeAutoScan);
   const analysisStatus = useWorkspaceStore((s) => s.analysis.status);
   const fetchAnalysisStatus = useWorkspaceStore((s) => s.fetchAnalysisStatus);
   const [view, setView] = useState<"list" | "category">("list");
@@ -44,8 +45,10 @@ export default function ResourcesPage() {
     void hydrate().then(() => {
       void fetchOverview();
       void fetchAnalysisStatus();
+      // S1.48：进入页面时静默检查并自动增量扫描（超阈值才触发）
+      void maybeAutoScan();
     });
-  }, [hydrate, fetchOverview, fetchAnalysisStatus]);
+  }, [hydrate, fetchOverview, fetchAnalysisStatus, maybeAutoScan]);
 
   // 顶栏重新扫描按钮联动：dispatch aiw:rescan 后重拉概览
   useEffect(() => {
@@ -62,10 +65,12 @@ export default function ResourcesPage() {
       await fetchOverview();
       const analyzed = result?.analysis?.analyzed ?? 0;
       const total = result?.resources?.length ?? 0;
+      const added = result?.addedResources ?? 0;
+      const addedNote = added > 0 ? `，新增 ${added} 个` : "";
       toast.success(
         analyzed > 0
-          ? `扫描完成：发现 ${total} 个真实资源，自动索引 ${analyzed} 个能力`
-          : `扫描完成：已更新本机资源索引（发现 ${total} 个资源）`,
+          ? `扫描完成：发现 ${total} 个真实资源${addedNote}，自动索引 ${analyzed} 个能力`
+          : `扫描完成：已更新本机资源索引（发现 ${total} 个资源${addedNote}）`,
       );
     } catch {
       toast.error("扫描失败，请查看错误信息");

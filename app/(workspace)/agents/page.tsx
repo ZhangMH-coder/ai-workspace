@@ -52,8 +52,8 @@ export default function AgentsPage() {
         }
       />
 
-      {/* S1.56：代码智囊团模板（空态/非空态都展示，一键创建为真实 Agent） */}
-      <AgentTemplates agentsCreated={agents.map((a) => a.name)} />
+      {/* S1.59：角色模板库（已添加状态联动，空态/非空态都展示） */}
+      <AgentTemplates agents={agents} />
 
       {!hydrated ? (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">

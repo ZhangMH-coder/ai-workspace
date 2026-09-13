@@ -1571,3 +1571,20 @@ pm run db:migrate 手动执行——已在 README / IMPL 记录，属既有机�
   - API 冒烟（真实 analyze）：低相关任务「帮我制定一份接下来四周的健身训练计划」top=0.72 → 页面显示「未找到匹配技能（相似度 < 80%）」+ 3 张建议卡（task-assistant-assistant / -workflow / -expert，各含触发场景/工作流/创建提示词复制/SKILL.md 草案）✅；高相关任务「帮我写一篇小红书种草文案」top=1.0/0.95/0.91 → 徽标「已找到 3 个可用技能（相似度 ≥ 80%）」+ 候选推荐（#1 doubao-ecommerce-proposal 100 分）+ 预置问题复制 ✅。
 - 已知问题：lint 4 个既有 warning（与本次无关）；建议名基于任务类型通用前缀（如 task-assistant-*），对内容创作/数据分析等有专门 profile 的任务会使用对应前缀；低置信区间（0.35~0.80）不再展示任何推荐（用户明确要求）。
 - Git：本小节改动待提交（push 前排除本地 QA 文档）。
+
+### S1.59 角色模板库重构：已添加状态联动 + 分组模板 + GitHub 专业提示词
+
+- 背景：用户反馈代码智囊团模板区「不要直接平铺创建入口，应显示已添加的情况」，且提示词设计得不好、希望能参考 GitHub 上的专业提示词。当前 agent-templates 平铺 5 个模板卡（每卡「创建此 Agent」），模板仅覆盖代码角色且 systemPrompt 为早期简版。
+- 领域决策：
+  - 模板区改为「角色模板库」：与已创建 Agent 按 name 联动——已添加的角色显示真实 Agent（状态徽标 + 关联信息 + 「查看详情」跳转 /agents/[id]），未添加的角色显示模板信息 + 「添加此角色」按钮；同名不重复创建。
+  - 模板库分两组：代码协作（架构师/实现/审查/测试/审批 5 个，覆盖软件交付链路）+ 通用角色（内容创作/数据分析/翻译/研究助理/写作润色 5 个）。
+  - systemPrompt 参照 GitHub 公开专业提示词结构重写（角色定位 / 能力范围 / 工作准则 / 执行流程 / 输出格式 / 边界与自检），参考：awesome-prompts（GPTs Store 500+）、leaked-system-prompts（Cursor/Claude 等产品级提示词）、Production-grade system prompt for agentic AI（210+ 论文：防幻觉/防谄媚/工具误用/注入防御）。模板仍为静态前端资产，点击「添加」才通过 createAgent 落库。
+- 实现：
+  - lib/agents/templates.ts：重构为 AGENT_TEMPLATES（10 个模板，含 group 字段）+ TEMPLATE_GROUPS + templatesOfGroup；提示词全部升级为结构化专业版本；保留 CODE_BRAINTRUST_TEMPLATES 兼容导出（= 代码组）；「代码架构师」名称保留以兼容用户已创建的 Agent（避免改名导致已添加状态丢失）。
+  - components/agents/agent-templates.tsx：改为按分组渲染 + 已添加/未添加双态卡（已添加：绿色徽标 + 关联 Agent + 查看详情；未添加：模板信息 + 添加按钮）；组头显示「已添加 n/total」。
+  - app/(workspace)/agents/page.tsx：AgentTemplates 改为接收 agents 完整对象数组。
+- 验证：
+  - lint ✅（0 error，4 既有 warning）/ tsc ✅ / build ✅ / 生产重启 200 ✅ / console clean ✅。
+  - 浏览器实测（生产，真实数据）：代码协作组已添加 5/5（用户已创建的 5 个代码角色正确匹配为「已添加」+ 查看详情跳转 /agents/98d7a268…）；通用角色组 0/5 全部显示「添加此角色」；「代码架构师」改名回退后恢复匹配（此前改名导致 4/5）；点击查看详情进入真实 Agent 详情页 ✅。
+- 已知问题：lint 4 个既有 warning（与本次无关）；「已添加」按模板 name 匹配（用户若手动改名创建，模板区会显示为未添加，属预期）；Agent 编辑（updateAgent/deleteAgent）仍缺失（下一步候选）。
+- Git：本小节改动待提交（push 前排除本地 QA 文档）。

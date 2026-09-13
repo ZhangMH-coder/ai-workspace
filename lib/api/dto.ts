@@ -80,6 +80,9 @@ export interface ProjectDTO {
   status: string;
   createdAt: string;
   updatedAt: string;
+  /** S1.55：项目 = 使用场景，资源数与类型分布（派生） */
+  resourceCount?: number;
+  resourceTypes?: Array<{ type: string; count: number }>;
 }
 
 export interface ProjectAgentDTO {
@@ -87,6 +90,15 @@ export interface ProjectAgentDTO {
   projectId: string;
   agentId: string;
   addedAt: string;
+}
+
+/** S1.55：项目 × 真实资源 关系（含完整资源实体） */
+export interface ProjectResourceDTO {
+  id: string;
+  projectId: string;
+  resourceId: string;
+  addedAt: string;
+  resource: DiscoveredResourceDTO;
 }
 
 export interface RunsStatsDTO {

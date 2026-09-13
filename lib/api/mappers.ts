@@ -19,6 +19,7 @@ import type {
   HarnessScanSummary,
   Project,
   ProjectAgent,
+  ProjectResource,
   ResourceAnalysis,
   ResourceCapability,
   ResourceInsight,
@@ -42,6 +43,7 @@ import type {
   HarnessScanSummaryDTO,
   ProjectAgentDTO,
   ProjectDTO,
+  ProjectResourceDTO,
   ResourceAnalysisDTO,
   ResourceCapabilityDTO,
   ResourceInsightDTO,
@@ -117,6 +119,9 @@ export function toProject(d: ProjectDTO): Project {
     status: d.status as Project["status"],
     createdAt: d.createdAt,
     updatedAt: d.updatedAt,
+    // S1.55：资源数与类型分布（列表派生字段，可选）
+    resourceCount: d.resourceCount ?? 0,
+    resourceTypes: d.resourceTypes ?? [],
   };
 }
 
@@ -126,6 +131,17 @@ export function toProjectAgent(d: ProjectAgentDTO): ProjectAgent {
     projectId: d.projectId,
     agentId: d.agentId,
     addedAt: d.addedAt,
+  };
+}
+
+/** S1.55：项目 × 真实资源 关系 → Domain */
+export function toProjectResource(d: ProjectResourceDTO): ProjectResource {
+  return {
+    id: d.id,
+    projectId: d.projectId,
+    resourceId: d.resourceId,
+    addedAt: d.addedAt,
+    resource: toDiscoveredResource(d.resource),
   };
 }
 

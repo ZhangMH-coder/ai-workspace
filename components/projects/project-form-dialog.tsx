@@ -69,8 +69,8 @@ export function ProjectFormDialog({
         <DialogHeader>
           <DialogTitle>新建项目</DialogTitle>
           <DialogDescription>
-            项目是业务组织上下文：把已有 Agent 组织到一个业务单元下，
-            项目级运行摘要自动派生，不复制任何数据。
+            项目是一个使用场景：把本机真实的技能/资源组织到场景下，
+            随时知道「这个场景我有哪些技能可用」。只引用资源，不复制数据。
           </DialogDescription>
         </DialogHeader>
 
@@ -83,7 +83,7 @@ export function ProjectFormDialog({
               id="prj-name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="例如：客服提效"
+              placeholder="例如：写小红书笔记 / 数据分析 / RSS 资讯"
               autoFocus
               className="h-9"
             />
@@ -97,7 +97,7 @@ export function ProjectFormDialog({
               id="prj-desc"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="简要说明项目目标与范围"
+              placeholder="简要说明这个场景要解决什么问题，之后可关联相关技能"
               rows={3}
             />
           </div>

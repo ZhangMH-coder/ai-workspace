@@ -44,9 +44,12 @@ import {
 } from "@/lib/services/demo";
 import {
   attachAgentToProject as attachAgentToProjectService,
+  attachResourcesToProject as attachResourcesToProjectService,
   createProject as createProjectService,
   detachAgentFromProject as detachAgentFromProjectService,
+  detachResourceFromProject as detachResourceFromProjectService,
   fetchAllProjectAgents as fetchAllProjectAgentsService,
+  fetchProjectResources as fetchProjectResourcesService,
   fetchProjects as fetchProjectsService,
 } from "@/lib/services/projects";
 import {
@@ -77,6 +80,7 @@ import type {
   NewProjectInput,
   Project,
   ProjectAgent,
+  ProjectResource,
   RunsStats,
   TimeRange,
   UpdateCapabilityInput,
@@ -154,6 +158,8 @@ interface WorkspaceState {
   projects: Project[];
   /** 项目 ↔ Agent 关联关系（多对多中介，持久化） */
   projectAgents: ProjectAgent[];
+  /** S1.55：项目 × 真实资源 关联（按项目缓存；资源数据来自真实扫描索引） */
+  projectResourcesById: Record<string, ProjectResource[]>;
   timeRange: TimeRange;
   /** 运行统计缓存（服务端聚合；随 timeRange 刷新 global/previous） */
   stats: StatsCache | null;
@@ -198,6 +204,12 @@ interface WorkspaceState {
   ) => Promise<ProjectAgent>;
   /** 解除 Agent 关联（幂等删除） */
   detachAgentFromProject: (id: string) => Promise<void>;
+  /** S1.55：按需加载某项目下关联资源（幂等缓存；force 强制重拉） */
+  fetchProjectResources: (projectId: string, force?: boolean) => Promise<void>;
+  /** S1.55：批量关联真实资源到项目（成功后刷新该项目缓存与 resourceCount） */
+  attachProjectResources: (projectId: string, resourceIds: string[]) => Promise<void>;
+  /** S1.55：解除资源关联（只删关系，不删真实资源） */
+  detachProjectResource: (projectId: string, resourceId: string) => Promise<void>;
   /** 重置回演示 seed 数据（Real 重置 SQLite；Mock 重置内存数据层） */
   resetDemoData: () => Promise<void>;
   /** 资源发现：最新一次扫描概览（未扫描/无资源 → 结构化空态，不伪造数据） */
@@ -284,6 +296,7 @@ export const useWorkspaceStore = create<WorkspaceState>()(
       agentCapabilities: [],
       projects: [],
       projectAgents: [],
+      projectResourcesById: {},
       timeRange: "30d",
       pinnedResourcePaths: [],
       stats: null,
@@ -861,6 +874,42 @@ export const useWorkspaceStore = create<WorkspaceState>()(
           ),
         }));
         if (target) await refreshProjectStats(target.projectId, get, set);
+      },
+
+      // S1.55：项目 × 真实资源
+      fetchProjectResources: async (projectId, force = false) => {
+        const cache = get().projectResourcesById;
+        if (cache[projectId] && !force) return;
+        const list = await fetchProjectResourcesService(projectId);
+        set((state) => ({
+          projectResourcesById: { ...state.projectResourcesById, [projectId]: list },
+        }));
+      },
+
+      attachProjectResources: async (projectId, resourceIds) => {
+        await attachResourcesToProjectService(projectId, resourceIds);
+        const list = await fetchProjectResourcesService(projectId);
+        set((state) => ({
+          projectResourcesById: { ...state.projectResourcesById, [projectId]: list },
+          projects: state.projects.map((p) =>
+            p.id === projectId
+              ? { ...p, updatedAt: new Date().toISOString(), resourceCount: list.length }
+              : p
+          ),
+        }));
+      },
+
+      detachProjectResource: async (projectId, resourceId) => {
+        await detachResourceFromProjectService(projectId, resourceId);
+        const list = await fetchProjectResourcesService(projectId);
+        set((state) => ({
+          projectResourcesById: { ...state.projectResourcesById, [projectId]: list },
+          projects: state.projects.map((p) =>
+            p.id === projectId
+              ? { ...p, updatedAt: new Date().toISOString(), resourceCount: list.length }
+              : p
+          ),
+        }));
       },
 
       resetDemoData: async () => {

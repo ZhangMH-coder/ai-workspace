@@ -135,14 +135,18 @@ export interface AgentCapability {
 /** 项目生命周期状态（active / archived；本阶段仅 active，归档为软删除语义预留） */
 export type ProjectStatus = "active" | "archived";
 
-/** 项目（业务组织上下文，只维护关系，不持有 Agent/Capability/Run 副本） */
+/** 项目（S1.55：使用场景组织单元，只维护关系，不持有资源副本） */
 export interface Project {
   id: string;
   name: string;
   description: string;
   status: ProjectStatus;
   createdAt: string; // ISO 8601
-  updatedAt: string; // ISO 8601，关联 Agent 时刷新（用于「最近活跃」）
+  updatedAt: string; // ISO 8601，关联资源时刷新（用于「最近活跃」）
+  /** S1.55：项目下关联的真实资源数（派生） */
+  resourceCount?: number;
+  /** S1.55：项目下资源按类型分布（派生） */
+  resourceTypes?: Array<{ type: string; count: number }>;
 }
 
 /** 项目 ↔ Agent 关联关系（多对多中介表，模式与 AgentCapability 一致） */
@@ -151,6 +155,15 @@ export interface ProjectAgent {
   projectId: string; // → Project.id
   agentId: string; // → Agent.id（只引用，不复制）
   addedAt: string; // ISO 8601
+}
+
+/** S1.55：项目 ↔ 真实资源 关联关系（含完整资源实体，供详情展示） */
+export interface ProjectResource {
+  id: string;
+  projectId: string; // → Project.id
+  resourceId: string; // → DiscoveredResource.id（只引用，不复制）
+  addedAt: string; // ISO 8601
+  resource: DiscoveredResource; // join 出的真实资源实体（来自扫描索引）
 }
 
 /** 新建项目的表单输入（Service 契约） */

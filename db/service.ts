@@ -358,6 +358,53 @@ export function detachAgentFromProject(id: string) {
   return existing;
 }
 
+/* ---------------- ProjectResource（S1.55：项目 = 使用场景，挂真实资源） ---------------- */
+
+export interface ProjectResourceView {
+  id: string;
+  projectId: string;
+  resourceId: string;
+  addedAt: string;
+  resource: DiscoveredResourceRow;
+}
+
+export function attachResourceToProject(projectId: string, resourceId: string) {
+  if (!repo.getProject(projectId)) throw new ServiceError("NOT_FOUND", "Project 不存在");
+  if (!repo.getDiscoveredResource(resourceId)) {
+    throw new ServiceError("NOT_FOUND", "本地资源不存在");
+  }
+  if (repo.getProjectResourceByPair(projectId, resourceId)) {
+    throw new ServiceError("CONFLICT", "该资源已关联到此项目");
+  }
+  return repo.insertProjectResource({
+    id: randomUUID(),
+    projectId,
+    resourceId,
+    addedAt: new Date().toISOString(),
+  });
+}
+
+export function detachResourceFromProject(id: string) {
+  const existing = repo.getProjectResource(id);
+  if (!existing) throw new ServiceError("NOT_FOUND", "关联关系不存在");
+  repo.deleteProjectResource(id);
+  return existing;
+}
+
+export function listProjectResourcesView(projectId: string): ProjectResourceView[] {
+  return repo.projectResourcesWithEntity(projectId).map((r) => ({
+    id: r.id,
+    projectId: r.projectId,
+    resourceId: r.resourceId,
+    addedAt: r.addedAt,
+    resource: r.resource,
+  }));
+}
+
+export function getProjectResource(id: string) {
+  return repo.getProjectResource(id);
+}
+
 /* ---------------- Demo Reset ---------------- */
 
 export function resetDemo() {

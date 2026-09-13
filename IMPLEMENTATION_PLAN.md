@@ -1510,3 +1510,19 @@ pm run db:migrate 手动执行——已在 README / IMPL 记录，属既有机�
 - 验证：lint ✅（0 error，3 既有 warning）/ tsc ✅ / build ✅ / 生产重启 200 ✅ / 浏览器实测：profile 预览卡片 + 计数（2/40 等真实值）+ 两段式上传「新头像预览→使用此头像/取消」✅、取消后恢复原态 ✅、画廊双徽标（software-development + Hermes）✅、hover 预览层来源行 Hermes · C:\\Users\\Administrator\\.hermes\\skills\\software-development\\project-kickoff-workflow\\SKILL.md ✅。
 - 已知问题：无新增；头像确认上传后需刷新图片缓存（avatar?v=updatedAt 已带版本号）。
 - Git：本小节改动待提交。
+
+### S1.55 Projects 改造：项目 = 使用场景组织单元（挂真实本机资源）
+
+- 背景：用户判定原 Projects（Agent 组织壳 + 演示 Run 统计）「看着没啥实际用处」，批复「1.删除，2待定」。本阶段把 Project 重构为「使用场景组织单元」：项目下关联**本机真实扫描出的资源**（技能等），页面承载真实价值，替代原 Agent 关联与运行统计空壳。
+- 领域模型：新增关系表 project_resource（projectId/resourceId/addedAt，unique uq_project_resource，FK cascade/restrict），只引用资源、不复制资源实体；Workspace → Project → ProjectResource → DiscoveredResource（真实扫描索引）。旧 ProjectAgent / Agent / Run 后端兼容保留（不删表不删接口），UI 删除相关区块。
+- 数据层：schema 新增 project_resource + migration 0015（已应用）；repository 新增 getProjectResource / getProjectResourceByPair / insertProjectResource / deleteProjectResource / countProjectResources / projectResourceTypeDistribution / projectResourcesWithEntity；service 新增 attachResourceToProject（校验 Project/Resource 存在、已关联抛 CONFLICT）/ detachResourceFromProject / listProjectResourcesView（含完整 resource 实体）/ getProjectResource。
+- API：GET /api/v1/projects 列表项追加 resourceCount + resourceTypes（服务端派生）；新增 GET+POST /api/v1/projects/[id]/resources（POST 批量 attach，幂等跳过已关联，返回与 GET 同构的 view 含 resource）；DELETE /api/v1/projects/[id]/resources/[resourceId]（只删关系，NOT_FOUND 走 ApiError）。
+- 前端：DTO ProjectDTO 扩展 resourceCount/resourceTypes? + 新增 ProjectResourceDTO（复用现有 DiscoveredResourceDTO，清掉误加的重复定义）；mapper toProject 扩展 + toProjectResource；HTTP service fetchProjectResources / attachResourcesToProject / detachResourceFromProject；store 新增 projectResourcesById + fetchProjectResources（幂等缓存）/ attachProjectResources（成功后重拉并刷新 resourceCount/updatedAt）/ detachProjectResource。
+- UI：列表页卡片改为「N 个技能 + 前 3 类型徽标 + 最近更新」（删除 agent 数/运行/成功率）；详情页重写为「项目摘要（关联技能数 / 类型分布徽标 / 创建时间+最近更新）+ 关联技能网格（真实资源卡：分类/类型/来源 Harness 徽标 + 描述 + sourcePath mono 行 + hover 移除按钮 + 移除确认 Dialog）+ ResourcePicker（搜索真实技能 → 勾选 → 批量添加，已关联自动隐藏）」；新建项目弹窗 wording 改为使用场景（placeholder「写小红书笔记 / 数据分析 / RSS 资讯」）。删除已无引用组件 agent-picker.tsx、projects-overview.tsx。
+- 验证：
+  - lint ✅（0 error，4 既有 warning）/ tsc ✅ / build ✅ / db:migrate 0015 应用 ✅ / 生产重启全页面 200 ✅。
+  - API 冒烟（Python 真实请求）：POST attach 2 个真实技能 200 ✅ → GET 列表 total=2（browser-record-replay / html）✅ → 项目统计 resourceCount=2、resourceTypes=[{skill,2}] ✅ → 幂等重复 POST 200 不重复插入 ✅ → DELETE 200 → 还原 0 ✅。期间发现 PowerShell `\"` 不转义导致 curl JSON 非法误报 INTERNAL_ERROR（工具链问题，非代码缺陷，改用 Python 请求验证通过）。
+  - 浏览器实测（生产）：/projects 列表「1 个技能 + skill·1 徽标」✅ → 详情页摘要（关联技能 1 / Skill·1 / 创建时间）✅ → 真实资源卡含真实 sourcePath（C:\...\browser-record-replay\SKILL.md）✅ → Picker 打开列真实技能（html / doubao-app-builder / Hermes 技能）✅ → 勾选 ppt 添加成功 toast「已添加1个技能」→ 页面实时 3 个资源、类型分布 Skill·3 ✅ → 移除确认弹窗（取消/确认移除）✅ → console 无错误 ✅ → 测试数据已还原（项目恢复 0 资源）。
+  - 修复的问题：① zustand selector `s.projectResourcesById[projectId] ?? []` 在缓存未填充时每次返回新数组引用 → React #185 无限重渲染页面崩溃；改为模块级 EMPTY_RESOURCES 稳定引用修复。② POST /resources 原返回 row（无 resource 字段）→ 前端 mapper 访问 d.resource 抛 TypeError 误报「添加失败」；改为返回与 GET 同构的 view。③ useMemo 条件调用（详情页 typeDistribution 在 early-return 后）→ 移到 hooks 区。
+- 已知问题：lint 4 个既有 warning 未处理（与本次无关）；/capabilities 路由 404 为旧页面早已移除（导航无入口，非本次回归）；dev 环境不自动跑 migration（既有机制）。
+- Git：本小节改动待提交（push 前排除本地 QA 文档）。

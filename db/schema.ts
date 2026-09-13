@@ -93,6 +93,30 @@ export const projectAgents = sqliteTable(
   ]
 );
 
+/**
+ * project_resource —— Project × DiscoveredResource 关系表（S1.55）
+ * 把 Project 重新定位为「使用场景组织单元」：项目下挂真实本机技能/资源，
+ * 只存外键不复制资源数据；资源数据始终来自真实扫描结果。
+ */
+export const projectResources = sqliteTable(
+  "project_resource",
+  {
+    id: text("id").primaryKey(),
+    projectId: text("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    resourceId: text("resource_id")
+      .notNull()
+      .references(() => discoveredResources.id, { onDelete: "restrict" }),
+    addedAt: text("added_at").notNull(),
+  },
+  (t) => [
+    uniqueIndex("uq_project_resource").on(t.projectId, t.resourceId),
+    index("idx_project_resource_project").on(t.projectId),
+    index("idx_project_resource_resource").on(t.resourceId),
+  ]
+);
+
 export const agentRuns = sqliteTable(
   "agent_run",
   {
@@ -577,6 +601,7 @@ export type CapabilityDefinitionRow = typeof capabilityDefinitions.$inferSelect;
 export type AgentCapabilityRow = typeof agentCapabilities.$inferSelect;
 export type ProjectRow = typeof projects.$inferSelect;
 export type ProjectAgentRow = typeof projectAgents.$inferSelect;
+export type ProjectResourceRow = typeof projectResources.$inferSelect;
 export type ScanRunRow = typeof scanRuns.$inferSelect;
 export type HarnessScanRow = typeof harnessScans.$inferSelect;
 export type DiscoveredResourceRow = typeof discoveredResources.$inferSelect;

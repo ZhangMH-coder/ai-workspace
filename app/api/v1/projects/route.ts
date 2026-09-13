@@ -19,7 +19,13 @@ export async function GET(req: NextRequest) {
       { status: sp.get("status") ?? undefined, search: sp.get("search") ?? undefined, sort },
       { page, pageSize }
     );
-    return NextResponse.json({ items, ...pageMeta(page, pageSize, total) });
+    // S1.55：项目 = 使用场景，附带资源数与类型分布（全部派生，不复制资源数据）
+    const itemsWithResources = items.map((p) => ({
+      ...p,
+      resourceCount: repo.countProjectResources(p.id),
+      resourceTypes: repo.projectResourceTypeDistribution(p.id),
+    }));
+    return NextResponse.json({ items: itemsWithResources, ...pageMeta(page, pageSize, total) });
   } catch (e) {
     return handleError(e);
   }

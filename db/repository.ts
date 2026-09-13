@@ -22,6 +22,7 @@ import {
   llmProviderEndpoints,
   planDependencies,
   projectAgents,
+  projectResources,
   projects,
   resourceAnalyses,
   resourceCapabilities,
@@ -452,6 +453,101 @@ export function insertProjectAgent(row: typeof projectAgents.$inferInsert) {
 
 export function deleteProjectAgent(id: string) {
   db.delete(projectAgents).where(eq(projectAgents.id, id)).run();
+}
+
+/* ---------------- ProjectResource（S1.55：项目 = 使用场景，挂真实资源） ---------------- */
+
+export function listProjectResources(f: { projectId?: string; resourceId?: string }, q: PageQuery) {
+  const conds = [];
+  if (f.projectId) conds.push(eq(projectResources.projectId, f.projectId));
+  if (f.resourceId) conds.push(eq(projectResources.resourceId, f.resourceId));
+  const where = conds.length ? and(...conds) : undefined;
+  const total = db.select({ n: count() }).from(projectResources).where(where).get()?.n ?? 0;
+  const items = db
+    .select()
+    .from(projectResources)
+    .where(where)
+    .orderBy(desc(projectResources.addedAt))
+    .limit(q.pageSize)
+    .offset(offsetOf(q))
+    .all();
+  return { items, total };
+}
+
+export function getProjectResourceByPair(projectId: string, resourceId: string) {
+  return (
+    db
+      .select()
+      .from(projectResources)
+      .where(
+        and(
+          eq(projectResources.projectId, projectId),
+          eq(projectResources.resourceId, resourceId)
+        )
+      )
+      .get() ?? null
+  );
+}
+
+export function getProjectResource(id: string) {
+  return db.select().from(projectResources).where(eq(projectResources.id, id)).get() ?? null;
+}
+
+export function insertProjectResource(row: typeof projectResources.$inferInsert) {
+  return db.insert(projectResources).values(row).returning().get();
+}
+
+export function deleteProjectResource(id: string) {
+  db.delete(projectResources).where(eq(projectResources.id, id)).run();
+}
+
+/** 项目下资源数量（真实扫描数据的派生计数） */
+export function countProjectResources(projectId: string): number {
+  return (
+    db
+      .select({ n: count() })
+      .from(projectResources)
+      .where(eq(projectResources.projectId, projectId))
+      .get()?.n ?? 0
+  );
+}
+
+/** 项目下资源按类型分布（Skill / Rule / MCP / Prompt / Plugin…，join discovered_resource 派生） */
+export function projectResourceTypeDistribution(projectId: string): Array<{ type: string; count: number }> {
+  return db
+    .select({
+      type: discoveredResources.type,
+      count: count(),
+    })
+    .from(projectResources)
+    .innerJoin(
+      discoveredResources,
+      eq(projectResources.resourceId, discoveredResources.id)
+    )
+    .where(eq(projectResources.projectId, projectId))
+    .groupBy(discoveredResources.type)
+    .all()
+    .map((r) => ({ type: r.type, count: r.count }));
+}
+
+/** 项目下关联资源的完整实体（join 真实资源，用于详情展示） */
+export function projectResourcesWithEntity(projectId: string) {
+  return db
+    .select({
+      id: projectResources.id,
+      projectId: projectResources.projectId,
+      resourceId: projectResources.resourceId,
+      addedAt: projectResources.addedAt,
+      resource: discoveredResources,
+    })
+    .from(projectResources)
+    .innerJoin(
+      discoveredResources,
+      eq(projectResources.resourceId, discoveredResources.id)
+    )
+    .where(eq(projectResources.projectId, projectId))
+    .orderBy(desc(projectResources.addedAt))
+    .all();
 }
 
 /* ---------------- Resource Discovery（本地资源发现，V1 MVP） ---------------- */

@@ -36,11 +36,11 @@ pm run db:reset（clearAll 仅清 6 张演示业务表），agent / agent_run / 
 | 2026-09-12 | v1.15 | **S1.47 四项候选执行** | ① S1.44+45+46 一起提交并 push：commit `7812ef8`（feat(S1.46)），推送 `95cf5ea..7812ef8 master -> master`（docs/AI Workspace 项目-QA测试方案与报告.md 非本次产物，未纳入）；② 资源详情页新增「使用建议 · 预设问题」：新组件 `components/resources/suggested-prompts.tsx`，按 type 模板确定性生成 3 条预设问题（真实注入 name/description，不调用 LLM），点击复制去 Harness 使用；并修复「相关资源」重复渲染（page.tsx 与 resource-detail.tsx 各渲染一次 → 仅保留 resource-detail 内一处）；③ Agent 模型分组复核：厂商分组 + 搜索过滤已在 S1.33 落地，本次清理 vendorOf 冗余分支（qwen 被前序拦截、开源分支永不命中的历史遗留）；④ 运行失败错误面板复核：Agent 详情页 failed 运行错误卡（formatRunErrorCode 可读标签 + errorMessage + 原始 code）已存在，agent_run 表当前 0 条真实记录，无 failed 样本可验证；验证：lint / tsc / build / 生产重启 / /resources/[id] 预设问题渲染（真实资源 project-evaluation）+「相关资源」唯一 / /agents/new 模型分组（DeepSeek 3 · 智谱 GLM 4 · MiniMax 1 · Kimi 2 · 通义千问 5 · 豆包 2 · 其他 2 = 19）全绿 | ✅ 已完成（本次交付） |
 | 2026-09-12 | v1.16 | **S1.48 页面进入时自动扫描** | store 新增 `maybeAutoScan` action + 15 分钟阈值常量 + inFlight 并发锁：进入 Dashboard / Resources 页面时静默检查上次扫描时间，从未扫描或距上次扫描超 15 分钟才触发增量扫描，完成后 dispatch `aiw:rescan` 复用现有页面刷新链路；自动扫描失败静默（不弹 toast、不打断浏览），保留手动「重新扫描」入口；验证：lint / tsc / build 全绿，生产重启后打开 /resources 自动触发（scanId b89b9b89 → cda18ea4），totalResources 保持 254 幂等无重复；同时输出《候选资源推荐重构方案（S1.49）》待审批 | ✅ 已完成（本次交付） |
 | 2026-09-13 | v1.17 | **S1.49 功能评估清单第一批** | ① 能力索引页新增搜索（匹配能力/资源名/证据引用/类别名）+ 类别过滤 + 分页（100/页，>100 条显示翻页）；② 扫描变更提示：discovered_resource 新增 created_at（migration 0011/0012，存量行 NULL 不误报），扫描后统计 addedResources，自动扫描有新增时低打扰 toast、手动扫描 toast 显示新增数；③ 纠正：任务智能「技能创建建议」已在 S1.37 实现（SkillProposalBlock + generateSkillProposal），无需重复开发；验证：lint / tsc / build 全绿；scan API addedResources=0（存量 254 无新增不误报）、total 254 幂等；浏览器实测搜索「代码生成」52 条（分类名可命中）、类别过滤/空态/计数正常 | ✅ 已完成（本次交付） |
-| ✅ 已完成（本次交付） |
+| 2026-09-13 | v1.18 | **S1.50 四项候选执行** | ① 提交推送：`e4eaca8`（S1.47）+ `05a771a`（S1.48+S1.49），push 成功 `7812ef8..05a771a`；② 资源收藏 Pin：store persist 升 v6（partialize 增 pinnedResourcePaths；migrate 旧版仅留 timeRange、领域数据明确丢弃），toggleResourcePin(sourcePath)；资源列表行内 Pin 按钮 + 置顶排序 + 名称旁图标，详情页「置顶/已置顶」按钮；③ 导出 CSV/JSON：新 API `GET /api/v1/resource-discovery/export` 与 `/api/v1/resource-capabilities/export`（format=csv|json，Content-Disposition 下载，服务端排除用户隐藏、CSV 转义），新公共组件 export-menu.tsx，resources 页与 capabilities 页接入；④ 预设问题统一：抽 `lib/prompts.ts`（presetPromptsForResource 类型模板 3 条 + presetQuestionFromDescription 描述转指令 + cleanPromptDesc），suggested-prompts.tsx 与 skill-suggestions.tsx 两处调用点统一；验证：lint / tsc / build 全绿；生产重启（端口占用杀净）；export API：资源 JSON 253（254−1 隐藏）、CSV 254 行、能力标签 JSON 970（当前有效）、CSV 971 行；浏览器：Pin 点击→persist v6 pinned=1、刷新保留+置顶优先、详情页已置顶、取消置顶=0、导出菜单 CSV/JSON、任务智能页 console 无 error | ✅ 已完成（本次交付） |
 
 ## 当前阶段
 
-**S1.49 功能评估清单第一批（能力索引搜索分页 / 扫描变更提示）**（已完成；**不自动进入下一阶段**，待审批）
+**S1.50 四项候选执行（提交推送 / 资源收藏 Pin / 导出 CSV·JSON / 预设问题统一）**（已完成；**不自动进入下一阶段**，待审批）
 
 ---
 
@@ -1433,3 +1433,15 @@ pm run db:reset（仅清空 6 张演示业务表，真实资源线不动）。
   - 扫描变更提示：`db/schema.ts` discovered_resource 加 `createdAt`；`drizzle/0011_discovered_resource_created_at.sql`（ALTER）+ `0012_discovered_resource_created_idx.sql`（CREATE INDEX，单语句约束）；`db/repository.ts` upsert 不改写 createdAt + `countResourcesCreatedAfter`；`db/service.ts` runResourceScan 传入 createdAt 并统计 `addedResources`；`lib/types.ts` RunScanResult 加 `addedResources?`；`stores/workspace.ts` maybeAutoScan 扫描后有新增时 `toast.info`（无新增完全静默）；`resources/page.tsx` 手动扫描 toast 显示新增数。
 - 验证：lint ✅ / tsc ✅ / build ✅ / migration 应用 ✅（journal 手写条目 + 单语句文件拆分）/ scan API `addedResources=0`、`totalResources=254` 幂等 ✅ / 浏览器实测：搜索「代码生成」52 条命中（分类名可搜）、类别过滤生效、空态「没有匹配（如实）」、无新增不误报 ✅。
 - 已知问题：分页控件需过滤结果 >100 条才出现，单次搜索词实测未达阈值（真实能力标签为短文本）；逻辑为确定性 slice，未做真实触发。
+
+### S1.50 四项候选执行
+
+- 背景：用户「继续候选」批准四项：①提交推送 ②资源收藏（Pin）③导出 CSV/JSON ④预设问题逻辑统一。
+- 实现：
+  - ①GitHub 提交推送：`e4eaca8`（S1.47 资源详情预设问题 + Agent 表单）、`05a771a`（S1.48+S1.49 自动扫描 / 能力索引搜索分页 / 扫描变更提示），push 成功 `7812ef8..05a771a`（代理 `-c http.proxy` 须紧跟 git 命令）。
+  - ②资源收藏 Pin：`stores/workspace.ts` persist 升 **v6**（partialize 增加 `pinnedResourcePaths`；migrate 旧版仅保留 timeRange，领域数据明确丢弃不合并）+ `toggleResourcePin(sourcePath)`；`resource-table.tsx` 行内 Pin/PinOff 按钮（amber 高亮）+ 名称旁 Pin 图标 + 当前页置顶排序；`resource-detail.tsx` 顶部「置顶/已置顶」按钮。语义：按 sourcePath 记录（稳定锚点，重扫 upsert/ID 变化不丢）；纯 UI 偏好不落库。
+  - ③导出 CSV/JSON：`db/repository.ts` `listAllVisibleResources()`（排除用户隐藏）；`db/service.ts` `exportResources` / `exportCapabilities`（JSON 全量、CSV 引号/换行转义）；新 API `GET /api/v1/resource-discovery/export?format=csv|json` 与 `GET /api/v1/resource-capabilities/export?format=csv|json`（Content-Disposition 下载）；新公共组件 `components/shared/export-menu.tsx`（fetch blob + a.download，成功/失败 toast）；resources 页与 capabilities 页 PageHeader 接入。
+  - ④预设问题统一：抽 `lib/prompts.ts`（`presetPromptsForResource` 类型模板 3 条 + `presetQuestionFromDescription` 描述转指令 + `cleanPromptDesc` 清洗截断 40 字），消除 `suggested-prompts.tsx`（8 组类型模板）与 `skill-suggestions.tsx`（presetQuestion 独立逻辑）两套模板漂移；两处调用点改为引用 lib，行为不变。
+- 验证：lint ✅ / tsc ✅ / build ✅ / 生产重启（端口占用已杀净）✅ / export API：资源 JSON **253** 条（254 − 1 隐藏）、CSV 254 行（表头+253）、能力标签 JSON **970** 条（当前有效 isCurrent）、CSV 971 行 ✅ / 浏览器：列表 50 行均带 Pin 按钮、点击后 localStorage version=6 pinned=1、刷新后置顶保留且排序置顶优先、详情页「已置顶」按钮、取消置顶 pinned=0、导出菜单 CSV/JSON 项、任务智能页 console 无 error ✅。
+- 已知问题：置顶排序仅作用于当前页（服务端分页 50 条/页），跨页置顶资源不会插到第 1 页顶部；导出为全量快照，未做增量导出。
+- Git：S1.50 全部改动待提交（见下方「Git 状态」）。

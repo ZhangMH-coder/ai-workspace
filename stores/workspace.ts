@@ -159,6 +159,9 @@ interface WorkspaceState {
   /** 首次加载（幂等）：无持久化数据时拉取 seed */
   hydrate: () => Promise<void>;
   setTimeRange: (range: TimeRange) => void;
+  /** S1.50：资源收藏（置顶）——按 sourcePath 记录（稳定锚点，重扫不丢）；UI 偏好，不落库 */
+  pinnedResourcePaths: string[];
+  toggleResourcePin: (sourcePath: string) => void;
   /** 新建并返回新 agent（调用方用于跳转） */
   createAgent: (input: NewAgentInput) => Promise<Agent>;
   /** 触发运行并返回新 run（调用方用于提示）；input 为给 Agent 的指令；刷新窗口统计与最近明细 */
@@ -276,6 +279,7 @@ export const useWorkspaceStore = create<WorkspaceState>()(
       projects: [],
       projectAgents: [],
       timeRange: "30d",
+      pinnedResourcePaths: [],
       stats: null,
       discovery: {
         overview: null,
@@ -613,6 +617,15 @@ export const useWorkspaceStore = create<WorkspaceState>()(
         set({ stats: { ...cur, ...refreshed } });
       },
 
+      toggleResourcePin: (sourcePath) => {
+        const cur = get().pinnedResourcePaths;
+        set({
+          pinnedResourcePaths: cur.includes(sourcePath)
+            ? cur.filter((p) => p !== sourcePath)
+            : [...cur, sourcePath],
+        });
+      },
+
       createAgent: async (input) => {
         const agent = await createAgentService(input);
         set((state) => ({ agents: [agent, ...state.agents] }));
@@ -813,18 +826,24 @@ export const useWorkspaceStore = create<WorkspaceState>()(
     }),
     {
       name: "ai-workspace-store",
-      version: 5,
+      version: 6,
       storage: createJSONStorage(() => localStorage),
       // 持久化职责收敛：localStorage 仅保留必要 UI 偏好；领域事实数据以 SQLite 为唯一事实源
       partialize: (state) => ({
         timeRange: state.timeRange,
+        pinnedResourcePaths: state.pinnedResourcePaths,
       }),
       migrate: (persistedState, persistedVersion) => {
         // v<5：旧版本持久化了领域事实数据。明确处理策略：**一律丢弃，不与 SQLite 合并**
         // （避免第二数据源）；仅迁移 UI 偏好 timeRange。
         void persistedVersion;
-        const old = persistedState as { timeRange?: TimeRange } | null;
-        return { timeRange: old?.timeRange ?? "30d" };
+        const old = persistedState as
+          | { timeRange?: TimeRange; pinnedResourcePaths?: string[] }
+          | null;
+        return {
+          timeRange: old?.timeRange ?? "30d",
+          pinnedResourcePaths: old?.pinnedResourcePaths ?? [],
+        };
       },
     }
   )

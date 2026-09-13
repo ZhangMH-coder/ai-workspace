@@ -16,6 +16,7 @@ import { EmptyDiscovery } from "@/components/resources/empty-discovery";
 import { HarnessGrid } from "@/components/resources/harness-grid";
 import { ResourceTable } from "@/components/resources/resource-table";
 import { PageHeader } from "@/components/shared/page-header";
+import { ExportMenu } from "@/components/shared/export-menu";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -96,6 +97,10 @@ export default function ResourcesPage() {
                 <BrainCircuit className="size-3.5" /> 能力索引
               </Button>
             </Link>
+            <ExportMenu
+              baseUrl="/api/v1/resource-discovery/export"
+              filename="ai-workspace-resources"
+            />
             <Button onClick={handleScan} disabled={scanning} className="h-8 gap-1.5 text-[12px]">
               {scanning ? (
                 <RotateCcw className="size-3.5 animate-spin" />

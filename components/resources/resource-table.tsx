@@ -5,8 +5,8 @@
  * parseable=false 的资源明确展示「发现但暂无法解析」与原因，保留真实路径。
  */
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import { EyeOff, Search } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { EyeOff, Pin, PinOff, Search } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -32,12 +32,24 @@ export function ResourceTable({ initialHarness }: { initialHarness?: string }) {
   const harnesses = useWorkspaceStore((s) => s.discovery.overview?.harnesses ?? []);
   const fetchResources = useWorkspaceStore((s) => s.fetchDiscoveredResources);
   const hideResource = useWorkspaceStore((s) => s.hideResource);
+  const pinnedResourcePaths = useWorkspaceStore((s) => s.pinnedResourcePaths);
+  const toggleResourcePin = useWorkspaceStore((s) => s.toggleResourcePin);
 
   const [type, setType] = useState<ResourceType | "all">("all");
   const [harness, setHarness] = useState<string>(initialHarness ?? "all");
   const [parseable, setParseable] = useState<"all" | "true" | "false">("all");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
+
+  // S1.50：收藏置顶排序（仅当前页排序；分页仍按服务端）
+  const pinnedSet = useMemo(() => new Set(pinnedResourcePaths), [pinnedResourcePaths]);
+  const orderedResources = useMemo(
+    () =>
+      [...resources].sort(
+        (a, b) => Number(pinnedSet.has(b.sourcePath)) - Number(pinnedSet.has(a.sourcePath)),
+      ),
+    [resources, pinnedSet],
+  );
 
   useEffect(() => {
     void fetchResources({
@@ -134,10 +146,12 @@ export function ResourceTable({ initialHarness }: { initialHarness?: string }) {
             当前筛选条件下没有资源（仅展示真实索引结果）
           </div>
         ) : (
-          resources.map((r) => (
+          orderedResources.map((r) => (
             <ResourceRow
               key={r.id}
               resource={r}
+              pinned={pinnedSet.has(r.sourcePath)}
+              onPin={() => toggleResourcePin(r.sourcePath)}
               onHide={async (res) => {
                 try {
                   await hideResource(res.id);
@@ -199,16 +213,23 @@ function usageOf(resource: DiscoveredResource): string {
 
 function ResourceRow({
   resource,
+  pinned,
+  onPin,
   onHide,
 }: {
   resource: DiscoveredResource;
+  pinned: boolean;
+  onPin: () => void;
   onHide: (resource: DiscoveredResource) => void;
 }) {
   return (
     <div className="group flex items-center gap-3 border-b border-white/[0.04] px-4 py-2.5 transition-colors last:border-0 hover:bg-white/[0.03]">
       <Link href={`/resources/${resource.id}`} className="flex min-w-0 flex-1 items-center gap-3">
         <div className="w-1/4 min-w-0">
-          <p className="truncate text-[13px] font-medium text-ink">{resource.name}</p>
+          <p className="flex items-center gap-1.5 truncate text-[13px] font-medium text-ink">
+            {pinned ? <Pin className="size-3 shrink-0 fill-amber-400/70 text-amber-400" aria-label="已置顶" /> : null}
+            {resource.name}
+          </p>
           <p className="truncate text-[11px] text-ink-3" title={usageOf(resource)}>
             {usageOf(resource)}
           </p>
@@ -235,6 +256,19 @@ function ResourceRow({
           )}
         </div>
       </Link>
+      <button
+        type="button"
+        onClick={onPin}
+        title={pinned ? "取消置顶" : "置顶此资源（常用收藏）"}
+        aria-label={`${pinned ? "取消置顶" : "置顶"} ${resource.name}`}
+        className={`shrink-0 rounded-md border p-1.5 transition-all ${
+          pinned
+            ? "border-amber-400/30 bg-amber-400/10 text-amber-300"
+            : "border-white/[0.08] bg-white/[0.03] text-ink-3 opacity-0 hover:border-white/20 hover:text-ink group-hover:opacity-100"
+        }`}
+      >
+        {pinned ? <Pin className="size-3.5" /> : <PinOff className="size-3.5" />}
+      </button>
       <button
         type="button"
         onClick={() => onHide(resource)}

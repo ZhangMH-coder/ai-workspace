@@ -574,6 +574,21 @@ export function getDiscoveredResource(id: string) {
   return db.select().from(discoveredResources).where(eq(discoveredResources.id, id)).get() ?? null;
 }
 
+/** S1.50：导出全量可见资源（排除用户隐藏；不受分页限制） */
+export function listAllVisibleResources() {
+  return db
+    .select()
+    .from(discoveredResources)
+    .where(
+      notInArray(
+        discoveredResources.sourcePath,
+        db.select({ p: userHiddenResources.sourcePath }).from(userHiddenResources)
+      )
+    )
+    .orderBy(desc(discoveredResources.lastModified), asc(discoveredResources.name))
+    .all();
+}
+
 /* ---------------- 用户级资源隐藏（展示排除） ---------------- */
 
 export function listHiddenSourcePaths(): Set<string> {

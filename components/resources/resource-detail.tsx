@@ -18,6 +18,7 @@ import {
   FileCode2,
   FolderOpen,
   Loader2,
+  Pin,
   RotateCcw,
   Sparkles,
 } from "lucide-react";
@@ -42,6 +43,8 @@ export function ResourceDetail({ resource }: { resource: DiscoveredResource }) {
   const router = useRouter();
   const hideResource = useWorkspaceStore((s) => s.hideResource);
   const unhideResource = useWorkspaceStore((s) => s.unhideResource);
+  const pinned = useWorkspaceStore((s) => s.pinnedResourcePaths.includes(resource.sourcePath));
+  const toggleResourcePin = useWorkspaceStore((s) => s.toggleResourcePin);
   const [hidden, setHidden] = useState(false);
   const [restoring, setRestoring] = useState(false);
   const [usageExpanded, setUsageExpanded] = useState(false);
@@ -110,14 +113,32 @@ export function ResourceDetail({ resource }: { resource: DiscoveredResource }) {
               <ArrowLeft className="size-3.5" /> 返回资源列表
             </Button>
           </Link>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleHide}
-            className="h-7 gap-1.5 border-white/10 px-2.5 text-[12px] text-ink-2 hover:text-ink"
-          >
-            <EyeOff className="size-3.5" /> 隐藏此资源
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                toggleResourcePin(resource.sourcePath);
+                toast.success(pinned ? `已取消置顶 ${resource.name}` : `已置顶 ${resource.name}`);
+              }}
+              className={`h-7 gap-1.5 border-white/10 px-2.5 text-[12px] ${
+                pinned
+                  ? "border-amber-400/30 bg-amber-400/10 text-amber-300 hover:text-amber-200"
+                  : "text-ink-2 hover:text-ink"
+              }`}
+            >
+              <Pin className={`size-3.5 ${pinned ? "fill-amber-400/70" : ""}`} />
+              {pinned ? "已置顶" : "置顶"}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleHide}
+              className="h-7 gap-1.5 border-white/10 px-2.5 text-[12px] text-ink-2 hover:text-ink"
+            >
+              <EyeOff className="size-3.5" /> 隐藏此资源
+            </Button>
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-2.5">
           <h1 className="text-[20px] font-semibold tracking-tight text-ink">{resource.name}</h1>

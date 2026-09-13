@@ -875,6 +875,81 @@ export function listCapabilityIndex(): CapabilityIndexEntry[] {
     .map((e) => ({ ...e, items: e.items.slice(0, 60) }));
 }
 
+/* ---------------- S1.50：导出（CSV / JSON，全量可见数据） ---------------- */
+
+/** 导出全量可见资源（排除隐藏；不受分页限制） */
+export function exportResources(format: "csv" | "json"): { contentType: string; body: string } {
+  const rows = repo.listAllVisibleResources();
+  if (format === "json") {
+    return {
+      contentType: "application/json; charset=utf-8",
+      body: JSON.stringify(rows, null, 2),
+    };
+  }
+  const esc = (v: string | null | undefined) =>
+    `"${(v ?? "").replace(/"/g, '""').replace(/\r?\n/g, " ")}"`;
+  const header = "name,type,source,framework,parseable,status,description,sourcePath,lastModified";
+  const lines = rows.map((r) =>
+    [
+      esc(r.name),
+      r.type,
+      esc(r.source),
+      esc(r.framework),
+      r.parseable ? "true" : "false",
+      r.status,
+      esc(r.description),
+      esc(r.sourcePath),
+      esc(r.lastModified),
+    ].join(","),
+  );
+  return {
+    contentType: "text/csv; charset=utf-8",
+    body: [header, ...lines].join("\n"),
+  };
+}
+
+/** 导出全量当前能力标签（含来源资源与证据引用） */
+export function exportCapabilities(format: "csv" | "json"): { contentType: string; body: string } {
+  const rows = repo.listAllCurrentCapabilities();
+  if (format === "json") {
+    return {
+      contentType: "application/json; charset=utf-8",
+      body: JSON.stringify(
+        rows.map(({ cap, resource }) => ({
+          capability: cap.capability,
+          category: cap.category,
+          confidence: cap.confidence,
+          evidenceRef: cap.evidenceRef,
+          resourceId: resource.id,
+          resourceName: resource.name,
+          harnessId: resource.harnessId,
+          sourcePath: resource.sourcePath,
+        })),
+        null,
+        2,
+      ),
+    };
+  }
+  const esc = (v: string | null | undefined) =>
+    `"${(v ?? "").replace(/"/g, '""').replace(/\r?\n/g, " ")}"`;
+  const header = "capability,category,confidence,evidenceRef,resourceName,harnessId,sourcePath";
+  const lines = rows.map(({ cap, resource }) =>
+    [
+      esc(cap.capability),
+      cap.category,
+      cap.confidence,
+      esc(cap.evidenceRef),
+      esc(resource.name),
+      esc(resource.harnessId),
+      esc(resource.sourcePath),
+    ].join(","),
+  );
+  return {
+    contentType: "text/csv; charset=utf-8",
+    body: [header, ...lines].join("\n"),
+  };
+}
+
 /** 任务分词：英文词 + 中文 2-gram / 3-gram（中文无空格，整句无法直接匹配） */
 function tokenizeTask(task: string): string[] {
   const s = task.toLowerCase().trim();

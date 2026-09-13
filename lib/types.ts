@@ -182,6 +182,8 @@ export interface Agent {
   systemPrompt: string;
   createdAt: string; // ISO 8601
   lastRunAt: string | null; // ISO 8601，未运行过为 null
+  /** S1.60：归档时间（软删除语义），非空即已归档并从列表隐藏 */
+  archivedAt?: string | null;
 }
 
 /** 单次运行记录 */
@@ -204,6 +206,14 @@ export interface AgentRun {
   errorMessage?: string;
   // S1.31：真实 LLM 输出内容（可空；旧数据为空）
   output?: string | null;
+}
+
+/** S1.60：编辑 Agent 的表单输入（全部可选） */
+export interface UpdateAgentInput {
+  name?: string;
+  model?: ModelId;
+  description?: string;
+  systemPrompt?: string;
 }
 
 /** 新建 Agent 的表单输入 */

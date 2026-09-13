@@ -381,6 +381,11 @@ export function getAgentTemplate(id: string): AgentTemplate | undefined {
   return AGENT_TEMPLATES.find((t) => t.id === id);
 }
 
+/** S1.60：按 Agent 名称匹配来源模板（用于卡片快捷任务 / 详情页角色识别） */
+export function templateForAgentName(name: string): AgentTemplate | undefined {
+  return AGENT_TEMPLATES.find((t) => t.name === name);
+}
+
 /** 按分组过滤模板（供页面分组渲染） */
 export function templatesOfGroup(group: TemplateGroupId): AgentTemplate[] {
   return AGENT_TEMPLATES.filter((t) => t.group === group);

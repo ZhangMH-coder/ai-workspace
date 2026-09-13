@@ -23,10 +23,12 @@ import { createJSONStorage, persist } from "zustand/middleware";
 import { toast } from "sonner";
 
 import {
+  archiveAgent as archiveAgentService,
   createAgent as createAgentService,
   fetchAgentRuns as fetchAgentRunsService,
   fetchAgents as fetchAgentsService,
   runAgent as runAgentService,
+  updateAgent as updateAgentService,
 } from "@/lib/services/agents";
 import {
   archiveCapability as archiveCapabilityService,
@@ -75,7 +77,7 @@ import type {
   DiscoveredResource,
   DiscoveryOverview,
   RunScanResult,
-  NewAgentInput,
+  NewAgentInput, UpdateAgentInput,
   NewCapabilityInput,
   NewProjectInput,
   Project,
@@ -172,6 +174,10 @@ interface WorkspaceState {
   toggleResourcePin: (sourcePath: string) => void;
   /** 新建并返回新 agent（调用方用于跳转） */
   createAgent: (input: NewAgentInput) => Promise<Agent>;
+  /** S1.60：编辑 Agent（名称/描述/模型/系统提示词），更新本地列表 */
+  updateAgent: (id: string, input: UpdateAgentInput) => Promise<void>;
+  /** S1.60：归档 Agent（软删；从列表移除） */
+  archiveAgent: (id: string) => Promise<void>;
   /** 触发运行并返回新 run（调用方用于提示）；input 为给 Agent 的指令；刷新窗口统计与最近明细 */
   runAgent: (agentId: string, input?: string) => Promise<AgentRun>;
   /** 按需加载某 Agent 运行历史（明细场景，分页有界）；force 强制重拉（运行后同步） */
@@ -690,6 +696,20 @@ export const useWorkspaceStore = create<WorkspaceState>()(
         const agent = await createAgentService(input);
         set((state) => ({ agents: [agent, ...state.agents] }));
         return agent;
+      },
+
+      updateAgent: async (id, input) => {
+        const agent = await updateAgentService(id, input);
+        set((state) => ({
+          agents: state.agents.map((a) => (a.id === id ? agent : a)),
+        }));
+      },
+
+      archiveAgent: async (id) => {
+        await archiveAgentService(id);
+        set((state) => ({
+          agents: state.agents.filter((a) => a.id !== id),
+        }));
       },
 
       runAgent: async (agentId, input) => {

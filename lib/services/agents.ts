@@ -5,5 +5,7 @@ export {
   fetchAgents,
   fetchAgentRuns,
   createAgent,
+  updateAgent,
+  archiveAgent,
   runAgent,
 } from "./http/agents";

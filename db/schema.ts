@@ -23,8 +23,12 @@ export const agents = sqliteTable(
     systemPrompt: text("system_prompt").notNull().default(""),
     createdAt: text("created_at").notNull(),
     lastRunAt: text("last_run_at"),
+    archivedAt: text("archived_at"),
   },
-  (t) => [index("idx_agent_status").on(t.status)]
+  (t) => [
+    index("idx_agent_status").on(t.status),
+    index("idx_agent_archived").on(t.archivedAt),
+  ]
 );
 
 export const capabilityDefinitions = sqliteTable(

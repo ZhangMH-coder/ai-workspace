@@ -10,7 +10,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import type { ModelId } from "@/lib/types";
+import type { Agent, ModelId } from "@/lib/types";
 import { fetchAvailableModels, polishSystemPrompt } from "@/lib/services/ai";
 import { useWorkspaceStore } from "@/stores/workspace";
 
@@ -47,14 +47,16 @@ function groupModels(models: string[]): Array<[string, string[]]> {
   return ordered;
 }
 
-export function AgentForm() {
+/** S1.60：创建 / 编辑双模式表单（initial 存在即编辑模式，保存走 updateAgent） */
+export function AgentForm({ initial }: { initial?: Agent }) {
   const router = useRouter();
   const createAgent = useWorkspaceStore((s) => s.createAgent);
+  const updateAgent = useWorkspaceStore((s) => s.updateAgent);
 
-  const [name, setName] = useState("");
-  const [model, setModel] = useState<ModelId>("");
-  const [description, setDescription] = useState("");
-  const [systemPrompt, setSystemPrompt] = useState("");
+  const [name, setName] = useState(initial?.name ?? "");
+  const [model, setModel] = useState<ModelId>(initial?.model ?? "");
+  const [description, setDescription] = useState(initial?.description ?? "");
+  const [systemPrompt, setSystemPrompt] = useState(initial?.systemPrompt ?? "");
   const [submitting, setSubmitting] = useState(false);
   // S1.44：系统提示词专业润色
   const [polishing, setPolishing] = useState(false);
@@ -157,11 +159,17 @@ export function AgentForm() {
     if (!canSubmit) return;
     setSubmitting(true);
     try {
-      const agent = await createAgent({ name, model, description, systemPrompt });
-      toast.success(`Agent「${agent.name}」已创建`);
-      router.push(`/agents/${agent.id}`);
+      if (initial) {
+        await updateAgent(initial.id, { name, model, description, systemPrompt });
+        toast.success(`Agent「${name}」已更新`);
+        router.push(`/agents/${initial.id}`);
+      } else {
+        const agent = await createAgent({ name, model, description, systemPrompt });
+        toast.success(`Agent「${agent.name}」已创建`);
+        router.push(`/agents/${agent.id}`);
+      }
     } catch {
-      toast.error("创建失败，请重试");
+      toast.error(initial ? "保存失败，请重试" : "创建失败，请重试");
       setSubmitting(false);
     }
   }
@@ -330,7 +338,13 @@ export function AgentForm() {
         </Button>
         <Button type="submit" disabled={!canSubmit}>
           {submitting ? <Loader2 className="animate-spin" /> : <Bot />}
-          {submitting ? "创建中…" : "创建 Agent"}
+          {submitting
+            ? initial
+              ? "保存中…"
+              : "创建中…"
+            : initial
+              ? "保存修改"
+              : "创建 Agent"}
         </Button>
       </div>
     </form>

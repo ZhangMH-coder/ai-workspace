@@ -7,7 +7,7 @@
 import { http } from "@/lib/api/client";
 import type { PageDTO, AgentDTO, AgentRunDTO } from "@/lib/api/dto";
 import { toAgent, toAgentRun } from "@/lib/api/mappers";
-import type { Agent, AgentRun, NewAgentInput } from "@/lib/types";
+import type { Agent, AgentRun, NewAgentInput, UpdateAgentInput } from "@/lib/types";
 
 export async function fetchAgents(): Promise<Agent[]> {
   const page = await http.get<PageDTO<AgentDTO>>("/agents?pageSize=100");
@@ -43,4 +43,21 @@ export async function runAgent(
     input: input ?? "",
   });
   return toAgentRun(dto);
+}
+
+/** S1.60：编辑 Agent（名称/描述/模型/系统提示词） */
+export async function updateAgent(id: string, input: UpdateAgentInput): Promise<Agent> {
+  const dto = await http.patch<AgentDTO>(`/agents/${encodeURIComponent(id)}`, {
+    ...(input.name !== undefined ? { name: input.name.trim() } : {}),
+    ...(input.description !== undefined ? { description: input.description.trim() } : {}),
+    ...(input.model !== undefined ? { model: input.model } : {}),
+    ...(input.systemPrompt !== undefined ? { systemPrompt: input.systemPrompt.trim() } : {}),
+  });
+  return toAgent(dto);
+}
+
+/** S1.60：归档 Agent（软删除语义；关联数据保留） */
+export async function archiveAgent(id: string): Promise<Agent> {
+  const dto = await http.del<AgentDTO>(`/agents/${encodeURIComponent(id)}`);
+  return toAgent(dto);
 }

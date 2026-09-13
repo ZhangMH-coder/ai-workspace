@@ -18,7 +18,13 @@ export async function GET(req: NextRequest) {
     const pageSize = parseIntParam(sp.get("pageSize"), 100, 100);
     const sort = parseSort(sp.get("sort"), ["name", "createdAt"]);
     const { items, total } = repo.listAgents(
-      { search: sp.get("search") ?? undefined, status: sp.get("status") ?? undefined, sort },
+      {
+        search: sp.get("search") ?? undefined,
+        status: sp.get("status") ?? undefined,
+        sort,
+        // S1.60：列表默认不展示已归档 Agent（归档 = 软删除）
+        archived: sp.get("archived") === "only" ? "only" : "exclude",
+      },
       { page, pageSize }
     );
     return NextResponse.json({ items, ...pageMeta(page, pageSize, total) });

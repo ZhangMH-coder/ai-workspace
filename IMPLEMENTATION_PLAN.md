@@ -1588,3 +1588,19 @@ pm run db:migrate 手动执行——已在 README / IMPL 记录，属既有机�
   - 浏览器实测（生产，真实数据）：代码协作组已添加 5/5（用户已创建的 5 个代码角色正确匹配为「已添加」+ 查看详情跳转 /agents/98d7a268…）；通用角色组 0/5 全部显示「添加此角色」；「代码架构师」改名回退后恢复匹配（此前改名导致 4/5）；点击查看详情进入真实 Agent 详情页 ✅。
 - 已知问题：lint 4 个既有 warning（与本次无关）；「已添加」按模板 name 匹配（用户若手动改名创建，模板区会显示为未添加，属预期）；Agent 编辑（updateAgent/deleteAgent）仍缺失（下一步候选）。
 - Git：本小节改动待提交（push 前排除本地 QA 文档）。
+
+### S1.60 Agents 模块重设计：团队工作台 + 智能体任务台 + CRUD + 运行错误面板
+
+- 背景：用户对 Agents 列表/详情页「感受不到用处、不够耳目一新」，要求保留 Agent 但重设计（参考 OpenClaw GUI「像管理团队一样管理 AI 助手」、Hermes Web UI、Agentic UI 多步可视化）。经方案确认后按四项范围实施。
+- 领域决策：
+  - 列表页 → 智能体团队工作台：搜索 + 状态筛选（全部/运行中/空闲/异常/暂停）+ 卡片候选任务快捷入口（来源模板 suggestedTasks，点击带 ?task= 进入详情并预填运行指令）+ 状态灯。
+  - 详情页 → 智能体任务台：身份区（角色图标/状态/模型/创建/最近运行 + 编辑/归档按钮 + 候选任务 chips）+ 运行状态流转可视化（排队→运行中脉冲动画 + 进度条）+ 运行历史时间线（状态色节点 + 可展开 output/error）+ 系统提示词可读化卡片（按 ## 标题分段）+ 配置折叠 + 能力装配保留。
+  - Agent CRUD：补 updateAgent（service + PATCH /agents/[id]）+ archiveAgent（软删除语义：archivedAt 落库，列表默认隐藏 archived=exclude，archived=only 可查；重复归档 CONFLICT）。Store/Service/API 全部补齐；AgentForm 改为创建/编辑双模式；新增 /agents/[id]/edit 编辑页。
+  - 运行错误面板：error_code 可读展示 + 展开消息 + provider_unavailable 特判「前往 Settings 配置 AI Provider」引导；失败运行时自动展开该条错误。
+- 数据层：agents 表新增 archived_at 列 + idx_agent_archived 索引（migration 0016，journal idx 16）。踩坑记录：drizzle migrator 按 journal `when` 时间戳跳过「比最后一次迁移旧」的条目——0016 首次写入 when 小于 0015 导致「applied 但未执行」；修正 when > 0015 后正常应用。
+- 验证：
+  - lint ✅（0 error，4 既有 warning，新文件零 warning）/ tsc ✅ / build ✅ / 生产 3000 ✅ / console 0 error ✅。
+  - 浏览器实测（真实数据）：列表「已添加 5/5」、候选任务 chip → /agents/[id]?task=… 预填运行框 ✅；详情任务台身份区/候选任务/运行统计/时间线渲染 ✅；失败节点展开显示「Provider 不可用 + LLM API 错误 400 + 前往 Settings + code: provider_unavailable」✅；编辑页表单预填 + 保存修改 ✅；归档两段式确认 → 列表 6→5 移除 ✅；CRUD API 冒烟（POST/PATCH 改名改描述/DELETE 归档 archivedAt 落库）✅；archived=only 过滤正确 ✅；Dashboard/Projects 回归 ✅。
+  - 测试数据全部清理（_归档测试/_api测试 物理删除），最终保持 5 个真实 Agent 零污染。
+- 已知问题：Agent 恢复（unarchive）未实现（本轮仅归档）；归档 Agent 详情显示「未找到/已归档」为预期；lint 4 个既有 warning 与本次无关。
+- Git：本小节改动待提交（push 前排除本地 QA 文档）。

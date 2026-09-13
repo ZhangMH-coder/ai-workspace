@@ -8,7 +8,7 @@
  * 未来切 node:sqlite / libsql 时本层代码零改动。
  */
 import { randomUUID } from "node:crypto";
-import { and, asc, count, desc, eq, gt, gte, inArray, like, lt, ne, notInArray, or, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, gt, gte, inArray, isNull, like, lt, ne, not, notInArray, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
 import { db } from "./db";
 import {
@@ -53,6 +53,8 @@ export interface AgentFilters {
   search?: string;
   status?: string;
   sort?: string;
+  /** S1.60：归档过滤（exclude=默认隐藏归档；only=仅归档） */
+  archived?: "exclude" | "only";
 }
 
 export function listAgents(f: AgentFilters, q: PageQuery) {
@@ -62,6 +64,8 @@ export function listAgents(f: AgentFilters, q: PageQuery) {
     conds.push(or(like(agents.name, s), like(agents.description, s)));
   }
   if (f.status) conds.push(eq(agents.status, f.status));
+  if (f.archived === "exclude") conds.push(isNull(agents.archivedAt));
+  if (f.archived === "only") conds.push(not(isNull(agents.archivedAt)));
   const where = conds.length ? and(...conds) : undefined;
 
   const orderBy =

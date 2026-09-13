@@ -118,6 +118,33 @@ export function createAgent(input: CreateAgentInput) {
   return repo.insertAgent(row);
 }
 
+export interface UpdateAgentInput {
+  name?: string;
+  description?: string;
+  model?: string;
+  systemPrompt?: string;
+}
+
+/** S1.60：编辑 Agent（名称/描述/模型/系统提示词）；不存在抛 NOT_FOUND */
+export function updateAgent(id: string, patch: UpdateAgentInput) {
+  const existing = repo.getAgent(id);
+  if (!existing) throw new ServiceError("NOT_FOUND", "Agent 不存在");
+  return repo.updateAgent(id, {
+    ...(patch.name !== undefined ? { name: patch.name } : {}),
+    ...(patch.description !== undefined ? { description: patch.description } : {}),
+    ...(patch.model !== undefined ? { model: patch.model } : {}),
+    ...(patch.systemPrompt !== undefined ? { systemPrompt: patch.systemPrompt } : {}),
+  });
+}
+
+/** S1.60：归档 Agent（软删除语义：archivedAt 落库；列表默认隐藏，详情保留只读；重复归档 CONFLICT） */
+export function archiveAgent(id: string) {
+  const existing = repo.getAgent(id);
+  if (!existing) throw new ServiceError("NOT_FOUND", "Agent 不存在");
+  if (existing.archivedAt) throw new ServiceError("CONFLICT", "Agent 已归档");
+  return repo.updateAgent(id, { archivedAt: new Date().toISOString() });
+}
+
 /* ================= AI Runtime（P5-2） ================= */
 
 /**

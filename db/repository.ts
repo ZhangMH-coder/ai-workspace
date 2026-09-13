@@ -8,7 +8,7 @@
  * 未来切 node:sqlite / libsql 时本层代码零改动。
  */
 import { randomUUID } from "node:crypto";
-import { and, asc, count, desc, eq, gte, inArray, like, lt, ne, notInArray, or, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, gt, gte, inArray, like, lt, ne, notInArray, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
 import { db } from "./db";
 import {
@@ -529,6 +529,8 @@ export interface DiscoveredResourceQuery {
   type?: string;
   harness?: string;
   parseable?: boolean;
+  /** S1.51：按 sourcePath 精确取回（置顶区块用；提供时忽略其余过滤与分页） */
+  ids?: string[];
   /** 是否排除用户隐藏的资源（默认 true：列表展示过滤；统计口径用 false） */
   excludeHidden?: boolean;
   page: number;
@@ -537,6 +539,24 @@ export interface DiscoveredResourceQuery {
 
 export function listDiscoveredResources(q: DiscoveredResourceQuery) {
   const conds = [];
+  if (q.ids && q.ids.length > 0) {
+    // S1.51：按 sourcePath 精确取回（置顶区块用；忽略分页/搜索，返回全部命中）
+    const items = db
+      .select()
+      .from(discoveredResources)
+      .where(
+        and(
+          inArray(discoveredResources.sourcePath, q.ids),
+          notInArray(
+            discoveredResources.sourcePath,
+            db.select({ p: userHiddenResources.sourcePath }).from(userHiddenResources)
+          )
+        )
+      )
+      .orderBy(desc(discoveredResources.lastModified), asc(discoveredResources.name))
+      .all();
+    return { items, total: items.length };
+  }
   if (q.search) {
     const s = `%${q.search}%`;
     conds.push(or(like(discoveredResources.name, s), like(discoveredResources.sourcePath, s)));
@@ -587,6 +607,25 @@ export function listAllVisibleResources() {
     )
     .orderBy(desc(discoveredResources.lastModified), asc(discoveredResources.name))
     .all();
+}
+
+/** S1.51：上一条 / 下一条（同列表排序：last_modified DESC, name ASC；排除隐藏；规模小，行内定位最稳） */
+export function getAdjacentResources(id: string): { prev: { id: string; name: string } | null; next: { id: string; name: string } | null } {
+  const hidden = db.select({ p: userHiddenResources.sourcePath }).from(userHiddenResources);
+  const rows = db
+    .select({ id: discoveredResources.id, name: discoveredResources.name, lastModified: discoveredResources.lastModified })
+    .from(discoveredResources)
+    .where(notInArray(discoveredResources.sourcePath, hidden))
+    .all();
+  rows.sort((a, b) => {
+    if (a.lastModified === b.lastModified) return a.name < b.name ? -1 : a.name > b.name ? 1 : 0;
+    return (a.lastModified ?? "") > (b.lastModified ?? "") ? -1 : 1;
+  });
+  const idx = rows.findIndex((r) => r.id === id);
+  if (idx === -1) return { prev: null, next: null };
+  const prev = idx > 0 ? { id: rows[idx - 1].id, name: rows[idx - 1].name } : null;
+  const next = idx < rows.length - 1 ? { id: rows[idx + 1].id, name: rows[idx + 1].name } : null;
+  return { prev, next };
 }
 
 /* ---------------- 用户级资源隐藏（展示排除） ---------------- */
@@ -1048,6 +1087,17 @@ export function listTaskAnalyses(limit = 20) {
     .orderBy(desc(taskAnalyses.createdAt))
     .limit(limit)
     .all();
+}
+
+/** S1.51：删除单条任务分析历史（连带其需求/推荐/计划）；返回是否删除成功 */
+export function deleteTaskAnalysisById(id: string): boolean {
+  const analysis = getTaskAnalysisById(id);
+  if (!analysis) return false;
+  db.delete(taskRequirements).where(eq(taskRequirements.taskAnalysisId, id)).run();
+  db.delete(resourceRecommendations).where(eq(resourceRecommendations.taskAnalysisId, id)).run();
+  db.delete(taskPlans).where(eq(taskPlans.taskAnalysisId, id)).run();
+  db.delete(taskAnalyses).where(eq(taskAnalyses.id, id)).run();
+  return true;
 }
 
 /* ---------------- Task Planning（Phase 4） ---------------- */

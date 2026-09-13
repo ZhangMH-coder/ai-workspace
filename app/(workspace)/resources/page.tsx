@@ -13,6 +13,7 @@ import { toast } from "sonner";
 
 import { CategoryBrowser } from "@/components/resources/category-browser";
 import { EmptyDiscovery } from "@/components/resources/empty-discovery";
+import { PinnedStrip } from "@/components/resources/pinned-strip";
 import { HarnessGrid } from "@/components/resources/harness-grid";
 import { ResourceTable } from "@/components/resources/resource-table";
 import { PageHeader } from "@/components/shared/page-header";
@@ -185,6 +186,9 @@ export default function ResourcesPage() {
 
           {/* Harness 命中 */}
           <HarnessGrid harnesses={overview?.harnesses ?? []} totalResources={total} />
+
+          {/* 置顶资源（跨页可见，S1.51） */}
+          <PinnedStrip />
 
           {/* 资源列表 */}
           <Card className="border-white/10 bg-transparent">

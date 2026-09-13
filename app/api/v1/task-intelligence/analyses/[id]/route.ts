@@ -18,3 +18,14 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
     return handleError(e);
   }
 }
+
+/** 删除单条历史：DELETE /[id]（连带需求/推荐/计划；当前展示态由前端同步） */
+export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string }> }) {
+  try {
+    const { id } = await ctx.params;
+    service.deleteTaskAnalysis(id);
+    return NextResponse.json({ ok: true });
+  } catch (e) {
+    return handleError(e);
+  }
+}

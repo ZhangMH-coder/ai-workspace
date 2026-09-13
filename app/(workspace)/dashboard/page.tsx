@@ -14,13 +14,15 @@ import { HeroStats } from "@/components/dashboard/showcase/hero-stats";
 import { HermesSpotlight } from "@/components/dashboard/showcase/hermes-spotlight";
 import { SkillGallery } from "@/components/dashboard/showcase/skill-gallery";
 import { TypeCards } from "@/components/dashboard/showcase/type-cards";
+import { DistributionBars } from "@/components/dashboard/showcase/distribution-bars";
 import { PageHeader } from "@/components/shared/page-header";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { fetchDiscoveredResources, fetchDiscoveryOverview, runResourceScan } from "@/lib/services/resource-discovery";
+import { fetchCapabilityIndex } from "@/lib/services/resource-analysis";
 import { fetchLLMProviderConfig } from "@/lib/services/ai";
 import { useWorkspaceStore } from "@/stores/workspace";
-import type { DiscoveredResource, ResourceType } from "@/lib/types";
+import type { CapabilityCategory, DiscoveredResource, ResourceType } from "@/lib/types";
 
 const TYPE_CARD_DEFS: { type: ResourceType; label: string; description: string }[] = [
   { type: "skill", label: "技能 Skills", description: "可直接调用的能力指令包，来自各 Harness 的 SKILL.md" },
@@ -37,18 +39,23 @@ export default function DashboardPage() {
   const [skills, setSkills] = useState<DiscoveredResource[]>([]);
   const [manualModel, setManualModel] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
+  const [capabilityCategories, setCapabilityCategories] = useState<
+    { category: CapabilityCategory; count: number }[]
+  >([]);
 
   const loadAll = async () => {
-    const [ov, pr, cf, sk] = await Promise.all([
+    const [ov, pr, cf, sk, caps] = await Promise.all([
       fetchDiscoveryOverview(),
       fetchDiscoveredResources({ type: "prompt", pageSize: 10 }),
       fetchDiscoveredResources({ type: "rule", harness: "hermes", pageSize: 10 }),
       fetchDiscoveredResources({ harness: "hermes", type: "skill", parseable: true, pageSize: 8 }),
+      fetchCapabilityIndex().catch(() => [] as { category: CapabilityCategory; count: number }[]),
     ]);
     setOverview(ov);
     setProfiles(pr.items);
     setConfigs(cf.items);
     setSkills(sk.items);
+    setCapabilityCategories(caps.map((c) => ({ category: c.category, count: c.count })));
     // 手动配置的生效模型（仅叠加展示，不覆盖 Hermes 自身配置）
     try {
       const llm = await fetchLLMProviderConfig();
@@ -142,6 +149,11 @@ export default function DashboardPage() {
           />
 
           <TypeCards cards={cards} />
+
+          <DistributionBars
+            byType={byType}
+            capabilityCategories={capabilityCategories}
+          />
 
           <HermesSpotlight config={config} profiles={profiles} manualModel={manualModel} />
 

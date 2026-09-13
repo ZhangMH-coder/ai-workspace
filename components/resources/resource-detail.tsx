@@ -31,6 +31,7 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { useWorkspaceStore } from "@/stores/workspace";
 import {
+  fetchAdjacentResources,
   interpretResource,
   isResourceHidden,
 } from "@/lib/services/resource-discovery";
@@ -46,6 +47,10 @@ export function ResourceDetail({ resource }: { resource: DiscoveredResource }) {
   const pinned = useWorkspaceStore((s) => s.pinnedResourcePaths.includes(resource.sourcePath));
   const toggleResourcePin = useWorkspaceStore((s) => s.toggleResourcePin);
   const [hidden, setHidden] = useState(false);
+  const [adjacent, setAdjacent] = useState<{
+    prev: { id: string; name: string } | null;
+    next: { id: string; name: string } | null;
+  } | null>(null);
   const [restoring, setRestoring] = useState(false);
   const [usageExpanded, setUsageExpanded] = useState(false);
   const metaEntries = Object.entries(resource.metadata ?? {});
@@ -60,6 +65,11 @@ export function ResourceDetail({ resource }: { resource: DiscoveredResource }) {
     isResourceHidden(resource.id).then((h) => {
       if (!cancelled) setHidden(h);
     }).catch(() => {});
+    fetchAdjacentResources(resource.id)
+      .then((a) => {
+        if (!cancelled) setAdjacent(a);
+      })
+      .catch(() => {});
     return () => {
       cancelled = true;
     };
@@ -108,11 +118,35 @@ export function ResourceDetail({ resource }: { resource: DiscoveredResource }) {
       ) : null}
       <div>
         <div className="mb-3 flex items-center justify-between gap-2">
-          <Link href="/resources">
-            <Button variant="ghost" size="sm" className="h-7 px-2 text-[12px] text-ink-2">
-              <ArrowLeft className="size-3.5" /> 返回资源列表
+          <div className="flex items-center gap-1">
+            <Link href="/resources">
+              <Button variant="ghost" size="sm" className="h-7 px-2 text-[12px] text-ink-2">
+                <ArrowLeft className="size-3.5" /> 返回资源列表
+              </Button>
+            </Link>
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={!adjacent?.prev}
+              onClick={() => adjacent?.prev && router.push(`/resources/${adjacent.prev.id}`)}
+              className="h-7 gap-1 px-2 text-[12px] text-ink-2 disabled:opacity-30"
+              title={adjacent?.prev ? `上一条：${adjacent.prev.name}` : "已是第一条"}
+            >
+              <ChevronUp className="size-3.5" />
+              上一条
             </Button>
-          </Link>
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={!adjacent?.next}
+              onClick={() => adjacent?.next && router.push(`/resources/${adjacent.next.id}`)}
+              className="h-7 gap-1 px-2 text-[12px] text-ink-2 disabled:opacity-30"
+              title={adjacent?.next ? `下一条：${adjacent.next.name}` : "已是最后一条"}
+            >
+              下一条
+              <ChevronDown className="size-3.5" />
+            </Button>
+          </div>
           <div className="flex items-center gap-2">
             <Button
               variant="outline"

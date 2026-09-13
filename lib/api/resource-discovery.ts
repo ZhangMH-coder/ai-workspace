@@ -13,6 +13,8 @@ export interface ResourceListQuery {
   type?: string;
   harness?: string;
   parseable?: boolean;
+  /** S1.51：按 sourcePath 精确取回（置顶区块用） */
+  ids?: string[];
   page?: number;
   pageSize?: number;
 }
@@ -35,6 +37,7 @@ export async function fetchDiscoveredResources(
   if (q.type) sp.set("type", q.type);
   if (q.harness) sp.set("harness", q.harness);
   if (q.parseable !== undefined) sp.set("parseable", String(q.parseable));
+  if (q.ids && q.ids.length > 0) sp.set("ids", q.ids.join(","));
   sp.set("page", String(q.page ?? 1));
   sp.set("pageSize", String(q.pageSize ?? 50));
   const dto = await http.get<PageDTO<DiscoveredResourceDTO>>(
@@ -46,6 +49,13 @@ export async function fetchDiscoveredResources(
 export async function fetchResourceDetail(id: string): Promise<DiscoveredResource> {
   const dto = await http.get<DiscoveredResourceDTO>(`/resource-discovery/resources/${id}`);
   return toDiscoveredResource(dto);
+}
+
+/** S1.51：详情上一条 / 下一条（同列表排序） */
+export async function fetchAdjacentResources(
+  id: string
+): Promise<{ prev: { id: string; name: string } | null; next: { id: string; name: string } | null }> {
+  return http.get(`/resource-discovery/resources/${id}/adjacent`);
 }
 
 /* ---------------- 相关资源推荐（真实派生，S1.28） ---------------- */

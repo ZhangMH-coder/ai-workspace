@@ -101,6 +101,8 @@ import {
   createTaskPlan as createTaskPlanService,
   fetchPlanByAnalysis as fetchPlanByAnalysisService,
   fetchTaskAnalyses as fetchTaskAnalysesService,
+  fetchTaskAnalysis as fetchTaskAnalysisService,
+  deleteTaskAnalysis as deleteTaskAnalysisService,
 } from "@/lib/services/task-intelligence";
 import type { RecommendationPlan } from "@/lib/task-intelligence";
 import type { TaskAnalysisListItemDTO } from "@/lib/api/task-intelligence";
@@ -258,6 +260,10 @@ interface WorkspaceState {
   };
   analyzeTask: (task: string, strategy?: "heuristic" | "llm-assisted") => Promise<RecommendationPlan>;
   fetchTaskAnalysisHistory: () => Promise<void>;
+  /** S1.51：历史回看（加载指定分析为当前展示态） */
+  loadTaskAnalysis: (id: string) => Promise<void>;
+  /** S1.51：删除单条历史（连带需求/推荐/计划；若正展示则清空） */
+  deleteTaskAnalysis: (id: string) => Promise<void>;
   createTaskPlan: (analysisId: string) => Promise<TaskPlan>;
   fetchPlanByAnalysis: (analysisId: string) => Promise<TaskPlan | null>;
 }
@@ -547,6 +553,47 @@ export const useWorkspaceStore = create<WorkspaceState>()(
             },
           }));
         }
+      },
+
+      loadTaskAnalysis: async (id: string) => {
+        set((s) => ({ taskIntelligence: { ...s.taskIntelligence, loading: true, error: null } }));
+        try {
+          const current = await fetchTaskAnalysisService(id);
+          set((s) => ({
+            taskIntelligence: {
+              ...s.taskIntelligence,
+              current,
+              plan: null,
+              planLoading: false,
+              planError: null,
+              loading: false,
+            },
+          }));
+        } catch (e) {
+          set((s) => ({
+            taskIntelligence: {
+              ...s.taskIntelligence,
+              loading: false,
+              error: (e as Error).message,
+            },
+          }));
+        }
+      },
+
+      deleteTaskAnalysis: async (id: string) => {
+        await deleteTaskAnalysisService(id);
+        set((s) => ({
+          taskIntelligence: {
+            ...s.taskIntelligence,
+            history: s.taskIntelligence.history.filter((h) => h.id !== id),
+            // 删除的是当前展示态 → 清空 current/plan
+            current:
+              s.taskIntelligence.current?.analysisId === id
+                ? null
+                : s.taskIntelligence.current,
+            plan: s.taskIntelligence.current?.analysisId === id ? null : s.taskIntelligence.plan,
+          },
+        }));
       },
 
       createTaskPlan: async (analysisId: string) => {

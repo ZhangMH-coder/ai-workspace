@@ -559,6 +559,7 @@ export function listDiscoveredResources(q: {
   type?: string;
   harness?: string;
   parseable?: boolean;
+  ids?: string[];
   page: number;
   pageSize: number;
 }) {
@@ -570,6 +571,15 @@ export function getDiscoveredResource(id: string): DiscoveredResource {
   const row = repo.getDiscoveredResource(id);
   if (!row) throw new ServiceError("NOT_FOUND", "资源不存在");
   return resourceToDomain(row);
+}
+
+/** S1.51：详情上一条 / 下一条（同列表排序，排除隐藏；不存在返回 null 不报错） */
+export function getAdjacentResources(id: string): {
+  prev: { id: string; name: string } | null;
+  next: { id: string; name: string } | null;
+} {
+  void getDiscoveredResource(id); // 校验存在性（NOT_FOUND）
+  return repo.getAdjacentResources(id);
 }
 
 /* ---------------- 相关资源推荐（真实派生，S1.28） ----------------
@@ -1658,6 +1668,12 @@ export function getTaskAnalysis(id: string): RecommendationPlan | null {  const 
 /** 任务分析历史（新 → 旧） */
 export function listTaskAnalyses(limit = 20) {
   return repo.listTaskAnalyses(limit);
+}
+
+/** S1.51：删除单条任务分析历史（连带需求/推荐/计划）；不存在抛 NOT_FOUND */
+export function deleteTaskAnalysis(id: string): void {
+  const ok = repo.deleteTaskAnalysisById(id);
+  if (!ok) throw new ServiceError("NOT_FOUND", "任务分析记录不存在");
 }
 
 /* ---------------- Task Planning（Phase 4） ---------------- */

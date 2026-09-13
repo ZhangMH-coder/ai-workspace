@@ -154,6 +154,11 @@ export async function fetchTaskAnalysis(id: string): Promise<RecommendationPlan>
 
 /* ---------------- Task Planning（Phase 4） DTO / Mappers / Client ---------------- */
 
+/** S1.51：删除单条历史（连带需求/推荐/计划） */
+export async function deleteTaskAnalysis(id: string): Promise<void> {
+  await http.del(`/task-intelligence/analyses/${encodeURIComponent(id)}`);
+}
+
 export interface PlanStepDTO {
   id: string;
   stepIndex: number;

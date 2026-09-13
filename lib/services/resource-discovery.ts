@@ -6,6 +6,7 @@ export {
   runResourceScan,
   fetchDiscoveredResources,
   fetchResourceDetail,
+  fetchAdjacentResources,
   fetchRelatedResources,
   hideResource,
   isResourceHidden,

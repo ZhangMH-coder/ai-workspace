@@ -18,6 +18,7 @@ export async function GET(req: NextRequest) {
       type: sp.get("type") ?? undefined,
       harness: sp.get("harness") ?? undefined,
       parseable,
+      ids: sp.get("ids")?.split(",").map((s) => s.trim()).filter(Boolean) || undefined,
       page,
       pageSize,
     });

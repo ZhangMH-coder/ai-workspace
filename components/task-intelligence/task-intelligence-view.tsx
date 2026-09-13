@@ -9,7 +9,7 @@
  * 所有推荐来自真实 ResourceCapability，零 Demo 数据；不执行、不越权。
  */
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   BrainCircuit,
@@ -42,6 +42,7 @@ import {
 import { generateSkillProposal } from "@/lib/task-intelligence/skill-proposal";
 import { PlanSection } from "./plan-section";
 import { SkillSuggestions } from "./skill-suggestions";
+import { HistoryPanel } from "./history-panel";
 
 const SAMPLE_TASKS = ["写一篇小红书文案", "帮我做一份数据周报并整理成表格", "总结一下这份会议纪要"];
 
@@ -397,9 +398,35 @@ export function TaskIntelligenceView() {
   const current = useWorkspaceStore((s) => s.taskIntelligence.current);
   const analyzing = useWorkspaceStore((s) => s.taskIntelligence.analyzing);
   const error = useWorkspaceStore((s) => s.taskIntelligence.error);
+  const history = useWorkspaceStore((s) => s.taskIntelligence.history);
   const analyzeTask = useWorkspaceStore((s) => s.analyzeTask);
+  const fetchTaskAnalysisHistory = useWorkspaceStore((s) => s.fetchTaskAnalysisHistory);
+  const loadTaskAnalysis = useWorkspaceStore((s) => s.loadTaskAnalysis);
+  const deleteTaskAnalysis = useWorkspaceStore((s) => s.deleteTaskAnalysis);
   const [task, setTask] = useState("");
   const [aiEnhanced, setAiEnhanced] = useState(true);
+
+  useEffect(() => {
+    void fetchTaskAnalysisHistory();
+  }, [fetchTaskAnalysisHistory]);
+
+  async function handleLoadHistory(id: string) {
+    try {
+      await loadTaskAnalysis(id);
+      toast.success("已回看该次分析");
+    } catch (err) {
+      toast.error((err as Error).message || "加载历史失败");
+    }
+  }
+
+  async function handleDeleteHistory(id: string) {
+    try {
+      await deleteTaskAnalysis(id);
+      toast.success("已删除该条历史（不影响原始资源文件）");
+    } catch (err) {
+      toast.error((err as Error).message || "删除失败");
+    }
+  }
 
   async function handleAnalyze(e: React.FormEvent) {
     e.preventDefault();
@@ -488,6 +515,14 @@ export function TaskIntelligenceView() {
 
       {/* 结果 */}
       {current ? <PlanResult plan={current} /> : null}
+
+      {/* 历史管理（S1.51） */}
+      <HistoryPanel
+        history={history}
+        currentId={current?.analysisId}
+        onLoad={handleLoadHistory}
+        onDelete={handleDeleteHistory}
+      />
 
       {/* 技能使用建议（保留） */}
       <SkillSuggestions />

@@ -30,7 +30,7 @@ import {
 } from "@/lib/types";
 
 /** S1.49：能力索引分页大小 */
-const INDEX_PAGE_SIZE = 100;
+const INDEX_PAGE_SIZE = 50;
 
 export function CapabilityIndexView() {
   const status = useWorkspaceStore((s) => s.analysis.status);

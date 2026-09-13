@@ -5,6 +5,7 @@ export {
   analyzeTask,
   fetchTaskAnalyses,
   fetchTaskAnalysis,
+  deleteTaskAnalysis,
   createTaskPlan,
   fetchTaskPlan,
   fetchPlanByAnalysis,

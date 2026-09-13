@@ -37,10 +37,11 @@ pm run db:reset（clearAll 仅清 6 张演示业务表），agent / agent_run / 
 | 2026-09-12 | v1.16 | **S1.48 页面进入时自动扫描** | store 新增 `maybeAutoScan` action + 15 分钟阈值常量 + inFlight 并发锁：进入 Dashboard / Resources 页面时静默检查上次扫描时间，从未扫描或距上次扫描超 15 分钟才触发增量扫描，完成后 dispatch `aiw:rescan` 复用现有页面刷新链路；自动扫描失败静默（不弹 toast、不打断浏览），保留手动「重新扫描」入口；验证：lint / tsc / build 全绿，生产重启后打开 /resources 自动触发（scanId b89b9b89 → cda18ea4），totalResources 保持 254 幂等无重复；同时输出《候选资源推荐重构方案（S1.49）》待审批 | ✅ 已完成（本次交付） |
 | 2026-09-13 | v1.17 | **S1.49 功能评估清单第一批** | ① 能力索引页新增搜索（匹配能力/资源名/证据引用/类别名）+ 类别过滤 + 分页（100/页，>100 条显示翻页）；② 扫描变更提示：discovered_resource 新增 created_at（migration 0011/0012，存量行 NULL 不误报），扫描后统计 addedResources，自动扫描有新增时低打扰 toast、手动扫描 toast 显示新增数；③ 纠正：任务智能「技能创建建议」已在 S1.37 实现（SkillProposalBlock + generateSkillProposal），无需重复开发；验证：lint / tsc / build 全绿；scan API addedResources=0（存量 254 无新增不误报）、total 254 幂等；浏览器实测搜索「代码生成」52 条（分类名可命中）、类别过滤/空态/计数正常 | ✅ 已完成（本次交付） |
 | 2026-09-13 | v1.18 | **S1.50 四项候选执行** | ① 提交推送：`e4eaca8`（S1.47）+ `05a771a`（S1.48+S1.49），push 成功 `7812ef8..05a771a`；② 资源收藏 Pin：store persist 升 v6（partialize 增 pinnedResourcePaths；migrate 旧版仅留 timeRange、领域数据明确丢弃），toggleResourcePin(sourcePath)；资源列表行内 Pin 按钮 + 置顶排序 + 名称旁图标，详情页「置顶/已置顶」按钮；③ 导出 CSV/JSON：新 API `GET /api/v1/resource-discovery/export` 与 `/api/v1/resource-capabilities/export`（format=csv|json，Content-Disposition 下载，服务端排除用户隐藏、CSV 转义），新公共组件 export-menu.tsx，resources 页与 capabilities 页接入；④ 预设问题统一：抽 `lib/prompts.ts`（presetPromptsForResource 类型模板 3 条 + presetQuestionFromDescription 描述转指令 + cleanPromptDesc），suggested-prompts.tsx 与 skill-suggestions.tsx 两处调用点统一；验证：lint / tsc / build 全绿；生产重启（端口占用杀净）；export API：资源 JSON 253（254−1 隐藏）、CSV 254 行、能力标签 JSON 970（当前有效）、CSV 971 行；浏览器：Pin 点击→persist v6 pinned=1、刷新保留+置顶优先、详情页已置顶、取消置顶=0、导出菜单 CSV/JSON、任务智能页 console 无 error | ✅ 已完成（本次交付） |
+| 2026-09-13 | v1.19 | **S1.51 四项候选执行** | ① 任务分析历史管理：`db/repository.ts` listTaskAnalyses/deleteTaskAnalysisById（连带删 task_requirements/resource_recommendations/task_plans/task_analyses）、`db/service.ts` deleteTaskAnalysis（NOT_FOUND）、API `DELETE /api/v1/task-intelligence/analyses/[id]`、client http.del、store loadTaskAnalysis/deleteTaskAnalysis（analysisId 标识；删当前态即清空 current/plan）、`history-panel.tsx` 列表+回看+删除（hover 显现）；② 能力索引 50/页 + PinnedStrip：INDEX_PAGE_SIZE 100→50、`DiscoveredResourceQuery.ids`（sourcePath 精确取回、忽略分页/搜索、排除隐藏）、`resources/route.ts` ids 解析、client ResourceListQuery.ids、`pinned-strip.tsx` 置顶条跨页可见；③ Dashboard 真实分布条 + 详情相邻导航：`distribution-bars.tsx`（资源类型分布 + 能力标签分类分布，纯 CSS，970 能力合计一致）、`getAdjacentResources`（行内排序定位 last_modified DESC,name ASC、排除隐藏，避开 drizzle gt/lt 类型坑）、API `GET /resources/[id]/adjacent`、详情页上一条/下一条（首条 disabled）；④ 命令面板全局搜索：重写 `command-palette.tsx`（打开懒加载能力索引平铺、输入防抖 280ms 服务端搜资源、分组：资源→能力标签→导航→工作区，点击跳详情） | ✅ 已完成（本次交付） |
 
 ## 当前阶段
 
-**S1.50 四项候选执行（提交推送 / 资源收藏 Pin / 导出 CSV·JSON / 预设问题统一）**（已完成；**不自动进入下一阶段**，待审批）
+**S1.51 四项候选执行（任务分析历史管理 / 能力索引 50·页 + 置顶跨页 / Dashboard 分布条 + 详情相邻导航 / 命令面板全局搜索）**（已完成；**不自动进入下一阶段**，待审批）
 
 ---
 
@@ -1445,3 +1446,17 @@ pm run db:reset（仅清空 6 张演示业务表，真实资源线不动）。
 - 验证：lint ✅ / tsc ✅ / build ✅ / 生产重启（端口占用已杀净）✅ / export API：资源 JSON **253** 条（254 − 1 隐藏）、CSV 254 行（表头+253）、能力标签 JSON **970** 条（当前有效 isCurrent）、CSV 971 行 ✅ / 浏览器：列表 50 行均带 Pin 按钮、点击后 localStorage version=6 pinned=1、刷新后置顶保留且排序置顶优先、详情页「已置顶」按钮、取消置顶 pinned=0、导出菜单 CSV/JSON 项、任务智能页 console 无 error ✅。
 - 已知问题：置顶排序仅作用于当前页（服务端分页 50 条/页），跨页置顶资源不会插到第 1 页顶部；导出为全量快照，未做增量导出。
 - Git：S1.50 全部改动待提交（见下方「Git 状态」）。
+
+
+### S1.51 四项候选执行（历史管理 / 索引分页·置顶 / 分布条·相邻导航 / 全局搜索）
+
+- 背景：用户「继续候选」批准四项：①任务分析历史管理 ②能力索引分页下探 50/页 + 资源置顶跨页可见 ③Dashboard 真实资源分布条 + 资源详情上一条/下一条 ④命令面板全局搜索真实资源/能力。
+- 实现：
+  - ① 任务分析历史管理：`db/repository.ts` 新增 `listTaskAnalyses`（新→旧，limit 20）+ `deleteTaskAnalysisById`（按序删除 task_requirements / resource_recommendations / task_plans / task_analyses）；`db/service.ts` `deleteTaskAnalysis`（不存在抛 NOT_FOUND，统一错误契约）；API `DELETE /api/v1/task-intelligence/analyses/[id]`；`lib/api/task-intelligence.ts` `deleteTaskAnalysis`（http.del）；store 新增 `loadTaskAnalysis`（回看并清空 plan）+ `deleteTaskAnalysis`（列表移除 + 删除当前展示态时清空 current/plan，判定用 `analysisId`——RecommendationPlan 无 `id` 字段，首版误用已修正）；新组件 `history-panel.tsx`（任务摘要 / 状态 badge / 当前标记 / 相对时间 / hover 删除）；`task-intelligence-view.tsx` 挂载时拉历史。
+  - ② 能力索引分页 + 置顶跨页：`capability-index-view.tsx` `INDEX_PAGE_SIZE` 100→50；`DiscoveredResourceQuery` 增 `ids?: string[]`，`listDiscoveredResources` 提供 ids 时按 sourcePath 精确取回（忽略分页/搜索、排除隐藏、last_modified DESC 排序）；`resources/route.ts` 解析逗号分隔 ids；client `ResourceListQuery.ids`；新组件 `pinned-strip.tsx`（从 store `pinnedResourcePaths` 拉全量置顶资源、横向小卡、PinOff 可取消、amber 边框）挂到 `resources/page.tsx`，跨页始终可见。
+  - ③ Dashboard 分布条 + 详情相邻导航：新组件 `distribution-bars.tsx` 两个纯 CSS Bars 区块（资源类型分布：Skill 244/Rule 5/Plugin 3/Prompt 2；能力标签分类分布：9 类合计 970）；`dashboard/page.tsx` 加载 `fetchCapabilityIndex` 并入；`getAdjacentResources` 采用「取可见行 + 行内排序定位」（排序口径 last_modified DESC, name ASC，与列表一致；规避 drizzle `gt/lt` 列类型重载冲突——首版 SQL 条件写法报类型错误已改行内定位）；API `GET /api/v1/resource-discovery/resources/[id]/adjacent`；`resource-detail.tsx` 顶部「上一条/下一条」按钮（首/尾条 disabled，点击 router.push）。
+  - ④ 命令面板全局搜索：整文件重写 `command-palette.tsx`——打开时懒加载 `fetchCapabilityIndex` 平铺为 FlatCapability（含 category）；输入防抖 280ms 走 `fetchDiscoveredResources({search,pageSize:6})`；分组依次「资源 → 能力标签 → 导航 → 工作区」；能力本地过滤（capability+category+resourceName），资源服务端过滤；点击跳 `/resources/[id]`；CommandInput 受控。lint 强制「effect 内不得同步 setState」已按要求改为异步回调内 set。
+- 验证：lint ✅（0 error，3 warning 为既有未用变量）/ tsc ✅（0）/ build ✅（0）/ 生产重启（kill 3000 → npm run start，200）/ API 冒烟：adjacent 中间条目 prev/next 正确、列表首条 prev=null ✅、ids(sourcePath) 精确取回 3/3 ✅、analyses 创建→DELETE 200→列表消失 ✅、runs/stats 回归正常 ✅ / 浏览器实测：详情页上一条（首条正确 disabled）+ 下一条跳转 doubao-app-builder ✅、Dashboard 分布条渲染且 9 类能力合计 970 与能力索引一致 ✅、任务智能「最近分析 20 条 · 点击回看」+ 点击回看出现「当前」标记与完整详情 ✅、置顶资源后列表页「置顶资源 1 个 · 跨页可见」+ doubao-app-builder 卡片 ✅、能力索引 50/页分页控件 ✅。
+- 已知问题：命令面板 dialog 在本机 WebView（computer_use）存在焦点获取限制（hotkey 被拒、dialog 闪开即关），面板分组/跳转逻辑已由代码 + API 层验证，真实浏览器交互待外部验证（环境限制，非代码缺陷）；置顶排序仍为服务端分页 50/页内的置顶优先，跨页不插入第 1 页（既定语义：PinnedStrip 解决跨页可见）。
+- Git：本小节全部改动待提交（见下方「Git 状态」）。
+

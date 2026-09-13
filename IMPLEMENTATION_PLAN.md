@@ -1526,3 +1526,20 @@ pm run db:migrate 手动执行——已在 README / IMPL 记录，属既有机�
   - 修复的问题：① zustand selector `s.projectResourcesById[projectId] ?? []` 在缓存未填充时每次返回新数组引用 → React #185 无限重渲染页面崩溃；改为模块级 EMPTY_RESOURCES 稳定引用修复。② POST /resources 原返回 row（无 resource 字段）→ 前端 mapper 访问 d.resource 抛 TypeError 误报「添加失败」；改为返回与 GET 同构的 view。③ useMemo 条件调用（详情页 typeDistribution 在 early-return 后）→ 移到 hooks 区。
 - 已知问题：lint 4 个既有 warning 未处理（与本次无关）；/capabilities 路由 404 为旧页面早已移除（导航无入口，非本次回归）；dev 环境不自动跑 migration（既有机制）。
 - Git：本小节改动待提交（push 前排除本地 QA 文档）。
+
+### S1.56 代码智囊团：通用代码协作 Agent 模板加入 Agents 页面
+
+- 背景：用户指令「设计几个通用的代码 agent 智囊团加入到 agent 页面中，审批，写代码等分工合作的 agent，还有候选工作」。当前 agent 表 0 条真实数据，Agents 列表为空态，无任何预置角色；同时页面遗留「重置演示数据」按钮（文案称恢复 5 个演示 Agent，实际 seed 已不建 agent，且 clearAll 会清空含真实扫描索引在内的全部表——与真实数据主线冲突且有数据风险）。
+- 领域设计：
+  - 模板为**静态前端常量**（lib/agents/templates.ts，不落库、不是假数据），点击「创建」才通过 store.createAgent → Service → SQLite 成为真实 Agent 记录，可再进表单/详情编辑模型与提示词。
+  - 5 个角色覆盖标准软件交付链路：架构师（拆解/方案）→ 实现工程师（写代码/修 bug）→ 代码审查员（审查/安全）→ 测试工程师（用例/回归）→ 发布审批人（把关/批准）；每个模板含 role 标签、description（一句话职责）、suggestedTasks（3 条候选工作）、systemPrompt（可直接使用的完整中文专业提示词，不绑定厂商/模型）。
+  - 创建去重：按已创建 Agent 的 name 判断，同名模板按钮显示「已创建」并禁用，避免重复创建。
+- 实现：
+  - 新增 lib/agents/templates.ts（AgentTemplate 类型 + CODE_BRAINTRUST_TEMPLATES 5 条 + getAgentTemplate）。
+  - 新增 components/agents/agent-templates.tsx（卡片网格：角色徽标（按角色着色）/名称/职责/候选工作列表/创建按钮，创建中 loading、成功 toast、失败错误提示、已创建禁用态）。
+  - 修改 app/(workspace)/agents/page.tsx：空态与非空态都展示模板区；空态文案改为引导从智囊团创建；**移除「重置演示数据」按钮**及其 Dialog/state/handleReset（清理与真实数据主线冲突且有清库风险的遗留入口）。
+- 验证：
+  - lint ✅（0 error，4 既有 warning）/ tsc ✅ / build ✅ / 生产重启 /agents 200 ✅。
+  - 浏览器实测（生产）：模板区 5 卡全部渲染（角色/职责/候选工作 3 条/创建按钮）✅；点击「创建此 Agent」→ toast「已创建」→ 按钮变「已创建」禁用 → 列表区「共 1 个 Agent」✅；SQLite 落库（代码架构师 / model=auto / status=idle / systemPrompt 完整）✅；console 无错误 ✅；测试数据已清理还原（agent 表回 0）。
+- 已知问题：lint 4 个既有 warning 未处理（与本次无关）；创建默认 model="auto"（用户未配置模型端点时显示原样，可在 Agent 表单选择真实模型）；Agent 详情页暂未提供「应用模板提示词」编辑入口（可走 /agents/new 或后续增强）。
+- Git：本小节改动待提交（push 前排除本地 QA 文档）。

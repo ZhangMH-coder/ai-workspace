@@ -318,9 +318,10 @@ html[data-glass='off'] header {
   backdrop-filter: none;
 }
 
-/* 玻璃效果开启时：大面积卡片（bg-surface-1）半透明毛玻璃，让壁纸/流体贯穿全页面（S1.25） */
+/* 玻璃效果开启时：大面积卡片（bg-surface-1）半透明毛玻璃，让壁纸/流体贯穿全页面（S1.25）
+ * S1.57：不透明度 72% → 82%，保证任意壁纸/亮度设置下卡片内文字对比度 */
 html[data-glass='on'] [class*="bg-surface-1"] {
-  background-color: color-mix(in oklab, var(--surface-1) 72%, transparent);
+  background-color: color-mix(in oklab, var(--surface-1) 82%, transparent);
   -webkit-backdrop-filter: blur(var(--glass-blur, 16px));
   backdrop-filter: blur(var(--glass-blur, 16px));
 }

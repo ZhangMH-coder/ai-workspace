@@ -88,11 +88,23 @@ export function AppearanceLayer() {
   }, [app.bgMode]);
 
   const activeWallpaper = wallpaperUrl;
+  // S1.57：对比度保护层颜色——深色主题用黑遮罩（压暗亮壁纸，保证白字可读），浅色主题用白遮罩
+  const isLight = app.theme === "light";
 
   return (
     <div aria-hidden className="pointer-events-none fixed inset-0 z-0">
       {/* 流体渐变背景 */}
       {app.bgMode === "fluid" ? <div className="app-bg-fluid h-full w-full" style={fluidStyle} /> : null}
+
+      {/* 流体模式下轻度对比度保护层（高亮度设置时兜底） */}
+      {app.bgMode === "fluid" ? (
+        <div
+          className="absolute inset-0"
+          style={{
+            backgroundColor: isLight ? "rgba(255,255,255,0.30)" : "rgba(6,6,10,0.22)",
+          }}
+        />
+      ) : null}
 
       {/* 壁纸背景 */}
       {app.bgMode === "wallpaper" && activeWallpaper ? (
@@ -116,13 +128,25 @@ export function AppearanceLayer() {
         </div>
       ) : null}
 
-      {/* 壁纸模式下无图：纯色底（body 兜底） */}
+      {/* 壁纸模式下对比度保护层（S1.57）：压暗亮壁纸 / 提亮暗壁纸，保证任意壁纸下文字可读 */}
+      {app.bgMode === "wallpaper" && activeWallpaper ? (
+        <div
+          className="absolute inset-0"
+          style={{
+            backgroundColor: isLight ? "rgba(255,255,255,0.55)" : "rgba(6,6,10,0.52)",
+          }}
+        />
+      ) : null}
 
-      {/* 雾化层（磨砂度） */}
+      {/* 雾化层（磨砂度）：深色主题下用黑色雾（同时起到暗化作用），浅色主题保持白雾 */}
       {app.bgMode !== "solid" && app.glassFrost > 0 ? (
         <div
           className="absolute inset-0"
-          style={{ backgroundColor: `rgba(255,255,255,var(--glass-frost))` }}
+          style={{
+            backgroundColor: isLight
+              ? `rgba(255,255,255,var(--glass-frost))`
+              : `rgba(0,0,0,calc(var(--glass-frost) * 0.92))`,
+          }}
         />
       ) : null}
     </div>

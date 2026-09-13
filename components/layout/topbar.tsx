@@ -158,15 +158,21 @@ function AccountMenu() {
 
   useEffect(() => {
     let cancelled = false;
-    getProfile()
-      .then((p) => {
-        if (!cancelled) setProfile(p);
-      })
-      .catch(() => {
-        // 拉取失败保持空态，不显示假身份
-      });
+    const load = () =>
+      getProfile()
+        .then((p) => {
+          if (!cancelled) setProfile(p);
+        })
+        .catch(() => {
+          // 拉取失败保持空态，不显示假身份
+        });
+    load();
+    // S1.54：资料保存 / 头像变更后顶栏实时联动
+    const onUpdated = () => load();
+    window.addEventListener("profile-updated", onUpdated);
     return () => {
       cancelled = true;
+      window.removeEventListener("profile-updated", onUpdated);
     };
   }, []);
 

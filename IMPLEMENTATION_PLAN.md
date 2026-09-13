@@ -1492,3 +1492,21 @@ pm run db:migrate 应用 0013/0014 后 API 正常）✅ / API 冒烟全链路：
 - 已知问题：dev 环境从未自动跑 migration（next start 不执行 drizzle migrator），新增表需 
 pm run db:migrate 手动执行——已在 README / IMPL 记录，属既有机制非本次引入；lint 3 个既有 warning 未处理（与本次无关）。
 - Git：本小节改动待提交。
+
+### S1.54 个人资料增强 + 技能画廊来源可追溯打磨
+
+- 背景：用户候选「个人资料页头像 / 信息编辑增强」+「首页技能画廊分类切换进一步打磨」。
+- 个人资料增强（components/profile/profile-form.tsx + 	opbar.tsx / sidebar.tsx）：
+  - ① 两段式头像上传：选择本地图片后先本地预览（不立即上传），出现「使用此头像 / 取消」确认按钮，确认后才上传（此前选择即上传，无预览确认）。
+  - ② 新增「展示效果预览」卡片（表单右侧）：实时模拟顶栏/侧栏效果——头像（上传图或配色渐变字母）+ 昵称（回退本机用户名）+ 职位 + 简介截断，编辑即时联动。
+  - ③ 昵称/职位/简介字符计数徽章（n/40、n/80、n/300）。
+  - ④ 保存联动：保存/上传/移除头像后 dispatch window profile-updated 自定义事件，TopBar 账户菜单与 Sidebar 用户区监听后重新 getProfile()（此前只在挂载时拉一次，保存后顶栏不刷新）。
+  - ⑤ 保存按钮脏状态：无未保存修改时禁用并显示「已保存 / 暂无未保存的修改」。
+- 技能画廊打磨（components/dashboard/showcase/skill-gallery.tsx）：
+  - ① 卡片新增来源 Harness 徽标（与 category 徽标并列，HardDrive 图标 + source）。
+  - ② 悬停预览层底部新增真实来源行（mono 字体 source · sourcePath，title 完整路径，可追溯真实文件）。
+  - ③ 复制文本带来源（【name】使用方式（来自 source）：…）。
+  - ④ 空分类空态文案；分类 Tab 补 focus-visible 焦点环。
+- 验证：lint ✅（0 error，3 既有 warning）/ tsc ✅ / build ✅ / 生产重启 200 ✅ / 浏览器实测：profile 预览卡片 + 计数（2/40 等真实值）+ 两段式上传「新头像预览→使用此头像/取消」✅、取消后恢复原态 ✅、画廊双徽标（software-development + Hermes）✅、hover 预览层来源行 Hermes · C:\\Users\\Administrator\\.hermes\\skills\\software-development\\project-kickoff-workflow\\SKILL.md ✅。
+- 已知问题：无新增；头像确认上传后需刷新图片缓存（avatar?v=updatedAt 已带版本号）。
+- Git：本小节改动待提交。

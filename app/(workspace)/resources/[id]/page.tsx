@@ -8,7 +8,6 @@ import { useParams } from "next/navigation";
 
 import { EmptyDiscovery } from "@/components/resources/empty-discovery";
 import { InsightPanel } from "@/components/resources/analysis/insight-panel";
-import { RelatedResources } from "@/components/resources/related-resources";
 import { ResourceDetail } from "@/components/resources/resource-detail";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -47,7 +46,6 @@ export default function ResourceDetailPage() {
       <ResourceDetail resource={detail} />
       <Separator className="bg-white/[0.06]" />
       <InsightPanel resourceId={detail.id} />
-      <RelatedResources resourceId={detail.id} />
     </div>
   );
 }

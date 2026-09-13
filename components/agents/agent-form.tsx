@@ -28,7 +28,7 @@ function vendorOf(model: string): string {
   if (m.includes("gpt") || m.includes("o1") || m.includes("o3")) return "OpenAI";
   if (m.includes("claude")) return "Anthropic";
   if (m.includes("gemini")) return "Google";
-  if (m.includes("llama") || m.includes("mistral") || m.includes("qwen")) return "开源模型";
+  if (m.includes("llama") || m.includes("mistral") || m.includes("gemma")) return "开源模型";
   return "其他";
 }
 

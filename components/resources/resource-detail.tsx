@@ -25,6 +25,7 @@ import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { RelatedResources } from "@/components/resources/related-resources";
+import { SuggestedPrompts } from "@/components/resources/suggested-prompts";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { useWorkspaceStore } from "@/stores/workspace";
@@ -166,6 +167,9 @@ export function ResourceDetail({ resource }: { resource: DiscoveredResource }) {
       ) : null}
 
       {/* Hermes 配置专用展示：模型 / Provider / 可用模型列表 */}
+
+      {/* 使用建议 · 预设问题（真实字段确定性生成，点击复制去 Harness 使用） */}
+      {resource.parseable ? <SuggestedPrompts resource={resource} /> : null}
 
       {/* AI 解读：真实 LLM 总结用途（未配置 Key 时如实提示，不伪造） */}
       {resource.parseable ? <AiInterpretSection resource={resource} /> : null}

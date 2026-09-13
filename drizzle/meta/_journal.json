@@ -92,6 +92,20 @@
       "when": 1789260300000,
       "tag": "0012_discovered_resource_created_idx",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "6",
+      "when": 1789344000000,
+      "tag": "0013_llm_provider_endpoint",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "6",
+      "when": 1789344060000,
+      "tag": "0014_llm_provider_endpoint_idx",
+      "breakpoints": true
     }
   ]
 }

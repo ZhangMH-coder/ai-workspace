@@ -35,6 +35,7 @@ import {
   type RetrievableCapability,
 } from "@/lib/task-intelligence";
 import { discoverStaticConfig, isLLMConfigured, maskKey, DEFAULT_BASE_URL, DEFAULT_MODEL } from "@/lib/ai/config";
+import { decryptApiKey, encryptApiKey } from "@/lib/ai/crypto";
 import { llmUnderstandTask } from "@/lib/ai/task-understand";
 import { interpretResourceText } from "@/lib/ai/interpret-resource";
 import { chatCompletion, listModels } from "@/lib/ai/client";
@@ -1328,23 +1329,26 @@ export interface EffectiveLLMConfig {
 }
 
 /**
- * 生效配置：手动配置（DB）> 环境变量 > Hermes 自动发现 > 内置默认。
+ * 生效配置：手动配置（默认端点，加密存储）> 环境变量 > Hermes 自动发现 > 内置默认。
  * 手动配置字段允许部分为空：空字段回落到静态发现值。
+ * 端点 Key 密文解密失败（换机/换用户）时视为未配置，回退静态发现，不崩溃。
  */
 export function getEffectiveLLMConfig(): EffectiveLLMConfig {
   const staticCfg = discoverStaticConfig();
-  const row = repo.getLLMProviderConfigRow();
+  repo.migrateLegacyProviderConfig((plain) => encryptApiKey(plain));
+  const endpoint = repo.getDefaultProviderEndpointRow();
 
-  if (row) {
-    const hasManual = Boolean(row.baseUrl || row.model || row.apiKey);
+  if (endpoint) {
+    const hasManual = Boolean(endpoint.baseUrl || endpoint.model || endpoint.apiKeyEnc);
     if (hasManual) {
+      const decrypted = decryptApiKey(endpoint.apiKeyEnc);
       return {
         config: {
-          baseUrl: row.baseUrl || staticCfg.baseUrl,
-          model: row.model || staticCfg.model,
-          apiKey: row.apiKey || staticCfg.apiKey,
+          baseUrl: endpoint.baseUrl || staticCfg.baseUrl,
+          model: endpoint.model || staticCfg.model,
+          apiKey: decrypted ?? staticCfg.apiKey,
         },
-        source: "manual",
+        source: 'manual',
       };
     }
   }
@@ -1357,20 +1361,207 @@ export interface SaveLLMProviderInput {
   apiKey?: string;
 }
 
-/** 保存手动配置；apiKey 传空 / 未传表示不修改 Key */
+/**
+ * 保存手动配置（S1.53 兼容入口）：写入「默认端点」（无端点则创建）。
+ * apiKey 传空 / 未传表示不修改 Key；传了则加密存储。
+ */
 export function saveLLMProviderConfig(input: SaveLLMProviderInput): EffectiveLLMConfig {
-  repo.upsertLLMProviderConfig({
-    baseUrl: input.baseUrl,
-    model: input.model,
-    apiKey: input.apiKey,
-  });
+  const endpoint = repo.getDefaultProviderEndpointRow();
+  if (endpoint) {
+    repo.updateProviderEndpoint(endpoint.id, {
+      baseUrl: input.baseUrl,
+      model: input.model,
+      apiKeyEnc: input.apiKey ? encryptApiKey(input.apiKey) : undefined,
+    });
+  } else {
+    repo.insertProviderEndpoint({
+      id: randomUUID(),
+      name: '手动配置',
+      baseUrl: input.baseUrl || DEFAULT_BASE_URL,
+      model: input.model,
+      apiKeyEnc: input.apiKey ? encryptApiKey(input.apiKey) : null,
+      isDefault: true,
+    });
+  }
   return getEffectiveLLMConfig();
 }
 
-/** 清除手动配置（恢复自动发现） */
+/** 清除手动配置（删除全部端点，恢复自动发现） */
 export function clearLLMProviderConfig(): EffectiveLLMConfig {
-  repo.clearLLMProviderConfig();
+  for (const e of repo.listProviderEndpoints()) repo.deleteProviderEndpoint(e.id);
   return getEffectiveLLMConfig();
+}
+
+/* ---------------- LLM Provider 端点（S1.53：多端点 + 加密存储） ---------------- */
+
+export interface LlmEndpointView {
+  id: string;
+  name: string;
+  baseUrl: string;
+  model: string;
+  keyConfigured: boolean;
+  keyMasked: string | null;
+  /** true=当前生效（默认端点）；false=其他 */
+  isDefault: boolean;
+  /** 密文存在但无法解密（换机/换用户） */
+  keyUndecryptable: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+function toEndpointView(row: repo.LlmProviderEndpointRow): LlmEndpointView {
+  const hasEnc = Boolean(row.apiKeyEnc);
+  const decrypted = hasEnc ? decryptApiKey(row.apiKeyEnc) : null;
+  return {
+    id: row.id,
+    name: row.name,
+    baseUrl: row.baseUrl,
+    model: row.model ?? '',
+    keyConfigured: decrypted !== null,
+    keyMasked: decrypted ? maskKey(decrypted) : null,
+    isDefault: row.isDefault,
+    keyUndecryptable: hasEnc && decrypted === null,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  };
+}
+
+/** 端点列表（含掩码 Key，绝不返回明文） */
+export function listProviderEndpointsView(): LlmEndpointView[] {
+  repo.migrateLegacyProviderConfig((plain) => encryptApiKey(plain));
+  const rows = repo.listProviderEndpoints();
+  // 无默认标记时，第一条实际生效（getEffectiveLLMConfig 同口径）
+  const hasDefault = rows.some((r) => r.isDefault);
+  return rows.map((r, i) => ({
+    ...toEndpointView(r),
+    isDefault: r.isDefault || (!hasDefault && i === 0),
+  }));
+}
+
+export interface CreateProviderEndpointInput {
+  name: string;
+  baseUrl: string;
+  model?: string;
+  apiKey?: string;
+}
+
+/** 新增端点；首个端点自动设为默认（当前生效） */
+export function createProviderEndpoint(input: CreateProviderEndpointInput): LlmEndpointView {
+  repo.migrateLegacyProviderConfig((plain) => encryptApiKey(plain));
+  const first = repo.countProviderEndpoints() === 0;
+  const id = randomUUID();
+  repo.insertProviderEndpoint({
+    id,
+    name: input.name.trim() || '未命名端点',
+    baseUrl: input.baseUrl.trim() || DEFAULT_BASE_URL,
+    model: input.model?.trim() || null,
+    apiKeyEnc: input.apiKey ? encryptApiKey(input.apiKey) : null,
+    isDefault: first,
+  });
+  const row = repo.getProviderEndpointRow(id);
+  return toEndpointView(row!);
+}
+
+export interface UpdateProviderEndpointInput {
+  name?: string;
+  baseUrl?: string;
+  model?: string;
+  /** 传非空 = 更新 Key（加密）；不传 = 不改；传空字符串 = 清空 Key */
+  apiKey?: string;
+}
+
+/** 更新端点；apiKey 传空字符串=清空 Key，未传=不改 */
+export function updateProviderEndpoint(
+  id: string,
+  input: UpdateProviderEndpointInput
+): LlmEndpointView {
+  const row = repo.getProviderEndpointRow(id);
+  if (!row) throw new ServiceError('NOT_FOUND', '端点不存在');
+  let apiKeyEnc: string | null | undefined;
+  if (input.apiKey !== undefined) {
+    apiKeyEnc = input.apiKey ? encryptApiKey(input.apiKey) : null;
+  }
+  repo.updateProviderEndpoint(id, {
+    name: input.name,
+    baseUrl: input.baseUrl,
+    model: input.model,
+    apiKeyEnc,
+  });
+  return toEndpointView(repo.getProviderEndpointRow(id)!);
+}
+
+/** 删除端点；删除默认端点后，其余第一条自动成为默认（生效） */
+export function deleteProviderEndpoint(id: string): { deleted: boolean } {
+  const row = repo.getProviderEndpointRow(id);
+  if (!row) return { deleted: false };
+  const wasDefault = row.isDefault;
+  repo.deleteProviderEndpoint(id);
+  if (wasDefault) {
+    const rest = repo.listProviderEndpoints();
+    if (rest.length > 0) repo.setDefaultProviderEndpoint(rest[0].id);
+  }
+  return { deleted: true };
+}
+
+/** 切换默认端点（当前生效） */
+export function activateProviderEndpoint(id: string): LlmEndpointView {
+  const row = repo.getProviderEndpointRow(id);
+  if (!row) throw new ServiceError('NOT_FOUND', '端点不存在');
+  repo.setDefaultProviderEndpoint(id);
+  return toEndpointView(repo.getProviderEndpointRow(id)!);
+}
+
+/** 测试指定端点：真实调用一次 LLM（短消息），返回延迟、模型与可用模型列表 */
+export async function testProviderEndpoint(id: string): Promise<TestLLMResult> {
+  const row = repo.getProviderEndpointRow(id);
+  if (!row) throw new ServiceError('NOT_FOUND', '端点不存在');
+  const staticCfg = discoverStaticConfig();
+  const decrypted = decryptApiKey(row.apiKeyEnc);
+  const config: LLMConfig = {
+    baseUrl: row.baseUrl || staticCfg.baseUrl,
+    model: row.model || staticCfg.model,
+    apiKey: decrypted ?? staticCfg.apiKey,
+  };
+  if (!isLLMConfigured(config)) {
+    return {
+      ok: false,
+      latencyMs: 0,
+      model: config.model,
+      source: 'manual',
+      error: '未配置 API Key（可编辑该端点填写）',
+    };
+  }
+  const started = Date.now();
+  try {
+    const res = await chatCompletion(
+      {
+        temperature: 0,
+        maxTokens: 16,
+        timeoutMs: 20_000,
+        messages: [
+          { role: 'system', content: '只回复两个字：正常' },
+          { role: 'user', content: '连接测试' },
+        ],
+      },
+      config
+    );
+    const models = await listModels(config);
+    return {
+      ok: true,
+      latencyMs: Date.now() - started,
+      model: res.model,
+      source: 'manual',
+      models,
+    };
+  } catch (e) {
+    return {
+      ok: false,
+      latencyMs: Date.now() - started,
+      model: config.model,
+      source: 'manual',
+      error: e instanceof Error ? e.message : String(e),
+    };
+  }
 }
 
 export interface TestLLMResult {
@@ -1445,7 +1636,8 @@ export async function testLLMProviderConfig(): Promise<TestLLMResult> {
 /** 页面回显用：当前生效配置（Key 只回显掩码，绝不返回原文） */
 export function getLLMProviderConfigView() {
   const effective = getEffectiveLLMConfig();
-  const row = repo.getLLMProviderConfigRow();
+  const endpoints = listProviderEndpointsView();
+  const manual = endpoints.find((e) => e.isDefault) ?? null;
   return {
     effective: {
       source: effective.source,
@@ -1457,13 +1649,15 @@ export function getLLMProviderConfigView() {
         : null,
       defaults: { baseUrl: DEFAULT_BASE_URL, model: DEFAULT_MODEL },
     },
-    manual: row
+    manual: manual
       ? {
-          baseUrl: row.baseUrl ?? "",
-          model: row.model ?? "",
-          keyConfigured: Boolean(row.apiKey),
+          baseUrl: manual.baseUrl,
+          model: manual.model,
+          keyConfigured: manual.keyConfigured,
         }
       : null,
+    /** S1.53：多端点列表（含掩码） */
+    endpoints,
   };
 }
 

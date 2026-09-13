@@ -1473,3 +1473,22 @@ pm run db:reset（仅清空 6 张演示业务表，真实资源线不动）。
 - 已知问题：无新增；复制反馈为既有稳定逻辑（S1.47 已验）。
 - Git：本小节改动待提交（见下方「Git 状态」）。
 
+### S1.53 LLM Provider 端面设计（多端点 + 加密存储 + 厂商快捷模板）
+
+- 背景：用户指令「端面设计保存暗文存放，可添加多个自定义和快捷选择厂商添加 API 端点」。原实现为单行 llm_provider_config 明文存 apiKey（等同 Hermes .env 行为），仅一个表单 + 9 个官方预设按钮（只填 base_url）。
+- 领域设计：
+  - 数据模型：新表 llm_provider_endpoint（多行命名端点）：id / name / base_url / model / api_key_enc（密文）/ is_default / created_at / updated_at；替代单行表语义，is_default 互斥标记「当前生效」，无默认标记时首条生效（getEffectiveLLMConfig 与列表同口径）。
+  - 加密：lib/ai/crypto.ts AES-256-GCM，密钥从「hostname + username + platform + homedir + 固定 pepper」SHA-256 派生，密钥不落库；密文格式 1:<iv>.<ct>.<tag>；换机/换用户解密失败返回 null 不崩溃，UI 显示「需重填 Key」徽标。旧表保留不再写入；旧 default 行由 migrateLegacyProviderConfig 惰性迁移为首条端点（幂等：新表非空即跳过）。
+  - 边界：Mock → Real 双模式不变；读取接口只回显掩码，绝不返回明文 Key。
+- 实现：
+  - Schema + migration：llm_provider_endpoint 表（0013）+ idx_endpoint_default（0014），journal 追加 idx 13/14。
+  - Repository：listProviderEndpoints / getProviderEndpointRow / getDefaultProviderEndpointRow / insertProviderEndpoint / updateProviderEndpoint / deleteProviderEndpoint / setDefaultProviderEndpoint / countProviderEndpoints / migrateLegacyProviderConfig。
+  - Service：getEffectiveLLMConfig 改为「默认端点（解密 Key）> env > hermes > default」；saveLLMProviderConfig 兼容入口写默认端点（无则创建）；clearLLMProviderConfig 删除全部端点；新增 listProviderEndpointsView / createProviderEndpoint / updateProviderEndpoint / deleteProviderEndpoint / ctivateProviderEndpoint / 	estProviderEndpoint(id)；getLLMProviderConfigView 增加 endpoints 列表（含掩码 Key / keyUndecryptable）。
+  - API：/api/v1/ai/provider-config GET/PUT/DELETE 兼容扩展；新增 POST /endpoints、PUT/DELETE /endpoints/[id]、POST /endpoints/[id]/activate、POST /endpoints/[id]/test（错误码走统一 ApiError code 分支）。
+  - Client：lib/api/ai.ts + lib/services/ai.ts 增加 createLLMEndpoint / updateLLMEndpoint / deleteLLMEndpoint / ctivateLLMEndpoint / 	estLLMEndpoint。
+  - UI：components/settings/llm-provider.tsx 整文件重写——端点列表卡片（名称 / 生效徽标 / base_url / model / key 状态 / 设为生效·编辑·删除·测试）、新增/编辑表单（10 个厂商快捷模板一键填入 name+base_url+模型提示、自定义、API Key 密码框留空不修改）、测试指定端点成功后模型列表点击即保存到该端点、加密安全说明。
+- 验证：lint ✅（0 error，3 既有 warning）/ tsc ✅ / build ✅ / 生产重启（migration 手动 
+pm run db:migrate 应用 0013/0014 后 API 正常）✅ / API 冒烟全链路：POST 创建（key 加密落库，密文前缀 v1: 长度 81、无明文）✅ → 第二端点 isDefault=false ✅ → activate 切换互斥正确 ✅ → PUT 更新（key 未传保持不变）✅ → DELETE 默认端点后首条自动升默认 ✅ → GET 列表/effective 同源 ✅ → 清理测试数据恢复自动发现 ✅ / 浏览器实测：设置页「AI Provider（LLM 端点）」区块渲染、空态提示、厂商模板按钮与字段齐全 ✅。
+- 已知问题：dev 环境从未自动跑 migration（next start 不执行 drizzle migrator），新增表需 
+pm run db:migrate 手动执行——已在 README / IMPL 记录，属既有机制非本次引入；lint 3 个既有 warning 未处理（与本次无关）。
+- Git：本小节改动待提交。

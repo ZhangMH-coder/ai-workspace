@@ -527,6 +527,34 @@ export const llmProviderConfigs = sqliteTable(
   }
 );
 
+/* ---------------- LLM Provider 端点（S1.53：多端点 + 加密存储） ----------------
+ *
+ * 替代单行 llm_provider_config：一个「命名端点」= 一组 base_url / model / apiKey。
+ * - 支持添加多个自定义端点，可切换「默认端点」（当前生效）。
+ * - apiKeyEnc 为 AES-256-GCM 密文（lib/ai/crypto.ts），不再明文落库；
+ *   密钥从本机指纹派生、不落库；换机/换用户无法解密 → 读取端回显「无法解密，请重填」。
+ * - 旧表 llm_provider_config 保留不再写入；migration 0014 将旧 default 行迁移为首条端点。
+ */
+export const llmProviderEndpoints = sqliteTable(
+  "llm_provider_endpoint",
+  {
+    id: text("id").primaryKey(),
+    /** 端点显示名（如 "DeepSeek 官方"） */
+    name: text("name").notNull(),
+    /** OpenAI 兼容 base URL */
+    baseUrl: text("base_url").notNull(),
+    /** 默认模型（可空：测试连接后从 /models 选择或手动填写） */
+    model: text("model"),
+    /** API Key 密文（v1:iv.ct.tag；空 = 未配置） */
+    apiKeyEnc: text("api_key_enc"),
+    /** 默认（当前生效）标记；同一时间最多一条 true */
+    isDefault: integer("is_default", { mode: "boolean" }).notNull().default(false),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (t) => [index("idx_endpoint_default").on(t.isDefault)]
+);
+
 /** 用户资料（单行，id 固定 "default"；仅存用户自定义展示信息，本机事实信息由 service 实时派生） */
 export const userProfiles = sqliteTable("user_profile", {
   id: text("id").primaryKey(),
@@ -561,4 +589,5 @@ export type TaskPlanRow = typeof taskPlans.$inferSelect;
 export type PlanStepRow = typeof planSteps.$inferSelect;
 export type PlanDependencyRow = typeof planDependencies.$inferSelect;
 export type LlmProviderConfigRow = typeof llmProviderConfigs.$inferSelect;
+export type LlmProviderEndpointRow = typeof llmProviderEndpoints.$inferSelect;
 export type UserProfileRow = typeof userProfiles.$inferSelect;

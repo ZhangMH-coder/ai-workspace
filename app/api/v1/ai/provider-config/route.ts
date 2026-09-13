@@ -1,10 +1,16 @@
 /**
  * /api/v1/ai/provider-config
  *
- * LLM Provider 配置（S1.20）：
- * - GET    读取当前生效配置（Key 仅回显掩码）
- * - PUT    保存手动配置（baseUrl / model / apiKey；apiKey 传空 = 不修改）
- * - DELETE 清除手动配置，恢复自动发现
+ * LLM Provider 配置（S1.20 / S1.53 多端点 + 加密）：
+ * - GET    读取当前生效配置 + 端点列表（Key 仅回显掩码）
+ * - PUT    保存手动配置（写入「默认端点」；apiKey 传空 = 不修改）
+ * - DELETE 清除全部手动端点，恢复自动发现
+ * 端点 CRUD / 切换 / 测试见子路由：
+ *   POST   /provider-config/endpoints
+ *   PUT    /provider-config/endpoints/[id]
+ *   DELETE /provider-config/endpoints/[id]
+ *   POST   /provider-config/endpoints/[id]/activate
+ *   POST   /provider-config/endpoints/[id]/test
  */
 import { NextRequest, NextResponse } from "next/server";
 

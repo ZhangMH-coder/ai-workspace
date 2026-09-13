@@ -19,6 +19,7 @@ import {
   discoveredResources,
   harnessScans,
   llmProviderConfigs,
+  llmProviderEndpoints,
   planDependencies,
   projectAgents,
   projects,
@@ -1239,6 +1240,131 @@ export function upsertLLMProviderConfig(input: SaveLLMProviderInput) {
 /** 清除手动配置（恢复自动发现） */
 export function clearLLMProviderConfig() {
   db.delete(llmProviderConfigs).where(eq(llmProviderConfigs.id, "default")).run();
+}
+
+/* ---------------- LLM Provider 端点（S1.53：多端点 + 加密存储） ---------------- */
+
+export interface LlmProviderEndpointRow {
+  id: string;
+  name: string;
+  baseUrl: string;
+  model: string | null;
+  apiKeyEnc: string | null;
+  isDefault: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** 全部端点（按创建时间升序，默认端点优先展示由 Service 处理） */
+export function listProviderEndpoints(): LlmProviderEndpointRow[] {
+  return db
+    .select()
+    .from(llmProviderEndpoints)
+    .orderBy(asc(llmProviderEndpoints.createdAt))
+    .all();
+}
+
+export function getProviderEndpointRow(id: string) {
+  return db
+    .select()
+    .from(llmProviderEndpoints)
+    .where(eq(llmProviderEndpoints.id, id))
+    .get();
+}
+
+/** 默认端点；无默认标记时回退第一条（按创建时间） */
+export function getDefaultProviderEndpointRow() {
+  const def = db
+    .select()
+    .from(llmProviderEndpoints)
+    .where(eq(llmProviderEndpoints.isDefault, true))
+    .get();
+  if (def) return def;
+  return db.select().from(llmProviderEndpoints).orderBy(asc(llmProviderEndpoints.createdAt)).get();
+}
+
+export interface InsertProviderEndpointInput {
+  id: string;
+  name: string;
+  baseUrl: string;
+  model?: string | null;
+  apiKeyEnc?: string | null;
+  isDefault: boolean;
+}
+
+export function insertProviderEndpoint(input: InsertProviderEndpointInput) {
+  const now = new Date().toISOString();
+  db.insert(llmProviderEndpoints)
+    .values({
+      id: input.id,
+      name: input.name,
+      baseUrl: input.baseUrl,
+      model: input.model ?? null,
+      apiKeyEnc: input.apiKeyEnc ?? null,
+      isDefault: input.isDefault,
+      createdAt: now,
+      updatedAt: now,
+    })
+    .run();
+}
+
+export interface UpdateProviderEndpointInput {
+  name?: string | null;
+  baseUrl?: string | null;
+  model?: string | null;
+  apiKeyEnc?: string | null; // undefined=不改；null=清空
+  isDefault?: boolean;
+}
+
+export function updateProviderEndpoint(id: string, input: UpdateProviderEndpointInput) {
+  const set: Record<string, unknown> = { updatedAt: new Date().toISOString() };
+  if (input.name !== undefined) set.name = input.name?.trim() || null;
+  if (input.baseUrl !== undefined) set.baseUrl = input.baseUrl?.trim() || null;
+  if (input.model !== undefined) set.model = input.model?.trim() || null;
+  if (input.apiKeyEnc !== undefined) set.apiKeyEnc = input.apiKeyEnc;
+  if (input.isDefault !== undefined) set.isDefault = input.isDefault;
+  db.update(llmProviderEndpoints).set(set).where(eq(llmProviderEndpoints.id, id)).run();
+}
+
+export function deleteProviderEndpoint(id: string) {
+  db.delete(llmProviderEndpoints).where(eq(llmProviderEndpoints.id, id)).run();
+}
+
+/** 将某端点设为默认：先清所有默认标记，再置该端点为默认 */
+export function setDefaultProviderEndpoint(id: string) {
+  db.update(llmProviderEndpoints)
+    .set({ isDefault: false, updatedAt: new Date().toISOString() })
+    .where(eq(llmProviderEndpoints.isDefault, true))
+    .run();
+  db.update(llmProviderEndpoints)
+    .set({ isDefault: true, updatedAt: new Date().toISOString() })
+    .where(eq(llmProviderEndpoints.id, id))
+    .run();
+}
+
+export function countProviderEndpoints(): number {
+  return db.select({ n: count() }).from(llmProviderEndpoints).get()?.n ?? 0;
+}
+
+/**
+ * 惰性迁移：旧单行 llm_provider_config（明文）→ 首条端点（加密）。
+ * 仅当新表为空且旧表存在有效配置时执行一次；幂等（之后新表非空即跳过）。
+ */
+export function migrateLegacyProviderConfig(encrypt: (plain: string) => string | null): boolean {
+  if (countProviderEndpoints() > 0) return false;
+  const legacy = getLLMProviderConfigRow();
+  if (!legacy) return false;
+  const hasManual = Boolean(legacy.baseUrl || legacy.model || legacy.apiKey);
+  if (!hasManual) return false;
+  insertProviderEndpoint({
+    id: randomUUID(),
+    name: legacy.baseUrl || legacy.model ? "旧配置迁移" : "手动配置",
+    baseUrl: legacy.baseUrl || "https://api.openai.com/v1",
+    model: legacy.model,
+    apiKeyEnc: legacy.apiKey ? encrypt(legacy.apiKey) : null,
+    isDefault: true,
+  });
+  return true;
 }
 
 /* ---------------- 用户资料（S1.45） ---------------- */
